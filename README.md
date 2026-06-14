@@ -4,6 +4,10 @@
 
 BOUND is a decision policy for agentic systems.
 
+Prompt library:
+
+- See `policies/standard-agent-prompts.md` for 50 reusable prompts for standard agent workflows.
+
 Most agents are optimized to find the best possible action.
 
 BOUND helps agents determine when an outcome is sufficiently complete to continue.
