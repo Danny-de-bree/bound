@@ -1,0 +1,24 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build artifacts
+build/
+dist/
+*.whl
+
+# uv
+# uv.lock IS committed (reproducible installs)
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
