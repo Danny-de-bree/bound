@@ -628,6 +628,10 @@ def test_signals_all_optional_default() -> None:
     assert signals.files_changed is None
     assert signals.unexpected_files_changed is None
     assert signals.rollback_available is None
+    # Test-mutation signals default to None (unobserved), like the other counts.
+    assert signals.tests_added is None
+    assert signals.tests_removed is None
+    assert signals.tests_modified is None
 
 
 def test_signals_valid_full() -> None:
@@ -644,10 +648,16 @@ def test_signals_valid_full() -> None:
         files_changed=3,
         unexpected_files_changed=0,
         rollback_available=True,
+        tests_added=4,
+        tests_removed=0,
+        tests_modified=2,
     )
     assert signals.test_pass_rate == 1.0
     assert signals.tool_call_count == 14
     assert signals.rollback_available is True
+    assert signals.tests_added == 4
+    assert signals.tests_removed == 0
+    assert signals.tests_modified == 2
 
 
 @pytest.mark.parametrize(
@@ -662,12 +672,29 @@ def test_signals_valid_full() -> None:
         ("execution_time_seconds", -0.1),
         ("files_changed", -1),
         ("unexpected_files_changed", -1),
+        ("tests_added", -1),
+        ("tests_removed", -1),
+        ("tests_modified", -1),
     ],
 )
 def test_signals_reject_out_of_range(field: str, value: float) -> None:
     """Out-of-range signals are rejected so the BOUND ranges stay meaningful."""
     with pytest.raises(ValidationError):
         CodingWorkflowSignals(**{field: value})  # type: ignore[arg-type]
+
+
+def test_signals_test_mutation_counts_accept_zero() -> None:
+    """Test-mutation counts are non-negative integers; zero is the clean baseline.
+
+    Zero is the valid "no mutation" value (not ``None``, which means unobserved),
+    so an agent that touched no tests records explicit zeros rather than absence.
+    """
+    signals = CodingWorkflowSignals(
+        tests_added=0, tests_removed=0, tests_modified=0
+    )
+    assert signals.tests_added == 0
+    assert signals.tests_removed == 0
+    assert signals.tests_modified == 0
 
 
 def test_signals_boundary_values_accepted() -> None:

@@ -86,6 +86,7 @@ _DOD_WORKFLOW_ARGS = [
     "--test-pass-rate", "1.0",
     "--lint-passed",
     "--type-check-passed",
+    "--required-checks-passed", "1.0",
     "--rollback-available",
     "--retry-count", "0",
     "--tool-call-count", "0",
@@ -605,6 +606,7 @@ def test_coding_workflow_evaluator_reaches_decision_with_socket_blocked(
         test_pass_rate=1.0,
         lint_passed=True,
         type_check_passed=True,
+        required_checks_passed=1.0,
         rollback_available=True,
         retry_count=0,
         tool_call_count=0,
@@ -615,7 +617,8 @@ def test_coding_workflow_evaluator_reaches_decision_with_socket_blocked(
     first = BoundPolicy(CodingWorkflowEvaluator(signals)).evaluate(action, criteria)
     second = BoundPolicy(CodingWorkflowEvaluator(signals)).evaluate(action, criteria)
 
-    # A=1.0, R=0.0, C=0.0, I=0.0 -> S=1.0 >= T=0.6 -> ACCEPT.
+    # All four completion gates green -> evidence_breadth = 1.0 -> A=1.0,
+    # R=0.0, C=0.0, I=0.0 -> S=1.0 >= T=0.6 -> ACCEPT.
     assert first.score == pytest.approx(1.0, abs=1e-12)
     assert first.decision == "ACCEPT"
     assert first == second
@@ -646,7 +649,11 @@ def test_experiment_harness_runs_with_socket_blocked(
             AgentStep(
                 step_index=1,
                 signals=CodingWorkflowSignals(
-                    test_pass_rate=1.0, lint_passed=True, rollback_available=True
+                    test_pass_rate=1.0,
+                    required_checks_passed=1.0,
+                    lint_passed=True,
+                    type_check_passed=True,
+                    rollback_available=True,
                 ),
             ),
         ],

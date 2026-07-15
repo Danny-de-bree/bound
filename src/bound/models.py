@@ -321,6 +321,15 @@ class CodingWorkflowSignals(BaseModel):
         files_changed: Number of files changed.
         unexpected_files_changed: Number of *unexpected* files changed.
         rollback_available: Whether a clean rollback is available.
+        tests_added: Number of tests added by the action. Adding tests is good
+            evidence, so this is *not* a risk signal; it is recorded for
+            auditability only.
+        tests_removed: Number of tests removed by the action. Deleting failing
+            tests to force a green suite is the canonical "mechanically correct,
+            semantically wrong" pattern, so any removal is a strong risk signal.
+        tests_modified: Number of tests modified by the action. Modification can
+            be legitimate refactoring or a subtle weakening of assertions, so it
+            is a *milder* risk signal than removal.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -338,6 +347,12 @@ class CodingWorkflowSignals(BaseModel):
     files_changed: int | None = Field(default=None, ge=0)
     unexpected_files_changed: int | None = Field(default=None, ge=0)
     rollback_available: bool | None = None
+
+    # Test-mutation signals (v0.2 blind-spot mitigation). See the field
+    # docstrings above for how each feeds the risk dimension.
+    tests_added: int | None = Field(default=None, ge=0)
+    tests_removed: int | None = Field(default=None, ge=0)
+    tests_modified: int | None = Field(default=None, ge=0)
 
 
 class AgentStep(BaseModel):

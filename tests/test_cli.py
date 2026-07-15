@@ -472,6 +472,7 @@ def test_evaluate_workflow_writes_json_and_prompt(capsys: pytest.CaptureFixture[
         "--test-pass-rate", "1.0",
         "--lint-passed",
         "--type-check-passed",
+        "--required-checks-passed", "1.0",
         "--retry-count", "2",
         "--tool-call-count", "14",
         "--rollback-available",
@@ -483,7 +484,7 @@ def test_evaluate_workflow_writes_json_and_prompt(capsys: pytest.CaptureFixture[
     payload = json.loads(out)
     assert set(payload) == _WORKFLOW_FIELDS
     assert set(payload["scores"]) == {"acceptance", "influence", "risk", "cost"}
-    # All-green completion signals -> acceptance is 1.0.
+    # All four completion signals green -> evidence_breadth = 1.0 -> acceptance 1.0.
     assert payload["scores"]["acceptance"] == pytest.approx(1.0, abs=1e-12)
     # Score is reconstructable from the weights and the derived scores.
     reconstructed = (
@@ -565,6 +566,7 @@ def test_evaluate_workflow_respects_weights(capsys: pytest.CaptureFixture[str]) 
         "--test-pass-rate", "1.0",
         "--lint-passed",
         "--type-check-passed",
+        "--required-checks-passed", "1.0",
         "--retry-count", "0",
         "--tool-call-count", "0",
         "--rollback-available",

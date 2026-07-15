@@ -61,6 +61,34 @@ _UNEXPECTED_CHANGE_INDICATOR = 1.0
 #: scales linearly as ``files_changed / _LARGE_CHANGE_SURFACE_FILES``.
 _LARGE_CHANGE_SURFACE_FILES = 10
 
+#: Total possible completion signals used to derive the evidence-breadth
+#: confidence floor on acceptance: ``test_pass_rate``, ``required_checks_passed``,
+#: ``lint_passed``, ``type_check_passed``. The breadth floor is
+#: ``n_available / _ACCEPTANCE_TOTAL_SIGNALS``, so thin evidence can no longer
+#: yield maximum confidence. v0.2 reference heuristic (NOT scientifically
+#: calibrated).
+_ACCEPTANCE_TOTAL_SIGNALS = 4
+
+#: Any deletion of tests counts as a full surprise-risk indicator. Deleting a
+#: failing test to force a green suite is the canonical "mechanically correct,
+#: semantically wrong" pattern, so a single removal is treated as maximum
+#: surprise — like ``unexpected_files_changed``. v0.2 reference heuristic (NOT
+#: scientifically calibrated).
+_TESTS_REMOVED_INDICATOR = 1.0
+
+#: Number of modified tests treated as a "large" mutation surface. At or above
+#: this value the ``tests_modified`` indicator saturates; below it the indicator
+#: scales linearly as ``tests_modified / _LARGE_TEST_MODIFICATION``. v0.2
+#: reference heuristic (NOT scientifically calibrated).
+_LARGE_TEST_MODIFICATION = 5
+
+#: Saturated value of the ``tests_modified`` risk indicator. Modifying tests is a
+#: *milder* signal than deleting them: it can be legitimate refactoring, but it
+#: can also weaken assertions. The cap is kept below ``_TESTS_REMOVED_INDICATOR``
+#: so a modification never outweighs a deletion. v0.2 reference heuristic (NOT
+#: scientifically calibrated).
+_TEST_MODIFICATION_SATURATED = 0.5
+
 
 def _normalize_capped(value: float, cap: float) -> float:
     """Normalize ``value`` against ``cap`` into ``[0.0, 1.0]``.
@@ -93,17 +121,21 @@ class CodingWorkflowEvaluator:
     All mappings are **v0.2 reference heuristics** — not scientifically
     calibrated:
 
-    * **Acceptance (A)** ``∈ [0, 1]``: the mean of the *available* completion
-      signals (``test_pass_rate``, ``required_checks_passed``,
-      ``lint_passed`` → ``1.0``/``0.0``, ``type_check_passed`` →
-      ``1.0``/``0.0``). Unavailable (``None``) signals are ignored rather than
-      defaulted to zero. Raises :class:`ValueError` when no acceptance evidence
-      is available at all.
+    * **Acceptance (A)** ``∈ [0, 1]``: ``(mean of the available completion
+      signals) × (evidence_breadth = n_available / 4)``, where the four
+      completion signals are ``test_pass_rate``, ``required_checks_passed``,
+      ``lint_passed`` → ``1.0``/``0.0`` and ``type_check_passed`` →
+      ``1.0``/``0.0``. Unavailable (``None``) signals are ignored by the mean
+      but reduce the evidence-breadth floor, so thin evidence can no longer
+      yield maximum confidence (blind-spot fix). Raises :class:`ValueError`
+      when no acceptance evidence is available at all.
     * **Risk (R)** ``∈ [0, 1]``: the mean of the *available* risk indicators —
       any ``unexpected_files_changed > 0``, ``rollback_available is False``, a
       large change surface via ``files_changed`` (graded against
-      :data:`_LARGE_CHANGE_SURFACE_FILES`), and failed checks (``1.0 - A``,
-      reusing the acceptance gap). Every constant is documented above.
+      :data:`_LARGE_CHANGE_SURFACE_FILES`), failed checks (``1.0 - A``,
+      reusing the acceptance gap), and the test-mutation signals
+      ``tests_removed > 0`` (full surprise indicator) and ``tests_modified > 0``
+      (a milder graded indicator). Every constant is documented above.
     * **Cost (C)** ``∈ [0, 1]``: the mean of the *available* normalized terms
       (``retry_count``, ``tool_call_count``, ``token_usage``,
       ``execution_time_seconds``), each ``min(value / cap, 1.0)`` against the
@@ -115,11 +147,12 @@ class CodingWorkflowEvaluator:
     Example:
         >>> from bound.models import Action, CodingWorkflowSignals
         >>> from bound.workflow import CodingWorkflowEvaluator
+        >>> # Two of four completion gates -> evidence_breadth = 2/4 = 0.5.
         >>> signals = CodingWorkflowSignals(test_pass_rate=1.0, lint_passed=True)
         >>> evaluator = CodingWorkflowEvaluator(signals)
         >>> scores = evaluator.evaluate(Action(description="Ship", goal="Release"))
         >>> scores.acceptance
-        1.0
+        0.5
         >>> "acceptance" in evaluator.provenance
         True
 
@@ -222,14 +255,31 @@ class CodingWorkflowEvaluator:
     # ------------------------------------------------------------------
 
     def _acceptance(self) -> tuple[float, list[ScoreEvidence]]:
-        """Mean of the available completion signals.
+        """Mean of the available completion signals, floored by evidence breadth.
 
         Booleans map ``True → 1.0`` / ``False → 0.0``. Missing (``None``)
         signals are ignored rather than treated as zero, so an unknown gate
-        never drags acceptance down. Raises when no gate is available at all.
+        never drags the mean down. Raises when no gate is available at all.
+
+        v0.2 blind-spot fix: thin evidence used to yield maximum confidence (a
+        single ``lint_passed=True`` gave ``A=1.0``). Acceptance is now scaled by
+        an evidence-breadth confidence floor::
+
+            A = (mean of available completion signals) × (n_available / 4)
+
+        where ``4`` is the total possible completion signals
+        (:data:`_ACCEPTANCE_TOTAL_SIGNALS`). With all four available the floor is
+        ``1.0`` (backward compatible); with one available it is ``0.25``, so a
+        single green gate can no longer read as "fully accepted".
 
         Returns:
-            A ``(acceptance, evidence)`` tuple.
+            A ``(acceptance, evidence)`` tuple. The evidence lists one
+            :class:`ScoreEvidence` per available signal (each contributing to the
+            raw mean) plus a final ``evidence_breadth`` entry describing the
+            multiplicative floor. Acceptance is the *product* of the per-signal
+            mean and the breadth floor, so a consumer reconstructs it as
+            ``(sum of per-signal contributions) × evidence_breadth`` rather than
+            a plain sum.
         """
         s = self._signals
         entries: list[tuple[str, float]] = []
@@ -252,7 +302,9 @@ class CodingWorkflowEvaluator:
 
         count = len(entries)
         total = sum(value for _, value in entries)
-        acceptance = total / count
+        raw_mean = total / count
+        evidence_breadth = count / _ACCEPTANCE_TOTAL_SIGNALS
+        acceptance = raw_mean * evidence_breadth
         evidence = [
             ScoreEvidence(
                 source=name,
@@ -265,6 +317,21 @@ class CodingWorkflowEvaluator:
             )
             for name, value in entries
         ]
+        evidence.append(
+            ScoreEvidence(
+                source="evidence_breadth",
+                value=evidence_breadth,
+                contribution=evidence_breadth,
+                description=(
+                    f"evidence_breadth={evidence_breadth:.4f} ({count}/"
+                    f"{_ACCEPTANCE_TOTAL_SIGNALS} completion signals available); "
+                    f"applied as a multiplicative confidence floor: "
+                    f"A = {raw_mean:.4f} (mean) × {evidence_breadth:.4f} = "
+                    f"{acceptance:.4f}. Thin evidence can no longer yield "
+                    f"maximum confidence (blind-spot fix)."
+                ),
+            )
+        )
         return acceptance, evidence
 
 
@@ -279,6 +346,15 @@ class CodingWorkflowEvaluator:
           else ``0.0``.
         * ``files_changed``: ``min(value / _LARGE_CHANGE_SURFACE_FILES, 1.0)``
           (graded blast radius).
+        * ``tests_removed``: ``1.0`` when ``> 0`` else ``0.0``. Deleting failing
+          tests to force a green suite is the canonical blind-spot pattern, so a
+          single removal is a full surprise signal (like
+          ``unexpected_files_changed``).
+        * ``tests_modified``: ``min(value / _LARGE_TEST_MODIFICATION, 1.0) ×
+          _TEST_MODIFICATION_SATURATED`` — a *milder* graded signal. Modification
+          can be legitimate refactoring, but it can also weaken assertions, so it
+          is capped below the deletion indicator. ``tests_added`` is intentionally
+          *not* a risk signal: adding tests is good evidence.
         * failed checks: ``1.0 - acceptance`` — reuses the acceptance gap so the
           same quality gates are not scored a second time with hidden constants.
 
@@ -312,6 +388,24 @@ class CodingWorkflowEvaluator:
             raw = float(s.files_changed)
             indicator = min(raw / _LARGE_CHANGE_SURFACE_FILES, 1.0)
             indicators.append(("large_change_surface(files_changed)", raw, indicator))
+
+        if s.tests_removed is not None:
+            # Any deletion of tests is a full surprise signal: an agent that
+            # deletes failing tests to force a green suite is "mechanically
+            # correct, semantically wrong". tests_added is deliberately excluded
+            # — adding tests is good evidence, not risk.
+            raw = float(s.tests_removed)
+            indicator = _TESTS_REMOVED_INDICATOR if raw > 0 else 0.0
+            indicators.append(("tests_removed", raw, indicator))
+
+        if s.tests_modified is not None:
+            # Milder than deletion: modification can be legitimate refactoring,
+            # but can also weaken assertions. Graded against
+            # _LARGE_TEST_MODIFICATION and capped at _TEST_MODIFICATION_SATURATED
+            # (below 1.0) so it never outweighs a deletion.
+            raw = float(s.tests_modified)
+            indicator = min(raw / _LARGE_TEST_MODIFICATION, 1.0) * _TEST_MODIFICATION_SATURATED
+            indicators.append(("tests_modified", raw, indicator))
 
         # Failed-checks indicator always available (acceptance computed first).
         failed_checks = 1.0 - acceptance
@@ -472,12 +566,16 @@ class CodingWorkflowEvaluator:
         """
         return (
             "v0.2 reference heuristic (NOT scientifically calibrated).\n"
-            f"Acceptance A={acceptance:.4f}: mean of available completion signals "
-            "(test_pass_rate, required_checks_passed, lint_passed, "
-            "type_check_passed); unavailable signals ignored.\n"
+            f"Acceptance A={acceptance:.4f}: (mean of available completion signals) "
+            "× (evidence_breadth = n_available / 4); the four completion signals "
+            "are test_pass_rate, required_checks_passed, lint_passed, "
+            "type_check_passed. Unavailable signals are ignored by the mean but "
+            "reduce the breadth floor, so thin evidence can no longer yield "
+            "maximum confidence.\n"
             f"Risk R={risk:.4f}: mean of available risk indicators "
             "(unexpected_files_changed>0, rollback_available is False, large "
-            "change surface via files_changed, failed checks = 1 - A).\n"
+            "change surface via files_changed, tests_removed>0, tests_modified>0 "
+            "graded, failed checks = 1 - A).\n"
             f"Cost C={cost:.4f}: mean of available normalized terms "
             "(retry_count, tool_call_count, token_usage, execution_time_seconds) "
             "each min(value/cap, 1.0) against WorkflowNormalization caps.\n"

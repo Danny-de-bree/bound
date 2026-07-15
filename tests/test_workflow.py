@@ -112,16 +112,19 @@ def test_evaluate_returns_evaluation_scores_with_reasoning() -> None:
 
 
 def test_acceptance_is_mean_of_available_completion_signals() -> None:
-    """Acceptance averages only the signals that are present.
+    """Acceptance averages only the signals that are present, then floors by breadth.
 
-    With test_pass_rate=0.5 and lint_passed=True → (0.5 + 1.0) / 2 = 0.75.
-    The absent gates (type-check, required checks) must not pull the mean down.
+    With test_pass_rate=0.5 and lint_passed=True the raw mean is
+    (0.5 + 1.0) / 2 = 0.75, but only 2 of 4 gates are available, so the
+    evidence-breadth floor is 2/4 = 0.5 and ``A = 0.75 × 0.5 = 0.375``. The
+    absent gates (type-check, required checks) must not pull the mean down, but
+    their absence *does* reduce confidence via the breadth floor.
     """
     signals = CodingWorkflowSignals(test_pass_rate=0.5, lint_passed=True)
 
     scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
 
-    assert scores.acceptance == pytest.approx(0.75)
+    assert scores.acceptance == pytest.approx(0.375)
 
 
 def test_lint_false_counts_as_zero_not_ignored() -> None:
@@ -129,12 +132,122 @@ def test_lint_false_counts_as_zero_not_ignored() -> None:
 
     This is the key edge case: ``lint_passed=False`` must contribute 0.0 to the
     mean (lowering acceptance) rather than being skipped like a ``None`` gate.
+    With test_pass_rate=1.0 and lint_passed=False the raw mean is 0.5 across 2 of
+    4 gates, so the breadth-floored acceptance is ``0.5 × (2/4) = 0.25``.
     """
     signals = CodingWorkflowSignals(test_pass_rate=1.0, lint_passed=False)
 
     scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
 
-    assert scores.acceptance == pytest.approx(0.5)
+    assert scores.acceptance == pytest.approx(0.25)
+
+# ---------------------------------------------------------------------------
+# Evidence-breadth confidence floor (blind-spot fix on A)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("gates", "expected_a"),
+    [
+        ({"test_pass_rate": 1.0}, 0.25),
+        ({"test_pass_rate": 1.0, "lint_passed": True}, 0.5),
+        (
+            {"test_pass_rate": 1.0, "lint_passed": True, "type_check_passed": True},
+            0.75,
+        ),
+        (
+            {
+                "test_pass_rate": 1.0,
+                "lint_passed": True,
+                "type_check_passed": True,
+                "required_checks_passed": 1.0,
+            },
+            1.0,
+        ),
+    ],
+)
+def test_acceptance_evidence_breadth_floor_scales_with_available_signals(
+    gates: dict[str, object], expected_a: float
+) -> None:
+    """A = (mean of available signals) × (n_available / 4).
+
+    With every available gate green the raw mean is 1.0, so acceptance equals the
+    evidence-breadth floor itself: 1/4 → 0.25, 2/4 → 0.5, 3/4 → 0.75, 4/4 → 1.0.
+    This is the core blind-spot fix: thin evidence can no longer masquerade as
+    full confidence.
+    """
+    signals = CodingWorkflowSignals(**gates)  # type: ignore[arg-type]
+
+    scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
+
+    assert scores.acceptance == pytest.approx(expected_a)
+
+
+def test_single_lint_passed_no_longer_yields_max_acceptance() -> None:
+    """A single lint_passed=True must NOT read as A=1.0 (blind-spot fix).
+
+    Before the evidence-breadth floor, one green gate produced maximum
+    confidence because missing signals were ignored rather than counted as
+    absent. Now ``lint_passed=True`` alone gives ``A = 1.0 × (1/4) = 0.25``.
+    """
+    signals = CodingWorkflowSignals(lint_passed=True)
+
+    scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
+
+    assert scores.acceptance == pytest.approx(0.25)
+    assert scores.acceptance < 1.0
+
+
+def test_acceptance_unchanged_when_all_four_signals_available() -> None:
+    """All four completion signals available → breadth floor is 1.0 (backward compat).
+
+    With the full gate set the floor is a no-op, so ``A`` equals the plain mean —
+    the pre-mitigation behaviour is preserved for well-evidenced runs.
+    """
+    signals = CodingWorkflowSignals(
+        test_pass_rate=1.0,
+        required_checks_passed=0.75,
+        lint_passed=True,
+        type_check_passed=True,
+    )
+
+    scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
+
+    # mean(1.0, 0.75, 1.0, 1.0) = 0.9375; breadth = 4/4 = 1.0 -> unchanged.
+    assert scores.acceptance == pytest.approx(0.9375)
+
+
+def test_acceptance_provenance_records_evidence_breadth() -> None:
+    """Acceptance provenance carries an ``evidence_breadth`` entry describing the floor.
+
+    The breadth entry's value is ``n_available / 4`` and its description spells
+    out ``A = mean × breadth``, so the blind-spot fix is auditable through
+    provenance. With all four gates it equals 1.0 (no penalty).
+    """
+    thin = CodingWorkflowEvaluator(CodingWorkflowSignals(lint_passed=True))
+    thin.evaluate(_ACTION)
+    breadth = next(
+        e for e in thin.provenance["acceptance"] if e.source == "evidence_breadth"
+    )
+    assert breadth.value == pytest.approx(0.25)
+    assert breadth.contribution == pytest.approx(0.25)
+    assert "evidence_breadth" in breadth.description
+
+    full = CodingWorkflowEvaluator(
+        CodingWorkflowSignals(
+            test_pass_rate=1.0,
+            required_checks_passed=1.0,
+            lint_passed=True,
+            type_check_passed=True,
+        )
+    )
+    full.evaluate(_ACTION)
+    full_breadth = next(
+        e for e in full.provenance["acceptance"] if e.source == "evidence_breadth"
+    )
+    assert full_breadth.value == pytest.approx(1.0)
+
+
 
 # ---------------------------------------------------------------------------
 # Missing / absent evidence
@@ -144,10 +257,13 @@ def test_lint_false_counts_as_zero_not_ignored() -> None:
 def test_missing_optional_signals_are_ignored() -> None:
     """Optional signals that are None are skipped, never defaulted to zero.
 
-    With only test_pass_rate=0.5 plus the always-present cost counters: acceptance
-    is 0.5 (single gate), risk reduces to the failed-checks gap (1 - 0.5 = 0.5),
-    and cost averages retry_count and tool_call_count only (tokens/runtime absent).
-    This proves "ignore unavailable" rather than "treat missing as failing".
+    With only test_pass_rate=0.5 plus the always-present cost counters: the raw
+    acceptance is 0.5 (single gate), but the evidence-breadth floor is 1/4 = 0.25,
+    so ``A = 0.5 × 0.25 = 0.125``. Risk then reduces to the failed-checks gap
+    (1 - 0.125 = 0.875), and cost averages retry_count and tool_call_count only
+    (tokens/runtime absent). This proves "ignore unavailable" rather than "treat
+    missing as failing" — a ``None`` gate is excluded from the *mean*, though its
+    absence now lowers confidence via the breadth floor (blind-spot fix).
     """
     signals = CodingWorkflowSignals(
         test_pass_rate=0.5,
@@ -157,9 +273,9 @@ def test_missing_optional_signals_are_ignored() -> None:
 
     scores = CodingWorkflowEvaluator(signals).evaluate(_ACTION)
 
-    assert scores.acceptance == pytest.approx(0.5)
+    assert scores.acceptance == pytest.approx(0.125)
     # No unexpected-file / rollback / change-surface evidence -> risk = 1 - A.
-    assert scores.risk == pytest.approx(0.5)
+    assert scores.risk == pytest.approx(0.875)
     # cost = mean(1/5, 10/50) = mean(0.2, 0.2) = 0.2 (tokens/runtime absent).
     assert scores.cost == pytest.approx(0.2)
 
@@ -333,10 +449,20 @@ def _clean_risk_signals(**overrides: object) -> CodingWorkflowSignals:
     """Signals with a perfect acceptance gate and no risk evidence by default.
 
     Lets each risk test toggle exactly one indicator while keeping acceptance
-    (and therefore the failed-checks indicator) fixed, isolating the effect of a
-    single rule.
+    (and therefore the failed-checks indicator) fixed at zero, isolating the
+    effect of a single rule.
+
+    All four completion gates are populated and green so the evidence-breadth
+    floor is ``1.0`` and ``A = 1.0`` (failed-checks = ``0.0``). Using a single
+    gate here would now trigger the breadth floor (``A = 0.25``) and contaminate
+    every risk value with a nonzero failed-checks term.
     """
-    base: dict[str, object] = {"test_pass_rate": 1.0}
+    base: dict[str, object] = {
+        "test_pass_rate": 1.0,
+        "required_checks_passed": 1.0,
+        "lint_passed": True,
+        "type_check_passed": True,
+    }
     base.update(overrides)
     return CodingWorkflowSignals(**base)  # type: ignore[arg-type]
 
@@ -398,6 +524,10 @@ def test_risk_failed_checks_are_coupled_to_acceptance() -> None:
 
     With only a test gate (no other risk evidence), risk equals the acceptance
     gap, proving the rule reuses acceptance rather than hiding a second scorer.
+    Because a single gate now triggers the evidence-breadth floor, ``A`` is
+    ``test_pass_rate × (1/4)`` and the failed-checks gap (hence risk) is the
+    complement — so a single passing gate reads as ``A=0.25 / R=0.75`` rather
+    than the old blind-spot ``A=1.0 / R=0.0``.
     """
     perfect = CodingWorkflowEvaluator(
         CodingWorkflowSignals(test_pass_rate=1.0)
@@ -409,11 +539,78 @@ def test_risk_failed_checks_are_coupled_to_acceptance() -> None:
         CodingWorkflowSignals(test_pass_rate=0.0)
     ).evaluate(_ACTION)
 
-    assert perfect.risk == pytest.approx(0.0)
-    assert half.risk == pytest.approx(0.5)
+    assert perfect.risk == pytest.approx(0.75)
+    assert half.risk == pytest.approx(0.875)
     assert none.risk == pytest.approx(1.0)
     # Risk is monotonic in the acceptance gap.
     assert perfect.risk < half.risk < none.risk
+
+def test_risk_tests_removed_increases_risk() -> None:
+    """Deleting tests raises risk (the canonical blind-spot signal).
+
+    An agent that removes failing tests to force a green suite is "mechanically
+    correct, semantically wrong". With a clean four-gate base (``A=1.0``,
+    failed-checks=0.0) and no other risk evidence, no removals gives ``R=0.0``
+    while any ``tests_removed > 0`` adds a full surprise indicator, so
+    ``R = mean(1.0, 0.0) = 0.5``.
+    """
+    clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
+    mutating = CodingWorkflowEvaluator(
+        _clean_risk_signals(tests_removed=2)
+    ).evaluate(_ACTION)
+
+    assert clean.risk == pytest.approx(0.0)
+    assert mutating.risk == pytest.approx(0.5)
+    assert mutating.risk > clean.risk
+    # The deletion is visible in risk provenance.
+    mutating_ev = CodingWorkflowEvaluator(_clean_risk_signals(tests_removed=2))
+    mutating_ev.evaluate(_ACTION)
+    assert "tests_removed" in {e.source for e in mutating_ev.provenance["risk"]}
+
+
+def test_risk_tests_modified_is_milder_than_tests_removed() -> None:
+    """Modifying tests is a milder, graded risk signal than deleting them.
+
+    ``tests_modified`` scales with the count (capped below 1.0) so it never
+    outweighs a deletion. With a clean four-gate base: one modification gives
+    ``indicator = min(1/5, 1.0) × 0.5 = 0.1`` → ``R = mean(0.1, 0.0) = 0.05``;
+    ten modifications saturate at ``1.0 × 0.5 = 0.5`` → ``R = 0.25`` — still
+    milder than a single deletion (``R = 0.5``).
+    """
+    clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
+    one_mod = CodingWorkflowEvaluator(
+        _clean_risk_signals(tests_modified=1)
+    ).evaluate(_ACTION)
+    many_mod = CodingWorkflowEvaluator(
+        _clean_risk_signals(tests_modified=10)
+    ).evaluate(_ACTION)
+    removed = CodingWorkflowEvaluator(
+        _clean_risk_signals(tests_removed=1)
+    ).evaluate(_ACTION)
+
+    assert one_mod.risk == pytest.approx(0.05)
+    assert many_mod.risk == pytest.approx(0.25)
+    assert many_mod.risk < removed.risk
+    assert clean.risk < one_mod.risk < many_mod.risk < removed.risk
+
+
+def test_risk_tests_added_is_not_a_risk_signal() -> None:
+    """Adding tests is good evidence, never a risk signal.
+
+    ``tests_added`` is recorded on the signals for auditability but must not
+    appear in risk provenance or raise risk — only removals and modifications do.
+    """
+    clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
+    adding = CodingWorkflowEvaluator(
+        _clean_risk_signals(tests_added=5)
+    ).evaluate(_ACTION)
+
+    assert adding.risk == pytest.approx(clean.risk)
+    adding_ev = CodingWorkflowEvaluator(_clean_risk_signals(tests_added=5))
+    adding_ev.evaluate(_ACTION)
+    assert "tests_added" not in {e.source for e in adding_ev.provenance["risk"]}
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -481,10 +678,15 @@ def test_influence_external_may_be_negative() -> None:
 
 
 def test_provenance_explains_every_score() -> None:
-    """Each dimension has evidence whose contributions sum back to the score.
+    """Each dimension's evidence reconstructs its score.
 
     This is the core Phase 7 guarantee: a consumer can answer "why is A=0.9375?"
-    by reading provenance["acceptance"] and verifying the contributions add up.
+    by reading ``provenance["acceptance"]``. For influence, risk and cost the
+    contributions still *sum* to the score. For acceptance the blind-spot fix
+    makes the score a *product* — the per-signal contributions sum to the raw
+    mean and the ``evidence_breadth`` entry is the multiplicative floor — so a
+    consumer reconstructs ``A = (sum of per-signal contributions) ×
+    evidence_breadth`` rather than a plain sum.
     """
     evaluator = CodingWorkflowEvaluator(_FULL_SIGNALS)
 
@@ -501,9 +703,18 @@ def test_provenance_explains_every_score() -> None:
     for dim, score in dimensions:
         evidence = evaluator.provenance[dim]
         assert evidence, f"dimension {dim!r} has no evidence"
-        total = sum(e.contribution for e in evidence)
-        assert total == pytest.approx(score), (
-            f"{dim}: contributions {total} do not sum to score {score}"
+        if dim == "acceptance":
+            # Acceptance is mean × evidence_breadth (blind-spot fix): the
+            # breadth entry is a multiplier, so reconstruct as a product.
+            breadth = next(e for e in evidence if e.source == "evidence_breadth")
+            signal_total = sum(
+                e.contribution for e in evidence if e.source != "evidence_breadth"
+            )
+            reconstructed = signal_total * breadth.contribution
+        else:
+            reconstructed = sum(e.contribution for e in evidence)
+        assert reconstructed == pytest.approx(score), (
+            f"{dim}: reconstructed {reconstructed} does not equal score {score}"
         )
         for piece in evidence:
             assert piece.source
