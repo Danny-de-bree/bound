@@ -11,7 +11,7 @@ The long-term goal is broader:
 The core principle remains:
 
 ```text
-S = (W × A) + I - R - C
+S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
 ```
 
 Where:
@@ -19,11 +19,18 @@ Where:
 | Variable | Meaning                     |
 | -------- | --------------------------- |
 | `S`      | Final bounded utility score |
-| `W`      | Goal weight                 |
 | `A`      | Acceptance score            |
 | `I`      | Downstream influence        |
 | `R`      | Risk penalty                |
 | `C`      | Resource penalty            |
+| `W_A`    | Acceptance weight           |
+| `W_I`    | Influence weight            |
+| `W_R`    | Risk weight                 |
+| `W_C`    | Cost weight                 |
+| `T`      | Acceptance threshold         |
+
+All weights default to `1.0`, so v0.1's `S = (W × A) + I - R - C` is reproduced
+exactly (`W_A = W`, `W_I = W_R = W_C = 1.0`).
 
 The success condition is:
 
@@ -72,13 +79,14 @@ Core pipeline:
 EvaluationScores
       │
       ▼
-S = (W × A) + I - R - C
+S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)
       │
       ▼
-Compare S with T
-      │
-      ▼
-ACCEPT / RETRY / REPLAN / ROLLBACK
+Fixed-order decision:
+  1. risk >= rollback_risk_threshold -> ROLLBACK  (safety, checked first)
+  2. S >= T                          -> ACCEPT
+  3. gap = T - S <= retry_margin     -> RETRY
+  4. otherwise                       -> REPLAN
 ```
 
 At this stage, the caller provides:
@@ -588,17 +596,20 @@ Machine learning should only be introduced once enough real-world data exists.
                   A I R C
                      │
                      ▼
-          S = (W × A) + I - R - C
+          S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)
                      │
                      ▼
-                  S >= T?
-                     │
-         ┌───────────┼────────────┐
-         │           │            │
-      ACCEPT       RETRY       REPLAN
-                                   │
-                                ROLLBACK
+   Fixed-order decision:
+     1. risk >= rollback_risk_threshold -> ROLLBACK  (safety, first)
+     2. S >= T                          -> ACCEPT
+     3. gap = T - S <= retry_margin     -> RETRY
+     4. otherwise                       -> REPLAN
 ```
+
+`ROLLBACK` is a peer outcome triggered by a hard safety boundary — it is not an
+escalation that `REPLAN` fails into. A future multi-step controller *could*
+escalate a sequence of `REPLAN` outcomes to a `ROLLBACK`, but that is not how the
+single-action v0.2 policy behaves.
 
 ---
 
@@ -623,13 +634,15 @@ A BOUND decision should be explainable from its inputs.
 The user should be able to inspect:
 
 ```text
-W
+W_A / W_I / W_R / W_C
 A
 I
 R
 C
 T
 S
+distance_to_threshold
+provenance (per-dimension evidence)
 ```
 
 and understand why a decision occurred.
@@ -651,6 +664,11 @@ Not:
 ```text
 Is this the best possible result?
 ```
+
+"Bounded" here means optimization is bounded by an explicit acceptance
+threshold (a satisficing policy: once `S >= T`, stop optimizing this step). It
+does **not** mean the utility function itself has a bounded or concave
+mathematical shape — the score is a plain linear combination.
 
 ---
 
@@ -700,34 +718,33 @@ not in an opaque final decision layer.
 
 ## v0.2
 
-* evaluator abstraction
-* configurable score components
-* richer result explanations
-* workflow signal schema
+* symmetric `BoundWeights` (`W_A / W_I / W_R / W_C`), v0.1 `weight` kept as alias
+* coherent decision semantics — `ROLLBACK` (safety) → `ACCEPT` → `RETRY` →
+  `REPLAN`, all four reachable (no float-equality trap)
+* `retry_margin` and `rollback_risk_threshold` criteria
+* `distance_to_threshold` (`S - T`) on every result
+* deterministic coding-workflow signals (`CodingWorkflowSignals`,
+  `WorkflowNormalization`)
+* `CodingWorkflowEvaluator` with auditable `ScoreEvidence` provenance
+* experiment harness + benchmark trajectories (where BOUND would stop)
+* updated prompts and CLI (per-dimension weight flags, `evaluate-workflow`)
 
 ## v0.3
 
-* deterministic coding-agent signals
-* test and lint evidence
-* cost and retry tracking
-* blast-radius and reversibility metrics
-
-## v0.4
-
 * composite evaluators
-* optional semantic evaluator
+* optional semantic (LLM-as-judge) evaluator behind the protocol
 * first hybrid deterministic/model scoring
 
-## v0.5
+## v0.4
 
 * integration into a real coding-agent workflow
 * explicit stop/continue loop
 * production usage data collection
+* threshold calibration
 
 ## Later
 
 * hierarchical BOUND
-* adaptive thresholds
-* learned score calibration
+* adaptive / learned thresholds
 * mission-level policies
 * provider-specific optional evaluator packages

@@ -42,15 +42,21 @@ _DOD_ARGS = [
 ]
 
 # Fields the auditable JSON payload must expose (per the CLI JSON-output spec).
+# Provenance is only present in workflow mode, so it is asserted separately
+# rather than in this strict-equality set.
 _JSON_FIELDS = {
     "scores",
+    "weights",
     "weight",
     "threshold",
+    "retry_margin",
+    "rollback_risk_threshold",
     "acceptance_component",
     "influence_component",
     "risk_component",
     "cost_component",
     "score",
+    "distance_to_threshold",
     "decision",
 }
 
@@ -83,27 +89,38 @@ def test_evaluate_writes_json_to_stdout_and_prompt_to_stderr(
 
 
 def test_evaluate_json_is_auditable(capsys: pytest.CaptureFixture[str]) -> None:
-    """The JSON alone is enough to reconstruct S = (W x A) + I - R - C.
+    """The JSON alone is enough to reconstruct S = (W_A x A) + (W_I x I) - (W_R x R) - (W_C x C).
 
     Auditability requirement: a consumer reading only the JSON must be able to
-    recompute the score. We recompute from the components and compare to the
-    reported ``score``.
+    recompute the score from the four symmetric weights and the four scores.
+    We recompute from the weights/scores and compare to the reported ``score``,
+    and also confirm the signed distance_to_threshold matches ``S - T``.
     """
     main(_DOD_ARGS)
     out, _ = capsys.readouterr()
     payload = json.loads(out)
 
     reconstructed = (
-        (payload["weight"] * payload["scores"]["acceptance"])
-        + payload["scores"]["influence"]
-        - payload["scores"]["risk"]
-        - payload["scores"]["cost"]
+        (payload["weights"]["acceptance"] * payload["scores"]["acceptance"])
+        + (payload["weights"]["influence"] * payload["scores"]["influence"])
+        - (payload["weights"]["risk"] * payload["scores"]["risk"])
+        - (payload["weights"]["cost"] * payload["scores"]["cost"])
     )
 
     assert payload["score"] == pytest.approx(reconstructed, abs=1e-12)
     assert payload["score"] == pytest.approx(0.8, abs=1e-12)
     assert payload["acceptance_component"] == pytest.approx(0.9, abs=1e-12)
     assert payload["decision"] == "ACCEPT"
+    assert payload["distance_to_threshold"] == pytest.approx(
+        payload["score"] - payload["threshold"], abs=1e-12
+    )
+    assert payload["weights"] == {
+        "acceptance": 1.0,
+        "influence": 1.0,
+        "risk": 1.0,
+        "cost": 1.0,
+    }
+    assert payload["weight"] == payload["weights"]["acceptance"]
 
 
 def test_evaluate_default_weight_is_one(capsys: pytest.CaptureFixture[str]) -> None:
@@ -274,3 +291,291 @@ def test_evaluate_subprocess_end_to_end() -> None:
     assert payload["decision"] == "ACCEPT"
     assert "[BOUND evaluation]" in proc.stderr
     assert "Decision: ACCEPT" in proc.stderr
+
+
+
+# ---------------------------------------------------------------------------
+# v0.2 symmetric weights, retry-margin, rollback threshold, deprecated alias
+# ---------------------------------------------------------------------------
+
+
+def test_evaluate_acceptance_weight_flag_sets_weight(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--acceptance-weight`` drives the symmetric weights and the ``weight`` alias.
+
+    The v0.2 symmetric weights flow into the policy, and the deprecated
+    ``weight`` alias stays in sync with ``weights.acceptance`` so legacy
+    consumers keep working.
+    """
+    args = [
+        "evaluate",
+        "--action", "Refactor authentication",
+        "--goal", "Ship secure login",
+        "--acceptance", "0.9",
+        "--influence", "0.2",
+        "--risk", "0.1",
+        "--cost", "0.2",
+        "--acceptance-weight", "2.0",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    out, _ = capsys.readouterr()
+
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["weights"] == {"acceptance": 2.0, "influence": 1.0, "risk": 1.0, "cost": 1.0}
+    assert payload["weight"] == 2.0
+    # S = (2.0 x 0.9) + (1.0 x 0.2) - (1.0 x 0.1) - (1.0 x 0.2) = 1.7
+    assert payload["score"] == pytest.approx(1.7, abs=1e-12)
+    assert payload["decision"] == "ACCEPT"
+
+
+def test_evaluate_weight_flag_is_deprecated_alias(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--weight`` remains a working deprecated alias for ``--acceptance-weight``.
+
+    Supplying ``--weight`` alone folds into ``weights.acceptance``, reproducing
+    the v0.1 behaviour (migration path preserved).
+    """
+    args = [
+        "evaluate",
+        "--action", "Refactor authentication",
+        "--goal", "Ship secure login",
+        "--acceptance", "0.9",
+        "--influence", "0.2",
+        "--risk", "0.1",
+        "--cost", "0.2",
+        "--weight", "2.0",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    out, _ = capsys.readouterr()
+
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["weights"]["acceptance"] == 2.0
+    assert payload["weight"] == 2.0
+    assert payload["score"] == pytest.approx(1.7, abs=1e-12)
+
+
+def test_evaluate_rejects_weight_and_symmetric_weights_conflict(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Supplying both ``--weight`` and a non-default ``--*-weight`` is rejected.
+
+    The two weight systems must never silently compete; the conflict surfaces
+    as a validation error with no JSON on STDOUT.
+    """
+    args = [
+        "evaluate",
+        "--action", "Refactor authentication",
+        "--goal", "Ship secure login",
+        "--acceptance", "0.9",
+        "--influence", "0.2",
+        "--risk", "0.1",
+        "--cost", "0.2",
+        "--weight", "2.0",
+        "--risk-weight", "0.5",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    out, err = capsys.readouterr()
+
+    assert rc == EXIT_VALIDATION_ERROR
+    assert out == ""
+    assert err.strip() != ""
+
+
+def test_evaluate_retry_margin_flag_changes_decision(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--retry-margin`` widens/narrows the RETRY band.
+
+    With default margin 0.1 a score 0.05 below T is RETRY; tightening the
+    margin to 0.0 pushes the same score into REPLAN.
+    """
+    base = [
+        "evaluate",
+        "--action", "Refactor authentication",
+        "--goal", "Ship secure login",
+        "--acceptance", "0.55",
+        "--influence", "0.0",
+        "--risk", "0.0",
+        "--cost", "0.0",
+        "--threshold", "0.6",
+    ]
+
+    rc = main(base)
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    assert json.loads(out)["decision"] == "RETRY"
+
+    rc = main([*base, "--retry-margin", "0.0"])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    assert json.loads(out)["decision"] == "REPLAN"
+
+
+def test_evaluate_rollback_threshold_flag_overrides_score(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--rollback-risk-threshold`` forces ROLLBACK even for an otherwise-ACCEPT score.
+
+    ROLLBACK is a safety boundary checked before the utility threshold, so a
+    high-scoring but too-risky action still rolls back.
+    """
+    args = [
+        "evaluate",
+        "--action", "Refactor authentication",
+        "--goal", "Ship secure login",
+        "--acceptance", "0.9",
+        "--influence", "0.2",
+        "--risk", "0.1",
+        "--cost", "0.2",
+        "--rollback-risk-threshold", "0.05",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    assert rc == 0
+    out, _ = capsys.readouterr()
+
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["score"] == pytest.approx(0.8, abs=1e-12)  # would ACCEPT normally
+    assert payload["decision"] == "ROLLBACK"
+    assert payload["rollback_risk_threshold"] == pytest.approx(0.05, abs=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# evaluate-workflow subcommand
+# ---------------------------------------------------------------------------
+
+
+_WORKFLOW_BASE = [
+    "evaluate-workflow",
+    "--action", "Implement feature X",
+    "--goal", "Complete issue #123",
+    "--threshold", "0.6",
+]
+
+_WORKFLOW_FIELDS = _JSON_FIELDS | {"signals", "provenance"}
+
+
+def test_evaluate_workflow_writes_json_and_prompt(capsys: pytest.CaptureFixture[str]) -> None:
+    """``evaluate-workflow`` derives scores from signals and emits an auditable payload.
+
+    The four score dimensions are derived from the workflow signals (no LLM,
+    no network): a fully-green workflow yields acceptance 1.0. The payload
+    carries the input ``signals`` and the per-dimension ``provenance`` evidence
+    in addition to the shared auditable fields.
+    """
+    args = [
+        *_WORKFLOW_BASE,
+        "--test-pass-rate", "1.0",
+        "--lint-passed",
+        "--type-check-passed",
+        "--retry-count", "2",
+        "--tool-call-count", "14",
+        "--rollback-available",
+    ]
+    rc = main(args)
+    out, err = capsys.readouterr()
+
+    assert rc == 0
+    payload = json.loads(out)
+    assert set(payload) == _WORKFLOW_FIELDS
+    assert set(payload["scores"]) == {"acceptance", "influence", "risk", "cost"}
+    # All-green completion signals -> acceptance is 1.0.
+    assert payload["scores"]["acceptance"] == pytest.approx(1.0, abs=1e-12)
+    # Score is reconstructable from the weights and the derived scores.
+    reconstructed = (
+        (payload["weights"]["acceptance"] * payload["scores"]["acceptance"])
+        + (payload["weights"]["influence"] * payload["scores"]["influence"])
+        - (payload["weights"]["risk"] * payload["scores"]["risk"])
+        - (payload["weights"]["cost"] * payload["scores"]["cost"])
+    )
+    assert payload["score"] == pytest.approx(reconstructed, abs=1e-12)
+    # Input signals are echoed for auditability.
+    assert payload["signals"]["test_pass_rate"] == 1.0
+    assert payload["signals"]["lint_passed"] is True
+    assert payload["signals"]["tool_call_count"] == 14
+    # Per-dimension provenance is present for every dimension.
+    assert set(payload["provenance"]) == {"acceptance", "influence", "risk", "cost"}
+    # STDERR carries the steering prompt.
+    assert "[BOUND evaluation]" in err
+
+
+def test_evaluate_workflow_no_acceptance_evidence_errors(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """No completion signals at all is a hard error, not a silent zero score.
+
+    CodingWorkflowEvaluator raises when it has no acceptance evidence; the CLI
+    surfaces that as a validation error with no JSON on STDOUT.
+    """
+    args = [
+        "evaluate-workflow",
+        "--action", "Implement feature X",
+        "--goal", "Complete issue #123",
+        "--retry-count", "1",
+        "--tool-call-count", "3",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    out, err = capsys.readouterr()
+
+    assert rc == EXIT_VALIDATION_ERROR
+    assert out == ""
+    assert err.strip() != ""
+
+
+def test_evaluate_workflow_rejects_out_of_range_signal(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An out-of-range signal fails Pydantic validation with no JSON on STDOUT."""
+    args = [
+        "evaluate-workflow",
+        "--action", "Implement feature X",
+        "--goal", "Complete issue #123",
+        "--test-pass-rate", "1.5",
+        "--threshold", "0.6",
+    ]
+    rc = main(args)
+    out, err = capsys.readouterr()
+
+    assert rc == EXIT_VALIDATION_ERROR
+    assert out == ""
+    assert err.strip() != ""
+
+
+def test_evaluate_workflow_help_lists_signal_flags(capsys: pytest.CaptureFixture[str]) -> None:
+    """``bound evaluate-workflow --help`` documents the workflow signal flags."""
+    with pytest.raises(SystemExit) as exc:
+        main(["evaluate-workflow", "--help"])
+    out, _ = capsys.readouterr()
+
+    assert exc.value.code == 0
+    assert "--test-pass-rate" in out
+    assert "--rollback-available" in out
+    assert "--threshold" in out
+
+
+def test_evaluate_workflow_respects_weights(capsys: pytest.CaptureFixture[str]) -> None:
+    """``evaluate-workflow`` honours the same ``--*-weight`` flags as ``evaluate``."""
+    args = [
+        *_WORKFLOW_BASE,
+        "--test-pass-rate", "1.0",
+        "--lint-passed",
+        "--type-check-passed",
+        "--retry-count", "0",
+        "--tool-call-count", "0",
+        "--rollback-available",
+        "--cost-weight", "0.0",
+    ]
+    rc = main(args)
+    out, _ = capsys.readouterr()
+
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["weights"]["cost"] == 0.0
+    # Zeroing the cost weight means the cost term cannot drag the score below 1.0.
+    assert payload["score"] == pytest.approx(1.0, abs=1e-12)
+    assert payload["decision"] == "ACCEPT"

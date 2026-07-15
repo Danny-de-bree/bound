@@ -1,4 +1,4 @@
-"""BOUND decision policy (Phase 4).
+"""BOUND decision policy (Phase 2 + Phase 4).
 
 The :class:`BoundPolicy` is the deterministic decision-maker in the BOUND
 pipeline. It wires together three concerns in a fixed order:
@@ -11,19 +11,22 @@ the policy:
 1. Asks the injected :class:`~bound.evaluator.Evaluator` for the
    :class:`~bound.models.EvaluationScores` (``A``, ``I``, ``R``, ``C``). The
    evaluator **never** returns a decision — it only supplies raw scores.
-2. Computes the component breakdown and final score ``S = (W × A) + I - R - C``
-   via the existing :func:`~bound.calculator.calculate_components` so the
-   result and its components stay bit-identical.
-3. Applies the deterministic decision rule:
+2. Computes the component breakdown and final score
+   ``S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)`` via the existing
+   :func:`~bound.calculator.calculate_components` so the result and its
+   components stay bit-identical.
+3. Applies the deterministic decision rule (v0.2 semantics):
 
-   * if ``S >= T`` (``T`` is the threshold): **ACCEPT**
-   * elif ``R > C`` (risk exceeds cost): **ROLLBACK**
-   * elif ``C > R`` (cost exceeds risk): **RETRY**
-   * else (``R == C`` and below threshold): **REPLAN**
+   * if ``scores.risk >= criteria.rollback_risk_threshold``: **ROLLBACK**
+     (safety boundary — evaluated *before* the utility threshold so a
+     high-scoring but unsafe action is still rolled back).
+   * elif ``S >= T`` (``T`` is the threshold): **ACCEPT**
+   * elif ``gap = T - S`` and ``gap <= criteria.retry_margin``: **RETRY**
+   * else: **REPLAN**
 
 4. Returns an :class:`~bound.models.EvaluationResult` carrying the scores,
-   weights, components, ``S``, ``T``, and the decision, so the whole
-   calculation is auditable from the result alone.
+   weights, components, ``S``, ``T``, ``distance_to_threshold``, and the
+   decision, so the whole calculation is auditable from the result alone.
 
 The policy performs no network access and imports no LLM SDK. Once the
 evaluator's scores are supplied, the decision is fully reproducible.
@@ -38,6 +41,7 @@ from bound.models import (
     BoundCriteria,
     Decision,
     EvaluationResult,
+    EvaluationScores,
 )
 
 
@@ -51,10 +55,21 @@ class BoundPolicy:
 
     Decision rule (applied exactly, in order):
 
-    * ``S >= T`` → ``ACCEPT`` (boundary-inclusive: ``S == T`` accepts).
-    * ``S < T`` and ``risk > cost`` → ``ROLLBACK``.
-    * ``S < T`` and ``cost > risk`` → ``RETRY``.
-    * ``S < T`` and ``risk == cost`` → ``REPLAN``.
+    * ``scores.risk >= rollback_risk_threshold`` → ``ROLLBACK`` (safety
+      boundary, evaluated first; a high-scoring but unsafe action still
+      rolls back).
+    * ``score >= threshold`` → ``ACCEPT`` (boundary-inclusive:
+      ``S == T`` accepts).
+    * ``gap = threshold - score`` and ``gap <= retry_margin`` → ``RETRY``
+      (the action is close enough to the threshold to justify another
+      attempt within the same action space).
+    * otherwise → ``REPLAN`` (the action is too far below the threshold;
+      choose a materially different strategy).
+
+    This replaces the v0.1 ``risk > cost`` / ``cost > risk`` / ``risk == cost``
+    rule entirely. In particular ``REPLAN`` is no longer gated on exact float
+    equality of ``risk`` and ``cost``: it is simply the fall-through when the
+    score is too far below the threshold to retry.
 
     Attributes:
         evaluator: The :class:`Evaluator` used to score each :class:`Action`.
@@ -85,69 +100,96 @@ class BoundPolicy:
         Execution order is fixed and auditable:
 
         1. Ask the evaluator for :class:`~bound.models.EvaluationScores`.
-        2. Compute ``S = (W × A) + I - R - C`` and its components via
-           :func:`~bound.calculator.calculate_components` (kept bit-identical to
-           the raw score).
-        3. Compare ``S`` to the threshold ``T`` and apply the decision rule.
+        2. Compute ``S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)`` and its
+           components via :func:`~bound.calculator.calculate_components`
+           (kept bit-identical to the raw score).
+        3. Apply the v0.2 decision rule: safety rollback (risk boundary)
+           first, then utility threshold (ACCEPT), then retry margin (RETRY),
+           else REPLAN. Populate ``distance_to_threshold = S - T``.
         4. Assemble and return the :class:`~bound.models.EvaluationResult`.
 
         Args:
             action: The proposed :class:`Action` to evaluate.
-            criteria: The :class:`BoundCriteria` supplying the goal weight
-                ``W`` and acceptance threshold ``T``.
+            criteria: The :class:`BoundCriteria` supplying the
+                :class:`~bound.models.BoundWeights`, acceptance threshold
+                ``T``, ``retry_margin``, and ``rollback_risk_threshold``.
 
         Returns:
-            An :class:`~bound.models.EvaluationResult` with the scores, weight,
-            threshold, individual components, final score ``S``, and the
-            deterministic ``decision``.
+            An :class:`~bound.models.EvaluationResult` with the scores,
+            weights, threshold, individual components, final score ``S``,
+            signed ``distance_to_threshold``, and the deterministic
+            ``decision``.
         """
         scores = self._evaluator.evaluate(action)
         components = calculate_components(scores, criteria)
         score = components.total
-        decision = self._decide(score, criteria.threshold, scores.risk, scores.cost)
+        decision = self._decide(score=score, scores=scores, criteria=criteria)
+
+        # Evaluators that produce auditable provenance (e.g.
+        # :class:`~bound.workflow.CodingWorkflowEvaluator`) may expose a
+        # ``provenance`` property. Forward it onto the result so the evidence
+        # backing each score dimension flows through the policy seam.
+        # Static / manual evaluators without this property yield ``None``.
+        provenance = getattr(self._evaluator, "provenance", None) or None
 
         return EvaluationResult(
             scores=scores,
-            weight=criteria.weight,
+            weights=criteria.weights,
             threshold=criteria.threshold,
+            rollback_risk_threshold=criteria.rollback_risk_threshold,
+            retry_margin=criteria.retry_margin,
             acceptance_component=components.weighted_acceptance,
             influence_component=components.influence,
             risk_component=components.risk,
             cost_component=components.cost,
             score=score,
+            distance_to_threshold=score - criteria.threshold,
             decision=decision,
+            provenance=provenance,
         )
 
     @staticmethod
     def _decide(
+        *,
         score: float,
-        threshold: float,
-        risk: float,
-        cost: float,
+        scores: EvaluationScores,
+        criteria: BoundCriteria,
     ) -> Decision:
-        """Apply the deterministic BOUND decision rule.
+        """Apply the deterministic v0.2 BOUND decision rule.
 
         The rule is evaluated strictly in this order:
 
-        * ``score >= threshold`` → ``ACCEPT``.
-        * ``risk > cost`` → ``ROLLBACK``.
-        * ``cost > risk`` → ``RETRY``.
-        * otherwise (``risk == cost``, below threshold) → ``REPLAN``.
+        1. ``scores.risk >= criteria.rollback_risk_threshold`` → ``ROLLBACK``.
+           This is a *safety* boundary, not a utility comparison, and it is
+           checked first so a high-scoring action that is still too risky is
+           rolled back rather than accepted.
+        2. ``score >= criteria.threshold`` → ``ACCEPT`` (boundary-inclusive).
+        3. ``gap = criteria.threshold - score``; if ``gap <= retry_margin`` →
+           ``RETRY``. Because step 2 already handled ``score >= threshold``,
+           reaching this point guarantees ``gap > 0``, so the condition is
+           effectively ``0 < gap <= retry_margin``.
+        4. otherwise → ``REPLAN``.
+
+        ``REPLAN`` is the fall-through: it no longer depends on exact float
+        equality of ``risk`` and ``cost`` (the v0.1 trap), so all four
+        decisions are meaningfully reachable.
 
         Args:
             score: The final BOUND score ``S`` (unclamped, unrounded).
-            threshold: The acceptance threshold ``T``.
-            risk: The risk penalty ``R``.
-            cost: The resource penalty ``C``.
+            scores: The original :class:`EvaluationScores` (used for the
+                ``risk`` safety boundary).
+            criteria: The :class:`BoundCriteria` supplying the threshold
+                ``T``, ``retry_margin``, and ``rollback_risk_threshold``.
 
         Returns:
             One of ``ACCEPT``, ``RETRY``, ``REPLAN``, ``ROLLBACK``.
         """
-        if score >= threshold:
-            return "ACCEPT"
-        if risk > cost:
+        if scores.risk >= criteria.rollback_risk_threshold:
             return "ROLLBACK"
-        if cost > risk:
+        if score >= criteria.threshold:
+            return "ACCEPT"
+        gap = criteria.threshold - score
+        if gap <= criteria.retry_margin:
             return "RETRY"
         return "REPLAN"
 

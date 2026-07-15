@@ -37,12 +37,12 @@ Every pull request must keep these green. CI enforces it on Python 3.12 and 3.13
 
 | In scope for `bound` core | Out of scope |
 |---|---|
-| The deterministic formula `S = (W × A) + I - R - C` | LLM SDKs (OpenAI, Anthropic, …) |
-| Pydantic domain models | Provider-specific dependencies |
-| The `Evaluator` protocol + `StaticEvaluator` | External API calls at runtime |
-| The deterministic decision rule | Hiding policy logic inside prompts |
+| The deterministic formula `S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)` | LLM SDKs (OpenAI, Anthropic, …) |
+| Pydantic domain models (`BoundWeights`, `CodingWorkflowSignals`, …) | Provider-specific dependencies |
+| The `Evaluator` protocol + `StaticEvaluator` / `CodingWorkflowEvaluator` | External API calls at runtime |
+| The deterministic decision rule (ROLLBACK → ACCEPT → RETRY → REPLAN) | Hiding policy logic inside prompts |
 | Deterministic steering-prompt rendering | An evaluator returning a decision directly |
-| The `bound evaluate` CLI | |
+| The `bound evaluate` / `bound evaluate-workflow` CLI | |
 
 LLM-as-judge and other evaluators are a *later*, optional concern. They must
 live behind the `Evaluator` protocol and never leak into the core.

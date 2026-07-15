@@ -1,1215 +1,1206 @@
-# BOUND — Agent TODO v3
+# BOUND — TODO v0.2
 
-## Core objective
+## Objective
 
-Build BOUND first as a standalone, agent-agnostic and model-agnostic Python package.
+BOUND v0.2 should turn the current v0.1 foundation into a more credible agent-control policy.
 
-BOUND is a bounded utility policy.
+The goal is not to add many features.
 
-It does not try to find the globally optimal action.
+The goal is to fix the weakest parts of v0.1:
 
-It evaluates whether a proposed action is sufficiently good to continue toward the larger goal.
+1. Make decision semantics coherent.
+2. Make `REPLAN` a real reachable outcome.
+3. Separate safety rollback from ordinary below-threshold decisions.
+4. Make score weighting explicit and symmetric.
+5. Make threshold behavior inspectable.
+6. Add the first real coding-agent workflow signals.
+7. Add an experiment harness to test whether BOUND actually reduces unnecessary agent work.
 
-The core mathematical rule is:
+Do not add an LLM provider dependency in v0.2.
 
-```text
-S = (W × A) + I - R - C
-```
+Do not implement Cline integration yet.
 
-Where:
+Do not claim that BOUND improves agent performance until the experiment harness produces evidence.
 
-| Variable | Meaning                     |
-| -------- | --------------------------- |
-| `S`      | Final bounded utility score |
-| `W`      | Goal weight                 |
-| `A`      | Acceptance score            |
-| `I`      | Downstream influence        |
-| `R`      | Risk penalty                |
-| `C`      | Resource penalty            |
+---
 
-The success condition is:
+# Core principle
+
+BOUND remains based on satisficing:
 
 ```text
 S >= T
 ```
 
+Once the acceptance threshold is crossed, further optimization is not required.
+
+The score remains:
+
+```text
+S = weighted utility - penalties
+```
+
+The exact v0.2 formulation should become:
+
+```text
+S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
+```
+
 Where:
 
-```text
-T = acceptance threshold
-```
+| Variable | Meaning              |
+| -------- | -------------------- |
+| `S`      | Final BOUND score    |
+| `A`      | Acceptance           |
+| `I`      | Downstream influence |
+| `R`      | Risk                 |
+| `C`      | Resource cost        |
+| `W_A`    | Acceptance weight    |
+| `W_I`    | Influence weight     |
+| `W_R`    | Risk weight          |
+| `W_C`    | Cost weight          |
+| `T`      | Acceptance threshold |
 
-The objective is not:
-
-```text
-maximize S indefinitely
-```
-
-The objective is:
-
-```text
-cross the acceptance threshold
-and continue making progress toward the final goal
-```
-
-This mathematical model is the core of BOUND.
-
-Keep it independent from:
-
-* LLM providers
-* agent frameworks
-* Cline
-* Claude Code
-* OpenAI
-* Anthropic
-* DeepSeek
-* MCP
-* IDE integrations
-
-LLM-as-judge support will be added later as one possible source of evaluation scores.
-
----
-
-# Development rules
-
-Work strictly phase by phase.
-
-Do not begin a new phase until:
-
-```bash
-uv run pytest
-uv run ruff check .
-```
-
-both pass.
-
-Use:
-
-* Python 3.12+
-* `uv`
-* Pydantic v2
-* pytest
-* Ruff
-* full type annotations
-
-Do not:
-
-* add an LLM SDK
-* add a provider-specific dependency
-* call external APIs
-* hide policy logic inside prompts
-* allow an evaluator to directly choose the final policy decision
-
-The BOUND core must remain deterministic once evaluation scores are provided.
-
----
-
-# Target architecture
-
-```text
-Input
-  │
-  ▼
-Action
-  │
-  ▼
-Evaluator
-  │
-  ▼
-EvaluationScores
-  │
-  ▼
-BoundCalculator
-  │
-  │  S = (W × A) + I - R - C
-  ▼
-BoundPolicy
-  │
-  ▼
-EvaluationResult
-  │
-  ├── JSON
-  │
-  └── Steering prompt
-```
-
-The evaluator is replaceable.
-
-The mathematical calculation is not.
-
----
-
-# Phase 0 — Project setup
-
-## Tasks
-
-* [ ] Initialize the repository as a `uv` Python project.
-* [ ] Use a `src/` package layout.
-* [ ] Add Pydantic:
-
-```bash
-uv add pydantic
-```
-
-* [ ] Add development dependencies:
-
-```bash
-uv add --dev pytest ruff
-```
-
-* [ ] Do not add Anthropic, OpenAI, or any other LLM SDK.
-* [ ] Add the CLI entrypoint:
-
-```toml
-[project.scripts]
-bound = "bound.cli:main"
-```
-
-Target structure:
-
-```text
-bound/
-├── pyproject.toml
-├── README.md
-├── src/
-│   └── bound/
-│       ├── __init__.py
-│       ├── models.py
-│       ├── calculator.py
-│       ├── evaluator.py
-│       ├── policy.py
-│       ├── prompt.py
-│       └── cli.py
-├── tests/
-│   ├── test_models.py
-│   ├── test_calculator.py
-│   ├── test_policy.py
-│   ├── test_prompt.py
-│   └── test_cli.py
-└── examples/
-    └── flight_booking.py
-```
-
-## Phase gate
-
-The following must succeed:
-
-```bash
-uv sync
-uv run pytest
-uv run ruff check .
-uv run bound --help
-```
-
----
-
-# Phase 1 — Pydantic domain models
-
-Create:
-
-```text
-src/bound/models.py
-```
-
-## Action
-
-```python
-class Action(BaseModel):
-    description: str
-    goal: str
-    context: str | None = None
-```
-
-Requirements:
-
-* `description` must not be empty.
-* `description` must not be whitespace only.
-* `goal` must not be empty.
-* `goal` must not be whitespace only.
-
----
-
-## BoundCriteria
-
-Use a name that reflects the mathematical model clearly.
-
-```python
-class BoundCriteria(BaseModel):
-    threshold: float = Field(ge=0.0)
-    weight: float = Field(default=1.0, ge=0.0)
-```
-
-Important:
-
-Do not artificially restrict `threshold` to `[0, 1]`.
-
-The final score:
+The v0.1 formula:
 
 ```text
 S = (W × A) + I - R - C
 ```
 
-is not restricted to `[0, 1]`.
-
-Therefore the threshold should not be assumed to be limited to `1.0`.
-
-For example:
+must remain expressible as the default configuration:
 
 ```text
-W = 2.0
-A = 1.0
-I = 1.0
-R = 0.0
-C = 0.0
-
-S = 3.0
+W_A = W
+W_I = 1.0
+W_R = 1.0
+W_C = 1.0
 ```
 
-A valid threshold could therefore be:
-
-```text
-T = 2.0
-```
+Do not break the mathematical behavior of existing users unless explicitly documented.
 
 ---
 
-## EvaluationScores
+# Phase 1 — Rework criteria and weights
+
+## Goal
+
+Remove the arbitrary assumption that only acceptance can be weighted.
+
+Replace or extend the existing criteria model.
+
+Suggested model:
 
 ```python
-class EvaluationScores(BaseModel):
-    acceptance: float = Field(ge=0.0, le=1.0)
-    influence: float = Field(ge=-1.0, le=1.0)
-    risk: float = Field(ge=0.0, le=1.0)
-    cost: float = Field(ge=0.0, le=1.0)
-    reasoning: str | None = None
-```
-
-Definitions:
-
-### Acceptance — `A`
-
-```text
-A ∈ [0, 1]
-```
-
-Measures:
-
-```text
-How well does this proposed action satisfy or advance the current goal?
-```
-
-Examples:
-
-```text
-0.0 = does not help satisfy the goal
-0.5 = partially satisfies the goal
-1.0 = fully satisfies the goal
-```
-
----
-
-### Influence — `I`
-
-```text
-I ∈ [-1, 1]
-```
-
-Measures:
-
-```text
-How does this action affect the probability of success of downstream goals?
-```
-
-Examples:
-
-```text
--1.0 = strongly damages future progress
- 0.0 = neutral downstream effect
- 1.0 = strongly improves future progress
-```
-
-Influence is not a penalty.
-
-It may either increase or decrease the final score.
-
----
-
-### Risk — `R`
-
-```text
-R ∈ [0, 1]
-```
-
-Measures:
-
-```text
-What is the potential downside of taking this action?
-```
-
-Higher risk lowers the final utility score.
-
----
-
-### Resource cost — `C`
-
-```text
-C ∈ [0, 1]
-```
-
-Measures normalized resource consumption.
-
-Examples include:
-
-* time
-* tokens
-* tool calls
-* compute
-* money
-* operational complexity
-
-Higher cost lowers the final utility score.
-
----
-
-## Decision
-
-```python
-Decision = Literal[
-    "ACCEPT",
-    "RETRY",
-    "REPLAN",
-    "ROLLBACK",
-]
-```
-
----
-
-## EvaluationResult
-
-```python
-class EvaluationResult(BaseModel):
-    scores: EvaluationScores
-
-    weight: float
-    threshold: float
-
-    acceptance_component: float
-    influence_component: float
-    risk_component: float
-    cost_component: float
-
-    score: float
-    decision: Decision
-```
-
-The result should contain the individual score components.
-
-This is important because BOUND should make its calculation visible and inspectable.
-
-For:
-
-```text
-S = (W × A) + I - R - C
-```
-
-store:
-
-```text
-acceptance_component = W × A
-influence_component = I
-risk_component = R
-cost_component = C
-```
-
-The final result can therefore clearly explain how `S` was calculated.
-
----
-
-# Phase 2 — Pure mathematical calculator
-
-Create:
-
-```text
-src/bound/calculator.py
-```
-
-This module contains the mathematical core of BOUND.
-
-It must have no dependency on:
-
-* CLI code
-* LLMs
-* providers
-* prompts
-* external APIs
-
----
-
-## BoundCalculation
-
-Implement a pure function:
-
-```python
-def calculate_bound_score(
-    scores: EvaluationScores,
-    criteria: BoundCriteria,
-) -> float:
-    ...
-```
-
-The implementation must be exactly equivalent to:
-
-```python
-return (
-    criteria.weight * scores.acceptance
-    + scores.influence
-    - scores.risk
-    - scores.cost
-)
-```
-
-Do not:
-
-* clamp the score
-* normalize the score
-* round the score
-* apply a sigmoid
-* rescale it to `[0, 1]`
-
-The mathematical score must remain raw.
-
----
-
-## Component calculation
-
-Also expose a structured calculation.
-
-For example:
-
-```python
-class ScoreComponents(BaseModel):
-    weighted_acceptance: float
-    influence: float
-    risk: float
-    cost: float
-    total: float
+class BoundWeights(BaseModel):
+    acceptance: float = Field(default=1.0, ge=0.0)
+    influence: float = Field(default=1.0, ge=0.0)
+    risk: float = Field(default=1.0, ge=0.0)
+    cost: float = Field(default=1.0, ge=0.0)
 ```
 
 And:
 
 ```python
-def calculate_components(
+class BoundCriteria(BaseModel):
+    threshold: float
+    retry_margin: float = Field(default=0.1, ge=0.0)
+    rollback_risk_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    weights: BoundWeights = Field(default_factory=BoundWeights)
+```
+
+If backward compatibility with the existing `weight` field is desired, support it only through a clearly documented migration path.
+
+Do not silently keep two competing weight systems.
+
+---
+
+## Required score formula
+
+Implement exactly:
+
+```python
+score = (
+    criteria.weights.acceptance * scores.acceptance
+    + criteria.weights.influence * scores.influence
+    - criteria.weights.risk * scores.risk
+    - criteria.weights.cost * scores.cost
+)
+```
+
+Do not:
+
+* clamp
+* normalize
+* apply nonlinear transforms
+* round internally
+
+---
+
+## Required tests
+
+Test:
+
+```text
+all default weights = 1.0
+```
+
+Test independent effects of:
+
+```text
+W_A
+W_I
+W_R
+W_C
+```
+
+Test that increasing:
+
+```text
+W_R
+```
+
+makes high-risk actions score lower.
+
+Test that increasing:
+
+```text
+W_C
+```
+
+makes expensive actions score lower.
+
+Test negative influence with influence weighting.
+
+---
+
+# Phase 2 — Fix decision semantics
+
+## Goal
+
+Make all four decisions distinct, meaningful, and reachable.
+
+The current v0.1 rule:
+
+```text
+risk > cost -> ROLLBACK
+cost > risk -> RETRY
+risk == cost -> REPLAN
+```
+
+must be removed.
+
+Exact float equality must never determine whether `REPLAN` is reachable.
+
+---
+
+# New decision model
+
+Use the following deterministic order.
+
+## 1. ROLLBACK
+
+Rollback is a safety condition.
+
+It is independent from whether risk happens to be greater than cost.
+
+Use:
+
+```python
+if scores.risk >= criteria.rollback_risk_threshold:
+    return "ROLLBACK"
+```
+
+This condition should be evaluated before ordinary retry/replan behavior.
+
+Document explicitly:
+
+```text
+ROLLBACK means the proposed or executed action exceeds the configured acceptable risk boundary.
+```
+
+Do not define rollback as:
+
+```text
+risk is the largest negative component
+```
+
+---
+
+## 2. ACCEPT
+
+If rollback is not required:
+
+```python
+if score >= criteria.threshold:
+    return "ACCEPT"
+```
+
+Decision meaning:
+
+```text
+The action is sufficiently good.
+
+Stop optimizing the current action and continue toward the larger goal.
+```
+
+---
+
+## 3. RETRY
+
+Calculate:
+
+```python
+gap = criteria.threshold - score
+```
+
+If:
+
+```text
+0 < gap <= retry_margin
+```
+
+return:
+
+```text
+RETRY
+```
+
+Decision meaning:
+
+```text
+The current approach is close enough to acceptable that another attempt within the same action space is justified.
+```
+
+---
+
+## 4. REPLAN
+
+Otherwise:
+
+```text
+REPLAN
+```
+
+Decision meaning:
+
+```text
+The current approach is too far below the acceptance threshold.
+
+Choose a materially different strategy.
+```
+
+---
+
+# Exact algorithm
+
+Implement approximately:
+
+```python
+def decide(
+    *,
+    score: float,
     scores: EvaluationScores,
     criteria: BoundCriteria,
-) -> ScoreComponents:
+) -> Decision:
+    if scores.risk >= criteria.rollback_risk_threshold:
+        return "ROLLBACK"
+
+    if score >= criteria.threshold:
+        return "ACCEPT"
+
+    gap = criteria.threshold - score
+
+    if gap <= criteria.retry_margin:
+        return "RETRY"
+
+    return "REPLAN"
+```
+
+Keep it pure and fully unit tested.
+
+---
+
+# Important semantic rule
+
+A high-scoring action may still produce:
+
+```text
+ROLLBACK
+```
+
+if it violates the configured hard risk threshold.
+
+This is intentional.
+
+BOUND should distinguish:
+
+```text
+utility threshold
+```
+
+from:
+
+```text
+safety boundary
+```
+
+Document this clearly.
+
+---
+
+# Phase 3 — Resolve ROADMAP inconsistencies
+
+## Goal
+
+Make code, README, TODO, and ROADMAP use the same decision semantics.
+
+Update all documentation.
+
+The canonical meanings become:
+
+```text
+ACCEPT
+The action is good enough. Stop optimizing and continue.
+
+RETRY
+The action is close to acceptable. Try again within the same general approach.
+
+REPLAN
+The action is not close enough to acceptable. Choose a different strategy.
+
+ROLLBACK
+The action exceeds a configured hard risk boundary. Revert or avoid it where possible.
+```
+
+Remove diagrams or text that imply:
+
+```text
+REPLAN -> failed -> ROLLBACK
+```
+
+unless a future multi-step escalation policy is being explicitly described.
+
+For v0.2:
+
+```text
+ROLLBACK
+```
+
+is a peer policy outcome triggered by a hard safety condition.
+
+---
+
+# Phase 4 — Make threshold behavior first-class
+
+## Goal
+
+Treat threshold selection as a core part of BOUND rather than an incidental CLI parameter.
+
+Do not implement automatic learned threshold selection yet.
+
+Add explicit threshold metadata to results.
+
+Suggested result additions:
+
+```python
+class ThresholdAnalysis(BaseModel):
+    threshold: float
+    score: float
+    gap: float
+    margin_to_accept: float
+    accepted: bool
+```
+
+For accepted results:
+
+```text
+margin_to_accept = score - threshold
+```
+
+For below-threshold results:
+
+```text
+gap = threshold - score
+```
+
+Avoid redundant fields if one signed value is clearer.
+
+A simpler model is acceptable:
+
+```python
+distance_to_threshold: float
+```
+
+where:
+
+```text
+positive = above threshold
+zero = exactly at threshold
+negative = below threshold
+```
+
+Choose one representation and document it clearly.
+
+---
+
+## Required tests
+
+Test:
+
+```text
+S > T
+S == T
+S just below T
+S far below T
+```
+
+Test retry-margin boundaries exactly.
+
+Example:
+
+```text
+T = 0.70
+retry_margin = 0.10
+```
+
+Then:
+
+```text
+S = 0.70 -> ACCEPT
+S = 0.60 -> RETRY
+S = 0.599999 -> REPLAN
+```
+
+Unless floating-point tolerance is deliberately introduced.
+
+If tolerance is introduced, make it explicit and deterministic.
+
+---
+
+# Phase 5 — Add workflow signal models
+
+## Goal
+
+Introduce the first deterministic inputs that can later produce BOUND scores.
+
+Do not yet attempt to derive every possible workflow signal.
+
+Focus on coding-agent workflows.
+
+Create a model such as:
+
+```python
+class CodingWorkflowSignals(BaseModel):
+    test_pass_rate: float | None = Field(default=None, ge=0.0, le=1.0)
+    lint_passed: bool | None = None
+    type_check_passed: bool | None = None
+    required_checks_passed: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    retry_count: int = Field(default=0, ge=0)
+    tool_call_count: int = Field(default=0, ge=0)
+    token_usage: int | None = Field(default=None, ge=0)
+    execution_time_seconds: float | None = Field(default=None, ge=0.0)
+
+    files_changed: int | None = Field(default=None, ge=0)
+    unexpected_files_changed: int | None = Field(default=None, ge=0)
+
+    rollback_available: bool | None = None
+```
+
+Keep this model generic enough to be populated by different coding agents.
+
+Do not include provider-specific fields.
+
+---
+
+# Phase 6 — Deterministic signal evaluator v1
+
+## Goal
+
+Prove that at least some BOUND inputs can be derived without an LLM.
+
+Create a new evaluator:
+
+```python
+class CodingWorkflowEvaluator:
     ...
 ```
 
-Required formulas:
+It should take:
 
 ```text
-weighted_acceptance = W × A
-
-total =
-    weighted_acceptance
-    + I
-    - R
-    - C
+Action
+CodingWorkflowSignals
 ```
 
-This makes the mathematical evaluation fully inspectable.
-
----
-
-## Required calculator tests
-
-### Basic formula
-
-Given:
+and produce:
 
 ```text
-W = 1.0
-A = 0.8
-I = 0.2
-R = 0.1
-C = 0.1
+EvaluationScores
 ```
 
-Expected:
+This first implementation must be intentionally simple and transparent.
+
+Do not pretend the mappings are scientifically calibrated.
+
+Mark them clearly as:
 
 ```text
-S = (1.0 × 0.8) + 0.2 - 0.1 - 0.1
-S = 0.8
+v0.2 reference heuristic
 ```
 
 ---
 
-### Positive downstream influence
+## Suggested acceptance mapping
+
+Example:
 
 ```text
-W = 1.0
-A = 0.5
-I = 0.5
-R = 0.0
-C = 0.0
+A = mean of available completion signals
 ```
 
-Expected:
+Possible inputs:
 
 ```text
-S = 1.0
+test_pass_rate
+required_checks_passed
+lint status
+type-check status
 ```
+
+Boolean values may map to:
+
+```text
+True = 1.0
+False = 0.0
+```
+
+Ignore unavailable signals rather than defaulting missing values to zero.
+
+Raise a clear error if no acceptance evidence is available.
 
 ---
 
-### Negative downstream influence
+## Suggested risk mapping
+
+Risk may include:
 
 ```text
-W = 1.0
-A = 0.8
-I = -0.5
-R = 0.1
-C = 0.1
+unexpected file changes
+rollback unavailable
+large change surface
+failed checks
 ```
 
-Expected:
+Keep the exact rule visible in code.
+
+Example only:
 
 ```text
-S = 0.1
+risk increases when unexpected_files_changed > 0
+risk increases when rollback_available is False
 ```
+
+Do not create opaque magic constants without documenting them.
 
 ---
 
-### Weight greater than one
+## Suggested cost mapping
+
+Cost may use:
 
 ```text
-W = 2.0
-A = 0.8
-I = 0.0
-R = 0.0
-C = 0.0
+retry count
+tool calls
+token usage
+execution time
 ```
 
-Expected:
-
-```text
-S = 1.6
-```
-
-This test explicitly proves that the score is not restricted to `[0, 1]`.
-
----
-
-### Negative final score
-
-```text
-W = 1.0
-A = 0.1
-I = -0.5
-R = 0.8
-C = 0.7
-```
-
-Expected:
-
-```text
-S = -1.9
-```
-
-This test explicitly proves that negative scores are valid.
-
----
-
-# Phase 3 — Evaluator abstraction
-
-Create:
-
-```text
-src/bound/evaluator.py
-```
-
-BOUND must not care how the four scores are produced.
-
-Define:
-
-```python
-class Evaluator(Protocol):
-    def evaluate(self, action: Action) -> EvaluationScores:
-        ...
-```
-
-Do not implement an LLM evaluator yet.
-
-Provide a simple implementation useful for:
-
-* tests
-* examples
-* manual integrations
+Normalization must be configuration-driven.
 
 For example:
 
 ```python
-class StaticEvaluator:
-    def __init__(self, scores: EvaluationScores):
-        self.scores = scores
-
-    def evaluate(self, action: Action) -> EvaluationScores:
-        return self.scores
+class WorkflowNormalization(BaseModel):
+    max_expected_retries: int = 5
+    max_expected_tool_calls: int = 50
+    max_expected_tokens: int = 100_000
+    max_expected_runtime_seconds: float = 3600.0
 ```
 
-This allows:
+Normalize using explicit caps.
+
+For example:
 
 ```python
-policy = BoundPolicy(
-    evaluator=StaticEvaluator(
-        EvaluationScores(
-            acceptance=0.8,
-            influence=0.2,
-            risk=0.1,
-            cost=0.1,
-        )
-    )
+normalized_tool_calls = min(
+    tool_call_count / max_expected_tool_calls,
+    1.0,
 )
 ```
 
-Later implementations may include:
-
-```text
-LLMEvaluator
-RuleBasedEvaluator
-HumanEvaluator
-RewardModelEvaluator
-EnvironmentEvaluator
-CompositeEvaluator
-```
-
-None belong in v0.1.
-
-The interface must already support them without changing the policy layer.
+Do not normalize against hidden constants.
 
 ---
 
-# Phase 4 — BOUND policy
+## Influence
 
-Create:
+Do not fake downstream influence when no evidence exists.
+
+For v0.2, either:
 
 ```text
-src/bound/policy.py
+influence = 0.0
 ```
 
-Implement:
+with an explicit explanation,
+
+or allow it to be provided externally.
+
+Prefer honesty over invented sophistication.
+
+---
+
+# Phase 7 — Explain score provenance
+
+## Goal
+
+Make every score inspectable.
+
+Add provenance metadata.
+
+Suggested model:
 
 ```python
-class BoundPolicy:
-    def __init__(self, evaluator: Evaluator):
-        self.evaluator = evaluator
-
-    def evaluate(
-        self,
-        action: Action,
-        criteria: BoundCriteria,
-    ) -> EvaluationResult:
-        ...
+class ScoreEvidence(BaseModel):
+    source: str
+    value: float
+    contribution: float | None = None
+    description: str | None = None
 ```
 
-Execution order:
+Or a simpler structured equivalent.
+
+The result should allow a consumer to understand:
 
 ```text
-1. Receive Action
-2. Ask Evaluator for EvaluationScores
-3. Calculate S using the BOUND formula
-4. Compare S against T
-5. Determine the policy decision
-6. Return EvaluationResult
+Why is A = 0.85?
+Why is R = 0.30?
+Why is C = 0.20?
 ```
+
+Example:
+
+```text
+Acceptance:
+- tests: 1.0
+- lint: 1.0
+- required checks: 0.75
+
+Computed A: 0.92
+```
+
+Do not require provenance for manually supplied `StaticEvaluator` scores.
+
+But deterministic evaluators should expose it.
 
 ---
 
-# Primary success rule
+# Phase 8 — Update steering prompts
 
-The core BOUND decision is:
+## Goal
 
-```text
-if S >= T:
-    ACCEPT
-```
+Make prompts reflect the new decision semantics.
 
-This rule is fundamental.
+Examples:
 
-The objective is not to maximize `S`.
-
-Once:
+## ACCEPT
 
 ```text
-S >= T
+The current result meets the required acceptance threshold and does not exceed the configured risk boundary.
+
+Further optimization of this step is not required.
+
+Continue toward the next goal.
 ```
 
-the action is sufficiently acceptable.
+## RETRY
 
-The system should continue.
+```text
+The current result is close to the required acceptance threshold.
+
+Stay with the same general approach and make one focused attempt to close the remaining gap.
+```
+
+## REPLAN
+
+```text
+The current result is materially below the required acceptance threshold.
+
+Do not keep iterating on the same approach.
+
+Choose a different strategy that better addresses the goal.
+```
+
+## ROLLBACK
+
+```text
+The action exceeds the configured acceptable risk boundary.
+
+Avoid or revert the action where possible before continuing.
+```
+
+The prompt should include:
+
+```text
+score
+threshold
+distance from threshold
+risk
+rollback threshold
+decision
+```
+
+Keep it concise.
 
 ---
 
-# Below-threshold decision rule
+# Phase 9 — CLI v0.2
 
-When:
+Keep direct-score mode.
 
-```text
-S < T
+Example:
+
+```bash
+bound evaluate \
+  --action "Refactor authentication" \
+  --goal "Ship secure login" \
+  --acceptance 0.8 \
+  --influence 0.1 \
+  --risk 0.2 \
+  --cost 0.3 \
+  --threshold 0.7
 ```
 
-use the negative components to determine the next action.
+Add optional weights:
 
-For v0.1:
+```text
+--acceptance-weight
+--influence-weight
+--risk-weight
+--cost-weight
+```
+
+Add:
+
+```text
+--retry-margin
+--rollback-risk-threshold
+```
+
+Do not remove the existing CLI without a migration path.
+
+---
+
+## Optional workflow mode
+
+Add only if it can remain clean:
+
+```bash
+bound evaluate-workflow \
+  --action "Implement feature X" \
+  --goal "Complete issue #123" \
+  --test-pass-rate 1.0 \
+  --lint-passed \
+  --type-check-passed \
+  --retry-count 2 \
+  --tool-call-count 14 \
+  --rollback-available
+```
+
+This command should use:
+
+```text
+CodingWorkflowEvaluator
+```
+
+No LLM.
+
+No network.
+
+If adding a second CLI mode makes v0.2 too large, prioritize the Python API and experiment harness instead.
+
+---
+
+# Phase 10 — Real agent-loop experiment harness
+
+## Goal
+
+Test the actual BOUND hypothesis.
+
+The central v0.2 research question is:
+
+> Can BOUND stop a coding agent after a sufficiently good solution has been reached, reducing unnecessary work without materially reducing task success?
+
+Build a small experiment harness.
+
+Do not integrate deeply into an agent framework yet.
+
+Use recorded or manually captured trajectories if necessary.
+
+---
+
+## Experiment input
+
+Represent an agent trajectory as sequential states:
 
 ```python
-if score >= criteria.threshold:
-    decision = "ACCEPT"
-elif scores.risk > scores.cost:
-    decision = "ROLLBACK"
-elif scores.cost > scores.risk:
-    decision = "RETRY"
-else:
-    decision = "REPLAN"
+class AgentStep(BaseModel):
+    step_index: int
+    signals: CodingWorkflowSignals
+    scores: EvaluationScores | None = None
 ```
 
-Interpretation:
+A trajectory:
 
-### ACCEPT
+```python
+class AgentTrajectory(BaseModel):
+    task_id: str
+    steps: list[AgentStep]
+```
+
+---
+
+## BOUND simulation
+
+For each step:
 
 ```text
-The bounded utility threshold has been reached.
-Stop optimizing this action and continue.
+1. calculate scores
+2. calculate S
+3. apply BOUND decision
+4. record the first step that produces ACCEPT
 ```
 
-### RETRY
+This gives:
 
 ```text
-The action is below threshold primarily because resource cost is too high.
-
-Stay within the same action space but attempt a cheaper or more efficient execution.
+BOUND stop step
 ```
 
-### ROLLBACK
+Compare against:
 
 ```text
-The action is below threshold primarily because its risk is too high.
-
-Avoid or reverse the risky action when possible before continuing.
+actual agent stop step
 ```
 
-### REPLAN
+---
+
+# Required experiment metrics
+
+At minimum calculate:
 
 ```text
-The action is below threshold but neither risk nor cost clearly dominates.
-
-Choose a different approach.
+steps_saved
+tool_calls_saved
+tokens_saved, when available
+runtime_saved, when available
 ```
 
-Important:
+Also track:
 
-The evaluator produces scores.
+```text
+did tests still pass at BOUND stop?
+did required checks pass?
+did later steps introduce regressions?
+```
 
-The BOUND policy produces the final decision.
+A particularly important metric:
 
-Never allow an evaluator to return:
+```text
+post-solution unnecessary steps
+```
+
+Define:
+
+```text
+the number of agent steps executed after the earliest state that already satisfied the task's acceptance criteria
+```
+
+BOUND should aim to reduce this.
+
+---
+
+# Phase 11 — Add benchmark fixtures
+
+## Goal
+
+Stop validating BOUND only on the flight example.
+
+Add at least 5 coding-agent trajectory fixtures.
+
+Examples:
+
+```text
+1. Agent solves task, then performs unnecessary refactor.
+2. Agent gets close, retries once, then succeeds.
+3. Agent repeatedly patches the same failing approach.
+4. Agent proposes a high-risk destructive action.
+5. Agent passes tests but changes unexpected files.
+```
+
+Each fixture should have expected policy behavior.
+
+At least one fixture should demonstrate:
 
 ```text
 ACCEPT
+```
+
+At least one:
+
+```text
 RETRY
+```
+
+At least one:
+
+```text
 REPLAN
+```
+
+At least one:
+
+```text
 ROLLBACK
 ```
 
-directly.
+---
+
+# Phase 12 — Document assumptions honestly
+
+Update README with a section:
+
+```text
+Current status
+```
+
+State clearly:
+
+```text
+BOUND v0.2 is an experimental deterministic control policy.
+
+The score formula and default heuristics are hypotheses.
+
+They have not yet been broadly validated across production agent workloads.
+```
+
+Document that:
+
+```text
+A/I/R/C are not naturally commensurable quantities.
+```
+
+The weights are explicit policy parameters.
+
+Do not imply that the defaults are universally correct.
 
 ---
 
-# Policy tests
+# Phase 13 — Clarify what "bounded" means
 
-Test the acceptance boundary explicitly.
+Add documentation explaining:
 
-Given:
-
-```text
-S = 0.6
-T = 0.6
-```
-
-Expected:
+BOUND does not currently mean:
 
 ```text
-ACCEPT
+the mathematical utility function itself has a bounded or concave shape
 ```
 
-Because:
+BOUND currently means:
 
 ```text
-S >= T
+optimization is bounded by an explicit acceptance threshold
 ```
 
-not:
+In other words:
 
 ```text
-S > T
+once S >= T:
+    stop optimizing this step
 ```
 
-Also test:
+This is a satisficing policy.
 
-```text
-S = 0.599999
-T = 0.6
-```
+Use precise language.
 
-Expected:
-
-```text
-not ACCEPT
-```
+Do not overclaim mathematical novelty.
 
 ---
 
-# Phase 5 — Steering prompt
+# Phase 14 — Competitive positioning
 
-Create:
+Add a concise section to README.
 
-```text
-src/bound/prompt.py
-```
+Do not claim the formula is the moat.
 
-Generate deterministic plain text from `EvaluationResult`.
-
-Do not use an LLM.
-
-Example:
+BOUND's intended differentiation is:
 
 ```text
-[BOUND evaluation]
-
-Decision: REPLAN
-
-Bounded utility:
-S = (W × A) + I - R - C
-S = (1.00 × 0.70) + 0.10 - 0.30 - 0.20
-S = 0.30
-
-Acceptance threshold:
-T = 0.60
-
-The proposed action does not yet meet the required acceptance threshold.
-
-Assessment:
-The current approach advances the goal but introduces too much uncertainty.
-
-Suggested next step:
-Choose an alternative approach that improves goal satisfaction or downstream impact while reducing risk or resource cost.
+provider-agnostic
+deterministic final policy
+auditable score decomposition
+explicit stop condition
+no mandatory LLM judge
+workflow evidence before semantic judgement
 ```
 
-For `ACCEPT`, make the core principle explicit:
+The future value is primarily in:
 
 ```text
-The proposed action meets the required acceptance threshold.
-
-Further optimization is not required.
-
-Proceed with the action and continue toward the larger goal.
+signal collection
+score derivation
+threshold calibration
+agent-loop integration
 ```
 
-The prompt should make the bounded optimization philosophy visible.
-
-Keep it under 150 words.
+not in the one-line score formula alone.
 
 ---
 
-# Phase 6 — CLI
+# Required tests
 
-Required command:
+By the end of v0.2, tests must cover:
+
+## Score calculation
+
+* all four independent weights
+* default v0.1-equivalent behavior
+* positive and negative influence
+* negative final scores
+* no clamping
+
+## Decision policy
+
+* hard risk rollback
+* high score but unsafe -> rollback
+* score exactly at threshold -> accept
+* score above threshold -> accept
+* score just below threshold within retry margin -> retry
+* score outside retry margin -> replan
+* exact retry-margin boundary
+* every decision is reachable
+
+## Workflow signals
+
+* valid signals
+* invalid ranges
+* missing optional signals
+* no acceptance evidence
+* deterministic normalization
+
+## Evaluator
+
+* deterministic same-input same-output
+* no network
+* no model dependency
+* explicit provenance
+
+## Experiment harness
+
+* correct first ACCEPT step
+* correct steps saved
+* regression-after-accept scenario
+* trajectory with no ACCEPT result
+
+---
+
+# Definition of Done
+
+BOUND v0.2 is complete when:
 
 ```bash
-uv run bound evaluate \
-  --action "Book the direct flight" \
-  --goal "Travel from Paris to New York" \
-  --acceptance 0.9 \
-  --influence 0.2 \
-  --risk 0.1 \
-  --cost 0.2 \
-  --weight 1.0 \
-  --threshold 0.6
-```
-
-For v0.1, accept the evaluation scores directly through the CLI.
-
-This is intentional.
-
-Do not call an LLM.
-
-Required inputs:
-
-```text
---action
---goal
---context
---acceptance
---influence
---risk
---cost
---weight
---threshold
-```
-
-This allows BOUND to be used today by any system that can produce the four evaluation dimensions.
-
-Example integration:
-
-```text
-agent
-  -> calculates or obtains A/I/R/C
-  -> calls BOUND
-  -> receives deterministic policy result
-```
-
-Later:
-
-```text
-agent
-  -> LLMEvaluator
-  -> A/I/R/C
-  -> BOUND
-```
-
-The core does not change.
-
----
-
-# CLI JSON output
-
-Include the mathematical components explicitly.
-
-Example:
-
-```json
-{
-  "scores": {
-    "acceptance": 0.9,
-    "influence": 0.2,
-    "risk": 0.1,
-    "cost": 0.2
-  },
-  "weight": 1.0,
-  "threshold": 0.6,
-  "acceptance_component": 0.9,
-  "influence_component": 0.2,
-  "risk_component": 0.1,
-  "cost_component": 0.2,
-  "score": 0.8,
-  "decision": "ACCEPT"
-}
-```
-
-The result must be auditable.
-
-A consumer should be able to reconstruct:
-
-```text
-S = (1.0 × 0.9) + 0.2 - 0.1 - 0.2
-S = 0.8
-```
-
-from the JSON alone.
-
----
-
-# Phase 7 — Flight example
-
-Reproduce the existing README concept without an LLM.
-
-Example:
-
-```python
-scores = EvaluationScores(
-    acceptance=0.9,
-    influence=0.2,
-    risk=0.1,
-    cost=0.2,
-)
-
-criteria = BoundCriteria(
-    weight=1.0,
-    threshold=0.6,
-)
-```
-
-Expected:
-
-```text
-S = (1.0 × 0.9) + 0.2 - 0.1 - 0.2
-S = 0.8
-```
-
-Since:
-
-```text
-0.8 >= 0.6
-```
-
-the result is:
-
-```text
-ACCEPT
-```
-
-The important behavior is:
-
-```text
-The flight does not need to be globally optimal.
-
-It has crossed the acceptance threshold.
-
-Continue.
-```
-
----
-
-# Final test requirements
-
-At minimum test:
-
-## Models
-
-* valid and invalid `Action`
-* valid and invalid score ranges
-* positive weight
-* thresholds above `1.0`
-
-## Mathematics
-
-* exact score formula
-* positive influence
-* negative influence
-* weight above `1`
-* negative final score
-* no score clamping
-* no score rounding internally
-
-## Threshold
-
-* `S > T`
-* `S == T`
-* `S < T`
-
-## Decisions
-
-* ACCEPT
-* RETRY
-* REPLAN
-* ROLLBACK
-
-## Architecture
-
-* policy works with `StaticEvaluator`
-* no network required
-* no API key required
-* no LLM SDK installed
-
-## Prompt
-
-* deterministic
-* mathematically correct
-* under 150 words
-* contains `S`
-* contains `T`
-* contains decision
-
-## CLI
-
-* valid JSON to stdout
-* readable prompt to stderr
-* all score inputs validated through Pydantic
-
----
-
-# Deferred
-
-Do not implement yet:
-
-## LLM-as-judge
-
-Later add something like:
-
-```text
-bound-evaluator-openai
-bound-evaluator-anthropic
-bound-evaluator-deepseek
-```
-
-or provider adapters behind:
-
-```python
-Evaluator
-```
-
-The BOUND core must not depend on them.
-
-## Agent integrations
-
-Deferred:
-
-* Cline
-* Claude Code
-* Codex
-* Cursor
-* MCP
-
-## Rule-based evaluator
-
-Deferred.
-
-## Persistent mission state
-
-Deferred.
-
-## Automatic score generation
-
-Deferred.
-
----
-
-# Definition of done
-
-BOUND v0.1 is complete when:
-
-```bash
-uv sync
 uv run ruff check .
-uv run pytest -v
+uv run pytest -q
 ```
 
-all pass and this works without any API key:
+pass and all four decisions are meaningfully reachable.
 
-```bash
-uv run bound evaluate \
-  --action "Book the direct flight" \
-  --goal "Travel from Paris to New York" \
-  --acceptance 0.9 \
-  --influence 0.2 \
-  --risk 0.1 \
-  --cost 0.2 \
-  --weight 1.0 \
-  --threshold 0.6
-```
-
-The package must calculate:
+The package must support:
 
 ```text
-S = (W × A) + I - R - C
+manual score input
 ```
 
-compare:
+and at least one:
 
 ```text
-S >= T
+deterministic coding workflow evaluator
 ```
 
-and return a deterministic BOUND decision.
+The repository must contain a reproducible experiment showing:
 
-Nothing model-specific belongs in the v0.1 core.
+```text
+where BOUND would stop an agent trajectory
+```
+
+and:
+
+```text
+how much work would have been avoided
+```
+
+Do not claim success based only on the existence of the framework.
+
+The important v0.2 output is evidence.
+
+---
+
+# Out of scope for v0.2
+
+Do not implement:
+
+* Anthropic integration
+* OpenAI integration
+* DeepSeek integration
+* model-specific judges
+* Cline plugin
+* Cursor integration
+* MCP integration
+* learned thresholds
+* reinforcement learning
+* production calibration
+* automatic model routing
+* persistent mission memory
+
+These may come later.
+
+---
+
+# Priority order
+
+If time or complexity becomes an issue, prioritize:
+
+```text
+1. Fix decision semantics
+2. Add symmetric weights
+3. Reconcile documentation
+4. Add deterministic workflow signals
+5. Add experiment harness
+6. Add benchmark trajectories
+7. Improve CLI
+```
+
+Do not sacrifice the experiment harness for extra packaging features.
+
+The key question for v0.2 is no longer:
+
+```text
+Does the calculator work?
+```
+
+It is:
+
+```text
+Does BOUND stop an agent at a useful moment?
+```
