@@ -1,6 +1,6 @@
 [project]
 name = "bound-policy"
-version = "0.2.0"
+version = "0.3.0"
 description = "BOUND — a deterministic bounded-utility policy for agentic systems."
 readme = "README.md"
 requires-python = ">=3.12"

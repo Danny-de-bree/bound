@@ -1,0 +1,36 @@
+{
+  "goal": "Add a caching layer",
+  "steps": [
+    {
+      "id": "add-cache",
+      "description": "Introduce an in-memory cache",
+      "goal": "Cache expensive lookups",
+      "acceptance_checks": [
+        {
+          "id": "cache_returns_value",
+          "description": "cache.get returns the stored value",
+          "required": true
+        },
+        {
+          "id": "cache_returns_value",
+          "description": "cache.get returns the stored value on a second call",
+          "required": true
+        }
+      ],
+      "risk_checks": [
+        {
+          "id": "no_data_corruption",
+          "description": "Caching must not corrupt underlying data",
+          "severity": 0.8
+        }
+      ],
+      "expected_artifacts": [],
+      "budget": {
+        "max_retries": 2,
+        "max_tool_calls": 15,
+        "max_tokens": 6000,
+        "max_runtime_seconds": 90.0
+      }
+    }
+  ]
+}

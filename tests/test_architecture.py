@@ -27,10 +27,22 @@ The checks combine three complementary strategies:
    networking or provider module (parsed with :mod:`ast`, so comments and
    strings cannot produce false positives).
 3. **Runtime** — running the policy, the CLI (both ``evaluate`` and
-   ``evaluate-workflow``), the :class:`CodingWorkflowEvaluator`, and the
-   experiment harness with a sanitized environment and a blocked socket must
-   still produce the deterministic decision, proving no network access or API
-   key is actually exercised at runtime.
+   ``evaluate-workflow``), the :class:`CodingWorkflowEvaluator`, the
+   experiment harness, and the v0.3 contract workflow
+   (:class:`BoundWorkflow` + :class:`ContractEvaluator`) with a sanitized
+   environment and a blocked socket must still produce the deterministic
+   decision, proving no network access or API key is actually exercised at
+   runtime.
+
+v0.3 extends the same invariants to the contract pipeline
+(:mod:`bound.contracts`, :mod:`bound.evidence`,
+:mod:`bound.contract_evaluator`, :mod:`bound.bound_workflow`,
+:mod:`bound.contract_quality`, :mod:`bound.llm_adapters`). The LLM-backed
+contract generator is an *optional* convenience layer; the deterministic
+core must reach an ``ACCEPT`` purely from a :class:`StaticContractGenerator`
++ :class:`ContractEvaluator` + :class:`BoundPolicy` with simulated
+:class:`ExecutionEvidence` — no LLM, no network, no API key — which is the
+project's Definition of Done for v0.3.
 """
 
 from __future__ import annotations
@@ -44,8 +56,17 @@ from pathlib import Path
 
 import pytest
 
+from bound.bound_workflow import BoundWorkflow
 from bound.cli import main
+from bound.contract_evaluator import ContractEvaluator
+from bound.contracts import (
+    AcceptanceCheck,
+    BoundPlan,
+    StaticContractGenerator,
+    StepContract,
+)
 from bound.evaluator import StaticEvaluator
+from bound.evidence import CheckEvidence, ExecutionEvidence
 from bound.experiment import run_experiment
 from bound.models import (
     Action,
@@ -118,6 +139,21 @@ _DOD_JSON_FIELDS = {
 #: future change adds another offline evaluator / harness module it must be
 #: registered here so the forbidden-import scan and runtime guards keep pace.
 _V0_2_SOURCE_MODULES = ("workflow.py", "experiment.py")
+
+#: v0.3 contract-pipeline source modules that the architecture guards must
+#: provably cover. The contract layer is the load-bearing v0.3 addition; if a
+#: module is removed or renamed the forbidden-import scan and runtime guards
+#: would silently stop covering it, so we fail loudly here instead. This is the
+#: registration point for the v0.3 modules listed in the project's Phase 16
+#: spec and Definition of Done.
+_V0_3_SOURCE_MODULES = (
+    "contracts.py",
+    "evidence.py",
+    "contract_evaluator.py",
+    "bound_workflow.py",
+    "contract_quality.py",
+    "llm_adapters.py",
+)
 
 #: Root of the installed ``bound`` package source tree.
 _SRC_ROOT = Path(__import__("bound").__file__).resolve().parent
@@ -266,6 +302,73 @@ def _block_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket, "create_connection", _no_network)
 
 
+def _wipe_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Delete every common provider API-key environment variable.
+
+    Companion to :func:`_block_sockets` for the runtime API-key-free guards:
+    it makes the absence of credentials explicit so a workflow that *did* gate on
+    a key fails loudly rather than opportunistically reading a real one.
+
+    Args:
+        monkeypatch: The pytest fixture used to delete the variables.
+    """
+    for var in _API_KEY_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+
+
+#: All-zero :class:`EvaluationScores` used as the vestigial policy placeholder
+#: in the v0.3 contract workflow. ``BoundWorkflow.evaluate_step`` rebinds the
+#: policy's evaluator per call to a :class:`StaticEvaluator` of the *contract*
+#: scores, so these scores are never used to score a step — they merely
+#: satisfy the :class:`BoundPolicy` constructor (mirroring
+#: ``test_bound_workflow.py``).
+_V0_3_ZERO_SCORES = EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
+
+
+def _green_contract_workflow() -> tuple[BoundWorkflow, StepContract, ExecutionEvidence]:
+    """Build the deterministic all-green v0.3 contract workflow fixture.
+
+    Constructs a :class:`BoundWorkflow` wired with a
+    :class:`StaticContractGenerator` (one step, two required acceptance checks,
+    no risk checks, no budget) plus a :class:`ContractEvaluator` and a
+    :class:`BoundPolicy`. The companion :class:`ExecutionEvidence` records both
+    required checks passing, a clean rollback and no unexpected artefacts.
+
+    This is the v0.3 Definition-of-Done fixture: with default weights
+    (``W_A=W_I=W_R=W_C=1.0``) the :class:`ContractEvaluator` yields
+    ``A=1.0, I=0.0, R=0.0, C=0.0`` so ``S = 1.0``; with ``threshold=0.6`` the
+    deterministic policy returns ``ACCEPT``. No LLM, network, or API key is
+    involved anywhere in the computation.
+
+    Returns:
+        A ``(workflow, contract, evidence)`` triple that deterministically
+        reaches ``ACCEPT`` with ``S == 1.0``.
+    """
+    contract = StepContract(
+        id="ship",
+        description="Ship the parser",
+        goal="Cover the parser edge cases",
+        acceptance_checks=[
+            AcceptanceCheck(id="tests-pass", description="All unit tests pass"),
+            AcceptanceCheck(id="lint-pass", description="The linter is clean"),
+        ],
+    )
+    plan = BoundPlan(goal="Ship the parser", steps=[contract])
+    workflow = BoundWorkflow(
+        StaticContractGenerator(plan),
+        ContractEvaluator(),
+        BoundPolicy(StaticEvaluator(_V0_3_ZERO_SCORES)),
+    )
+    evidence = ExecutionEvidence(
+        acceptance=[
+            CheckEvidence(check_id="tests-pass", passed=True, source="pytest"),
+            CheckEvidence(check_id="lint-pass", passed=True, source="ruff"),
+        ],
+        rollback_available=True,
+    )
+    return workflow, contract, evidence
+
+
 # ---------------------------------------------------------------------------
 # No LLM / provider SDK installed
 # ---------------------------------------------------------------------------
@@ -323,7 +426,7 @@ def test_importing_bound_does_not_load_any_provider_sdk() -> None:
     assert not offenders, (
         f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
     )
-    assert bound.__version__ == "0.2.0"
+    assert bound.__version__ == "0.3.0"
 
 
 # ---------------------------------------------------------------------------
@@ -521,17 +624,95 @@ def test_v0_2_module_imports_no_network_or_provider_modules(module_name: str) ->
     )
 
 
+# ---------------------------------------------------------------------------
+# v0.3 module coverage of the forbidden-import scan
+# ---------------------------------------------------------------------------
+
+
+def test_v0_3_source_modules_exist_and_are_scanned() -> None:
+    """The v0.3 contract-pipeline modules must be present and scanned.
+
+    Mirrors :func:`test_v0_2_source_modules_exist_and_are_scanned` for the six
+    v0.3 modules listed in the Phase 16 spec
+    (``contracts.py`` / ``evidence.py`` / ``contract_evaluator.py`` /
+    ``bound_workflow.py`` / ``contract_quality.py`` / ``llm_adapters.py``).
+    The package-wide AST scan walks ``_SRC_ROOT.rglob(\"*.py\")`` so it picks
+    them up automatically, *provided they exist* — if one is removed or
+    renamed the forbidden-import and runtime guards would silently stop
+    covering it, so this test fails loudly at the registration point the
+    ``_V0_3_SOURCE_MODULES`` constant exists to enforce.
+    """
+    scanned = {path.name for path in _SRC_ROOT.rglob("*.py")}
+    missing = [name for name in _V0_3_SOURCE_MODULES if name not in scanned]
+    assert not missing, f"v0.3 source modules missing from src/bound: {missing}"
+
+
+@pytest.mark.parametrize("module_name", _V0_3_SOURCE_MODULES)
+def test_v0_3_module_imports_no_network_or_provider_modules(module_name: str) -> None:
+    """Each v0.3 contract-pipeline module must import no networking/provider module.
+
+    A focused, per-module companion to the package-wide scan. The v0.3
+    contract layer is the *load-bearing* addition for the Definition of Done
+    (``natural-language plan -> contracts -> evidence -> automatic A/I/R/C ->
+    deterministic decision``), so a regression that sneaks a network primitive
+    or an LLM SDK into — say — ``contract_evaluator.py`` would break the
+    ``no mandatory LLM dependency`` / ``no network required`` invariants in
+    exactly the module that must stay deterministic. Pinning each module
+    individually keeps such a regression localised and named.
+    """
+    path = _SRC_ROOT / module_name
+    assert path.exists(), f"{module_name} not found under {_SRC_ROOT}"
+
+    forbidden = _module_roots_imported_by(path) & _FORBIDDEN_IMPORT_ROOTS
+    assert not forbidden, (
+        f"{module_name} must not import networking/provider modules; found: {forbidden}"
+    )
+
+
+def test_llm_adapters_module_is_import_free() -> None:
+    """The optional-adapter placeholder module must perform zero imports.
+
+    ``bound.llm_adapters`` is the documented seam where an LLM-backed
+    :class:`ContractGenerator` *would* live, and the Phase 4 boundary demands
+    it ship import-free so importing ``bound`` can never pull a provider SDK.
+    Asserting the parsed AST contains no ``import`` / ``from ... import`` node
+    at all is stronger than the forbidden-root scan: it pins the documented
+    "documentation placeholder" contract, so a future contributor adding even a
+    stdlib import there is forced to reconsider whether their code belongs in the
+    optional package instead of the core.
+    """
+    path = _SRC_ROOT / "llm_adapters.py"
+    assert path.exists(), f"llm_adapters.py not found under {_SRC_ROOT}"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    import_nodes = [
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+    ]
+    assert not import_nodes, (
+        "bound.llm_adapters must remain import-free (the optional-LLM seam); "
+        f"found import nodes: {ast.dump(import_nodes[0]) if import_nodes else None}"
+    )
+
+
 def test_importing_bound_submodules_loads_no_provider_sdk() -> None:
     """Importing every public BOUND submodule loads no provider SDK.
 
     ``import bound`` only triggers :mod:`bound.models`; the heavier modules
-    (``workflow``, ``experiment``, ``cli``) are imported on demand. We import
+    (``workflow``, ``experiment``, ``cli`` and the v0.3 contract modules
+    ``contracts``, ``evidence``, ``contract_evaluator``, ``bound_workflow``,
+    ``contract_quality``, ``llm_adapters``) are imported on demand. We import
     each one explicitly and then assert none of the forbidden provider packages
     leaked into ``sys.modules`` — guarding against a submodule that lazily
-    pulls a provider client at import time.
+    pulls a provider client at import time, including the v0.3 optional-LLM seam.
     """
-    import bound.cli  # noqa: F401  (import side-effect under test)
+    import bound.bound_workflow  # noqa: F401  (import side-effect under test)
+    import bound.cli  # noqa: F401
+    import bound.contract_evaluator  # noqa: F401
+    import bound.contract_quality  # noqa: F401
+    import bound.contracts  # noqa: F401
+    import bound.evidence  # noqa: F401
     import bound.experiment  # noqa: F401
+    import bound.llm_adapters  # noqa: F401
     import bound.workflow  # noqa: F401
 
     loaded = set(sys.modules)
@@ -781,4 +962,136 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     )
 
     assert decisions == {"ACCEPT", "RETRY", "REPLAN", "ROLLBACK"}
+
+
+
+# ---------------------------------------------------------------------------
+# v0.3 contract workflow is network-free / API-key-free at runtime
+# ---------------------------------------------------------------------------
+
+
+def test_bound_workflow_reaches_decision_with_socket_blocked_and_no_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The v0.3 contract workflow reaches a deterministic decision offline.
+
+    Extends the runtime network-free / API-key-free guards from the v0.2
+    :class:`StaticEvaluator` / :class:`CodingWorkflowEvaluator` paths to the
+    v0.3 contract pipeline. With the socket primitive blocked *and* every
+    common provider API-key variable unset, building a
+    ``BoundWorkflow(StaticContractGenerator, ContractEvaluator, BoundPolicy)``
+    and running ``prepare`` + ``evaluate_step`` must still produce the
+    deterministic ``ACCEPT`` with ``S == 1.0``. This proves the contract layer
+    genuinely exercises no network and no credentials at runtime — not merely
+    that it imports nothing, but that nothing is actually called.
+    """
+    _block_sockets(monkeypatch)
+    _wipe_api_keys(monkeypatch)
+
+    workflow, contract, evidence = _green_contract_workflow()
+
+    # prepare: natural-language plan -> validated BoundPlan (the generator
+    # ignores the text and returns the static plan, by identity).
+    plan = workflow.prepare(goal="Ship the parser", plan="1. write tests 2. fix bugs")
+    assert plan is workflow.contract_generator.plan
+
+    criteria = BoundCriteria(threshold=0.6)
+    first = workflow.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+    second = workflow.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+
+    # A=1.0 (2/2 required), R=0.0, C=0.0, I=0.0 -> S=1.0 >= 0.6 -> ACCEPT.
+    assert first.scores.acceptance == pytest.approx(1.0, abs=1e-12)
+    assert first.scores.risk == pytest.approx(0.0, abs=1e-12)
+    assert first.scores.cost == pytest.approx(0.0, abs=1e-12)
+    assert first.score == pytest.approx(1.0, abs=1e-12)
+    assert first.decision == "ACCEPT"
+    # Deterministic: the exact same inputs reproduce the exact same result.
+    assert first == second
+    # The contract provenance flows onto the result (the StaticEvaluator bridge
+    # carries none, but evaluate_step forwards the ContractEvaluator's).
+    assert set(first.provenance) == {"acceptance", "influence", "risk", "cost"}
+
+
+def test_bound_workflow_decision_is_deterministic_without_llm() -> None:
+    """A contract-based decision is bit-for-bit reproducible across instances.
+
+    Intent: pin the "final decision remains deterministic" invariant for the
+    v0.3 path specifically. Two independently constructed workflows (fresh
+    generator, evaluator and policy each time) fed identical contract +
+    evidence must yield equal :class:`EvaluationResult` objects — no hidden
+    state, no randomness, no LLM. A regression that introduces any
+    non-determinism (e.g. a dict-iteration order dependency or a cached
+    counter) surfaces as inequality here.
+    """
+    wf_a, contract, evidence = _green_contract_workflow()
+    wf_b, _, _ = _green_contract_workflow()
+    criteria = BoundCriteria(threshold=0.6)
+
+    result_a = wf_a.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+    result_b = wf_b.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+
+    assert result_a == result_b
+    assert result_a.decision == "ACCEPT"
+
+# ---------------------------------------------------------------------------
+# v0.3 Definition of Done: contract workflow reaching ACCEPT without an LLM
+# ---------------------------------------------------------------------------
+
+
+def test_contract_workflow_definition_of_done_reaches_accept_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The v0.3 Definition of Done: a contract workflow reaches ACCEPT, no LLM.
+
+    This is the architecture-level gate for the v0.3 Definition of Done as
+    written in ``todo.md``::
+
+        natural-language plan -> evaluation contracts -> execution evidence
+            -> automatic A / I / R / C -> deterministic BOUND decision
+
+    It is exercised *entirely without an LLM*: a :class:`StaticContractGenerator`
+    stands in for the (optional) LLM contract generator, a
+    :class:`ContractEvaluator` derives ``A / I / R / C`` from simulated
+    :class:`ExecutionEvidence` where every required check passes, and a
+    :class:`BoundPolicy` makes the final deterministic decision. Sockets are
+    blocked and every provider API-key variable is unset so the gate also
+    doubles as the "no network required / no API key required / no mandatory
+    LLM dependency" proof. The user supplies *no* manual scores — the four
+    dimensions are computed automatically from the contract + evidence.
+    """
+    _block_sockets(monkeypatch)
+    _wipe_api_keys(monkeypatch)
+
+    workflow, contract, evidence = _green_contract_workflow()
+    criteria = BoundCriteria(threshold=0.6)
+
+    # Stage 1: natural-language plan -> evaluation contracts (offline generator).
+    plan = workflow.prepare(
+        goal="Ship the parser",
+        plan="Write unit tests and run the linter until both are green.",
+    )
+    assert plan.steps  # the contract layer defines at least one step
+    assert plan.steps[0].acceptance_checks  # ...each with measurable criteria
+
+    # Stage 2: contract + (simulated) execution evidence -> automatic A/I/R/C.
+    result = workflow.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+    scores = result.scores
+
+    # The four dimensions are *derived*, not supplied manually: the user gave
+    # no A/I/R/C — only the contract and the evidence.
+    assert scores.acceptance == pytest.approx(1.0, abs=1e-12)  # 2/2 required pass
+    assert scores.risk == pytest.approx(0.0, abs=1e-12)        # no violated risk checks
+    assert scores.cost == pytest.approx(0.0, abs=1e-12)        # no budget declared
+    assert scores.influence == pytest.approx(0.0, abs=1e-12)  # not derivable
+
+    # Stage 3: automatic A/I/R/C -> deterministic BOUND decision (ACCEPT).
+    assert result.score == pytest.approx(1.0, abs=1e-12)
+    assert result.decision == "ACCEPT"
+    assert result.threshold == pytest.approx(0.6, abs=1e-12)
+
+    # The decision is reproducible: re-running the identical pipeline yields
+    # the same result, locking the "final decision remains deterministic"
+    # invariant for the contract path.
+    replay = workflow.evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+    assert replay == result
 

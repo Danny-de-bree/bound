@@ -1,0 +1,94 @@
+{
+  "goal": "Migrate the database schema",
+  "steps": [
+    {
+      "id": "plan-migration",
+      "description": "Write the migration plan",
+      "goal": "Plan the schema migration and downtime",
+      "acceptance_checks": [
+        {
+          "id": "migration_plan_written",
+          "description": "The migration plan is written to docs/migration.md",
+          "required": true
+        },
+        {
+          "id": "downtime_estimate_exists",
+          "description": "A downtime estimate exists in the migration plan",
+          "required": true
+        }
+      ],
+      "risk_checks": [
+        {
+          "id": "no_data_loss",
+          "description": "Migration must not lose data",
+          "severity": 1.0
+        }
+      ],
+      "expected_artifacts": [
+        "docs/migration.md"
+      ],
+      "budget": {
+        "max_retries": 1,
+        "max_tool_calls": 5,
+        "max_tokens": 2000,
+        "max_runtime_seconds": 30.0
+      }
+    },
+    {
+      "id": "run-migration",
+      "description": "Apply the migration",
+      "goal": "Apply the migration with minimal downtime",
+      "acceptance_checks": [
+        {
+          "id": "works",
+          "description": "ok",
+          "required": true
+        },
+        {
+          "id": "done",
+          "description": "done",
+          "required": true
+        }
+      ],
+      "risk_checks": [],
+      "expected_artifacts": [],
+      "budget": {
+        "max_retries": 0,
+        "max_tool_calls": 3,
+        "max_tokens": 1000,
+        "max_runtime_seconds": 15.0
+      }
+    },
+    {
+      "id": "verify-migration",
+      "description": "Verify the migrated schema",
+      "goal": "Confirm the live schema matches the target",
+      "acceptance_checks": [
+        {
+          "id": "schema_matches_target",
+          "description": "The live schema matches the target schema",
+          "required": true
+        },
+        {
+          "id": "good",
+          "description": "looks ok",
+          "required": true
+        }
+      ],
+      "risk_checks": [
+        {
+          "id": "no_orphans",
+          "description": "No orphaned tables remain",
+          "severity": 0.6
+        }
+      ],
+      "expected_artifacts": [],
+      "budget": {
+        "max_retries": 1,
+        "max_tool_calls": 8,
+        "max_tokens": 3000,
+        "max_runtime_seconds": 45.0
+      }
+    }
+  ]
+}

@@ -1,1206 +1,1076 @@
-# BOUND — TODO v0.2
+# BOUND — TODO v0.3
 
 ## Objective
 
-BOUND v0.2 should turn the current v0.1 foundation into a more credible agent-control policy.
+BOUND v0.3 should remove the need for users to manually assign most `A / I / R / C` scores.
 
-The goal is not to add many features.
+The core problem in v0.2 is:
 
-The goal is to fix the weakest parts of v0.1:
+```text
+BOUND can evaluate scores,
+but the user still has to decide what should be measured
+and often provide the scores manually.
+```
 
-1. Make decision semantics coherent.
-2. Make `REPLAN` a real reachable outcome.
-3. Separate safety rollback from ordinary below-threshold decisions.
-4. Make score weighting explicit and symmetric.
-5. Make threshold behavior inspectable.
-6. Add the first real coding-agent workflow signals.
-7. Add an experiment harness to test whether BOUND actually reduces unnecessary agent work.
+v0.3 introduces automatic evaluation contracts.
 
-Do not add an LLM provider dependency in v0.2.
+The intended architecture becomes:
 
-Do not implement Cline integration yet.
+```text
+Natural-language goal + plan
+          │
+          ▼
+   ContractGenerator
+          │
+          ▼
+      BoundPlan
+          │
+          ▼
+     StepContract
+          │
+          ▼
+    Agent execution
+          │
+          ▼
+   EvidenceCollector
+          │
+          ▼
+   ContractEvaluator
+          │
+          ▼
+      A / I / R / C
+          │
+          ▼
+        BOUND
+          │
+          ▼
+ACCEPT / RETRY / REPLAN / ROLLBACK
+```
 
-Do not claim that BOUND improves agent performance until the experiment harness produces evidence.
+The key principle is:
+
+> Use an LLM to translate intent into an explicit evaluation contract, not to make the final BOUND decision.
+
+The final policy remains deterministic.
 
 ---
 
-# Core principle
+# Phase 0 — Repository cleanup
 
-BOUND remains based on satisficing:
+Complete this before implementing v0.3.
 
-```text
-S >= T
-```
+## Remove `/policies`
 
-Once the acceptance threshold is crossed, further optimization is not required.
-
-The score remains:
+The entire repository directory:
 
 ```text
-S = weighted utility - penalties
-```
-
-The exact v0.2 formulation should become:
-
-```text
-S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
-```
-
-Where:
-
-| Variable | Meaning              |
-| -------- | -------------------- |
-| `S`      | Final BOUND score    |
-| `A`      | Acceptance           |
-| `I`      | Downstream influence |
-| `R`      | Risk                 |
-| `C`      | Resource cost        |
-| `W_A`    | Acceptance weight    |
-| `W_I`    | Influence weight     |
-| `W_R`    | Risk weight          |
-| `W_C`    | Cost weight          |
-| `T`      | Acceptance threshold |
-
-The v0.1 formula:
-
-```text
-S = (W × A) + I - R - C
-```
-
-must remain expressible as the default configuration:
-
-```text
-W_A = W
-W_I = 1.0
-W_R = 1.0
-W_C = 1.0
-```
-
-Do not break the mathematical behavior of existing users unless explicitly documented.
-
----
-
-# Phase 1 — Rework criteria and weights
-
-## Goal
-
-Remove the arbitrary assumption that only acceptance can be weighted.
-
-Replace or extend the existing criteria model.
-
-Suggested model:
-
-```python
-class BoundWeights(BaseModel):
-    acceptance: float = Field(default=1.0, ge=0.0)
-    influence: float = Field(default=1.0, ge=0.0)
-    risk: float = Field(default=1.0, ge=0.0)
-    cost: float = Field(default=1.0, ge=0.0)
-```
-
-And:
-
-```python
-class BoundCriteria(BaseModel):
-    threshold: float
-    retry_margin: float = Field(default=0.1, ge=0.0)
-    rollback_risk_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
-    weights: BoundWeights = Field(default_factory=BoundWeights)
-```
-
-If backward compatibility with the existing `weight` field is desired, support it only through a clearly documented migration path.
-
-Do not silently keep two competing weight systems.
-
----
-
-## Required score formula
-
-Implement exactly:
-
-```python
-score = (
-    criteria.weights.acceptance * scores.acceptance
-    + criteria.weights.influence * scores.influence
-    - criteria.weights.risk * scores.risk
-    - criteria.weights.cost * scores.cost
-)
-```
-
-Do not:
-
-* clamp
-* normalize
-* apply nonlinear transforms
-* round internally
-
----
-
-## Required tests
-
-Test:
-
-```text
-all default weights = 1.0
-```
-
-Test independent effects of:
-
-```text
-W_A
-W_I
-W_R
-W_C
-```
-
-Test that increasing:
-
-```text
-W_R
-```
-
-makes high-risk actions score lower.
-
-Test that increasing:
-
-```text
-W_C
-```
-
-makes expensive actions score lower.
-
-Test negative influence with influence weighting.
-
----
-
-# Phase 2 — Fix decision semantics
-
-## Goal
-
-Make all four decisions distinct, meaningful, and reachable.
-
-The current v0.1 rule:
-
-```text
-risk > cost -> ROLLBACK
-cost > risk -> RETRY
-risk == cost -> REPLAN
+/policies
 ```
 
 must be removed.
 
-Exact float equality must never determine whether `REPLAN` is reachable.
+Requirements:
+
+* [ ] Remove `/policies` from the current working tree.
+* [ ] Remove `/policies` from all branches/tags that are part of the published repository history.
+* [ ] Remove all historical blobs belonging to `/policies` from Git history.
+* [ ] Verify the directory cannot be recovered from rewritten reachable Git history.
+* [ ] Verify the current application does not import or depend on anything from `/policies`.
+
+Do not merely:
+
+```bash
+git rm -r policies
+```
+
+The requirement is removal from Git history.
+
+Use an appropriate history-rewriting tool such as:
+
+```text
+git filter-repo
+```
+
+Do not use deprecated `git filter-branch` unless no safer supported option exists.
+
+Before rewriting history:
+
+* [ ] Confirm the repository.
+* [ ] Confirm the remote.
+* [ ] Create a local backup or safety reference outside the rewritten refs.
+* [ ] Record the current HEAD SHA.
+* [ ] Confirm `/policies` is the exact path being removed.
+
+After rewriting:
+
+* [ ] Verify `/policies` is absent from the working tree.
+* [ ] Verify no reachable commit contains `/policies`.
+* [ ] Verify repository tests still pass.
+* [ ] Force-push rewritten branches and tags only after verification.
+
+Document that collaborators with existing clones must re-clone or carefully reset to the rewritten history.
 
 ---
 
-# New decision model
+## Remove `todo.md` and `roadmap.md` from Git
 
-Use the following deterministic order.
-
-## 1. ROLLBACK
-
-Rollback is a safety condition.
-
-It is independent from whether risk happens to be greater than cost.
-
-Use:
-
-```python
-if scores.risk >= criteria.rollback_risk_threshold:
-    return "ROLLBACK"
-```
-
-This condition should be evaluated before ordinary retry/replan behavior.
-
-Document explicitly:
+The files:
 
 ```text
-ROLLBACK means the proposed or executed action exceeds the configured acceptable risk boundary.
+todo.md
+roadmap.md
 ```
 
-Do not define rollback as:
+are internal development documents.
 
-```text
-risk is the largest negative component
+They must no longer be tracked or published.
+
+Requirements:
+
+* [ ] Preserve local copies before rewriting history.
+* [ ] Remove both files from the current Git index.
+* [ ] Keep both files locally.
+* [ ] Add them to `.gitignore`.
+* [ ] Remove both files from all rewritten reachable Git history.
+* [ ] Restore the local untracked copies after history rewriting.
+
+Add to `.gitignore`:
+
+```gitignore
+# Internal development documents
+todo.md
+roadmap.md
 ```
+
+If case variants have existed historically, inspect and remove those exact tracked paths as well.
+
+Do not accidentally delete the local working copies permanently.
 
 ---
 
-## 2. ACCEPT
+## History-cleanup verification
 
-If rollback is not required:
-
-```python
-if score >= criteria.threshold:
-    return "ACCEPT"
-```
-
-Decision meaning:
+After the rewrite, verify:
 
 ```text
-The action is sufficiently good.
+/policies      -> absent from current tree
+/policies      -> absent from reachable rewritten history
 
-Stop optimizing the current action and continue toward the larger goal.
+todo.md        -> exists locally
+todo.md        -> ignored
+todo.md        -> untracked
+todo.md        -> absent from reachable rewritten history
+
+roadmap.md     -> exists locally
+roadmap.md     -> ignored
+roadmap.md     -> untracked
+roadmap.md     -> absent from reachable rewritten history
 ```
+
+Also verify:
+
+```bash
+git status --ignored
+uv run ruff check .
+uv run pytest -q
+```
+
+Do not begin v0.3 implementation until repository cleanup is complete.
 
 ---
 
-## 3. RETRY
-
-Calculate:
-
-```python
-gap = criteria.threshold - score
-```
-
-If:
-
-```text
-0 < gap <= retry_margin
-```
-
-return:
-
-```text
-RETRY
-```
-
-Decision meaning:
-
-```text
-The current approach is close enough to acceptable that another attempt within the same action space is justified.
-```
-
----
-
-## 4. REPLAN
-
-Otherwise:
-
-```text
-REPLAN
-```
-
-Decision meaning:
-
-```text
-The current approach is too far below the acceptance threshold.
-
-Choose a materially different strategy.
-```
-
----
-
-# Exact algorithm
-
-Implement approximately:
-
-```python
-def decide(
-    *,
-    score: float,
-    scores: EvaluationScores,
-    criteria: BoundCriteria,
-) -> Decision:
-    if scores.risk >= criteria.rollback_risk_threshold:
-        return "ROLLBACK"
-
-    if score >= criteria.threshold:
-        return "ACCEPT"
-
-    gap = criteria.threshold - score
-
-    if gap <= criteria.retry_margin:
-        return "RETRY"
-
-    return "REPLAN"
-```
-
-Keep it pure and fully unit tested.
-
----
-
-# Important semantic rule
-
-A high-scoring action may still produce:
-
-```text
-ROLLBACK
-```
-
-if it violates the configured hard risk threshold.
-
-This is intentional.
-
-BOUND should distinguish:
-
-```text
-utility threshold
-```
-
-from:
-
-```text
-safety boundary
-```
-
-Document this clearly.
-
----
-
-# Phase 3 — Resolve ROADMAP inconsistencies
+# Phase 1 — Evaluation contract domain models
 
 ## Goal
 
-Make code, README, TODO, and ROADMAP use the same decision semantics.
+Represent what success means before an agent executes a step.
 
-Update all documentation.
+Create models for explicit, machine-readable evaluation contracts.
 
-The canonical meanings become:
-
-```text
-ACCEPT
-The action is good enough. Stop optimizing and continue.
-
-RETRY
-The action is close to acceptable. Try again within the same general approach.
-
-REPLAN
-The action is not close enough to acceptable. Choose a different strategy.
-
-ROLLBACK
-The action exceeds a configured hard risk boundary. Revert or avoid it where possible.
-```
-
-Remove diagrams or text that imply:
+Suggested module:
 
 ```text
-REPLAN -> failed -> ROLLBACK
+src/bound/contracts.py
 ```
-
-unless a future multi-step escalation policy is being explicitly described.
-
-For v0.2:
-
-```text
-ROLLBACK
-```
-
-is a peer policy outcome triggered by a hard safety condition.
 
 ---
 
-# Phase 4 — Make threshold behavior first-class
+## AcceptanceCheck
 
-## Goal
+Implement a model representing one expected outcome.
 
-Treat threshold selection as a core part of BOUND rather than an incidental CLI parameter.
-
-Do not implement automatic learned threshold selection yet.
-
-Add explicit threshold metadata to results.
-
-Suggested result additions:
+Example:
 
 ```python
-class ThresholdAnalysis(BaseModel):
-    threshold: float
-    score: float
-    gap: float
-    margin_to_accept: float
-    accepted: bool
+class AcceptanceCheck(BaseModel):
+    id: str
+    description: str
+    required: bool = True
 ```
 
-For accepted results:
+Examples:
 
 ```text
-margin_to_accept = score - threshold
+valid_input_accepted
+invalid_input_rejected
+existing_tests_pass
+lint_passes
 ```
 
-For below-threshold results:
-
-```text
-gap = threshold - score
-```
-
-Avoid redundant fields if one signed value is clearer.
-
-A simpler model is acceptable:
-
-```python
-distance_to_threshold: float
-```
-
-where:
-
-```text
-positive = above threshold
-zero = exactly at threshold
-negative = below threshold
-```
-
-Choose one representation and document it clearly.
+Do not store executable arbitrary Python code inside contracts.
 
 ---
 
-## Required tests
+## RiskCheck
 
-Test:
+Implement:
 
-```text
-S > T
-S == T
-S just below T
-S far below T
+```python
+class RiskCheck(BaseModel):
+    id: str
+    description: str
+    severity: float = Field(ge=0.0, le=1.0)
 ```
-
-Test retry-margin boundaries exactly.
 
 Example:
 
 ```text
-T = 0.70
-retry_margin = 0.10
+No plaintext secrets are introduced.
 ```
-
-Then:
-
-```text
-S = 0.70 -> ACCEPT
-S = 0.60 -> RETRY
-S = 0.599999 -> REPLAN
-```
-
-Unless floating-point tolerance is deliberately introduced.
-
-If tolerance is introduced, make it explicit and deterministic.
 
 ---
 
-# Phase 5 — Add workflow signal models
+## StepBudget
+
+Implement explicit execution budgets.
+
+Suggested fields:
+
+```python
+class StepBudget(BaseModel):
+    max_retries: int | None = Field(default=None, ge=0)
+    max_tool_calls: int | None = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=None, ge=0)
+    max_runtime_seconds: float | None = Field(default=None, ge=0.0)
+```
+
+All fields are optional.
+
+Absence means:
+
+```text
+no explicit budget was defined
+```
+
+not:
+
+```text
+zero budget
+```
+
+---
+
+## StepContract
+
+Implement:
+
+```python
+class StepContract(BaseModel):
+    id: str
+    description: str
+    goal: str
+
+    acceptance_checks: list[AcceptanceCheck]
+
+    risk_checks: list[RiskCheck] = []
+    expected_artifacts: list[str] = []
+
+    budget: StepBudget | None = None
+```
+
+Require at least one acceptance check.
+
+A contract without any definition of success is invalid.
+
+---
+
+## BoundPlan
+
+Implement:
+
+```python
+class BoundPlan(BaseModel):
+    goal: str
+    steps: list[StepContract]
+```
+
+Require at least one step.
+
+---
+
+# Phase 2 — Contract generator abstraction
 
 ## Goal
 
-Introduce the first deterministic inputs that can later produce BOUND scores.
+Separate contract generation from BOUND itself.
 
-Do not yet attempt to derive every possible workflow signal.
-
-Focus on coding-agent workflows.
-
-Create a model such as:
+Define:
 
 ```python
-class CodingWorkflowSignals(BaseModel):
-    test_pass_rate: float | None = Field(default=None, ge=0.0, le=1.0)
-    lint_passed: bool | None = None
-    type_check_passed: bool | None = None
-    required_checks_passed: float | None = Field(default=None, ge=0.0, le=1.0)
+class ContractGenerator(Protocol):
+    def generate(
+        self,
+        *,
+        goal: str,
+        plan: str,
+        context: str | None = None,
+    ) -> BoundPlan:
+        ...
+```
 
-    retry_count: int = Field(default=0, ge=0)
-    tool_call_count: int = Field(default=0, ge=0)
-    token_usage: int | None = Field(default=None, ge=0)
-    execution_time_seconds: float | None = Field(default=None, ge=0.0)
+BOUND core must not depend on a specific LLM provider.
 
-    files_changed: int | None = Field(default=None, ge=0)
-    unexpected_files_changed: int | None = Field(default=None, ge=0)
+Do not add Anthropic/OpenAI/DeepSeek-specific code to core modules.
+
+Possible future implementations:
+
+```text
+OpenAIContractGenerator
+AnthropicContractGenerator
+DeepSeekContractGenerator
+RuleBasedContractGenerator
+```
+
+The core only knows:
+
+```text
+ContractGenerator
+```
+
+---
+
+# Phase 3 — Manual/static contract generator
+
+## Goal
+
+Make the entire contract pipeline testable without an LLM.
+
+Implement:
+
+```python
+class StaticContractGenerator:
+    def __init__(self, plan: BoundPlan):
+        self.plan = plan
+
+    def generate(...) -> BoundPlan:
+        return self.plan
+```
+
+This implementation must be used throughout unit tests.
+
+No v0.3 unit test may require:
+
+```text
+network access
+API keys
+an LLM provider
+```
+
+---
+
+# Phase 4 — Optional LLM contract generation package boundary
+
+## Goal
+
+Prepare for automatic natural-language plan compilation without coupling BOUND to a provider.
+
+The conceptual operation is:
+
+```text
+natural-language goal
++
+natural-language plan
++
+optional context
+        │
+        ▼
+ContractGenerator
+        │
+        ▼
+validated BoundPlan
+```
+
+The generated result must pass Pydantic validation before BOUND can use it.
+
+The LLM must generate structured data only.
+
+It must not return BOUND decisions.
+
+It must not assign final `A / I / R / C` scores.
+
+Its job is to define:
+
+```text
+what success looks like
+what evidence should be collected
+what risks matter
+what artifacts are expected
+what execution budgets apply
+```
+
+If provider integration is implemented during v0.3, keep it optional and outside the deterministic core.
+
+Prefer an optional dependency group or separate adapter module/package.
+
+Do not make an LLM SDK a mandatory installation dependency.
+
+---
+
+# Phase 5 — Evidence models
+
+## Goal
+
+Represent observations collected after an agent executes a step.
+
+Suggested module:
+
+```text
+src/bound/evidence.py
+```
+
+Implement:
+
+```python
+class CheckEvidence(BaseModel):
+    check_id: str
+    passed: bool
+    source: str
+    details: str | None = None
+```
+
+Implement execution evidence:
+
+```python
+class ExecutionEvidence(BaseModel):
+    acceptance: list[CheckEvidence] = []
+    risks: list[CheckEvidence] = []
+
+    produced_artifacts: list[str] = []
+    unexpected_artifacts: list[str] = []
+
+    retry_count: int = 0
+    tool_call_count: int = 0
+    token_usage: int | None = None
+    runtime_seconds: float | None = None
 
     rollback_available: bool | None = None
 ```
 
-Keep this model generic enough to be populated by different coding agents.
-
-Do not include provider-specific fields.
+All numeric values must use Pydantic range validation.
 
 ---
 
-# Phase 6 — Deterministic signal evaluator v1
+# Phase 6 — Evidence collector abstraction
 
 ## Goal
 
-Prove that at least some BOUND inputs can be derived without an LLM.
+Allow different agent environments to collect evidence.
 
-Create a new evaluator:
+Define:
 
 ```python
-class CodingWorkflowEvaluator:
-    ...
+class EvidenceCollector(Protocol):
+    def collect(
+        self,
+        *,
+        contract: StepContract,
+        execution: object,
+    ) -> ExecutionEvidence:
+        ...
 ```
 
-It should take:
+BOUND must not depend on:
 
 ```text
-Action
-CodingWorkflowSignals
+Cline
+Claude Code
+Codex
+Cursor
+GitHub Actions
+pytest
 ```
 
-and produce:
+Collectors may later integrate with those systems.
+
+---
+
+# Phase 7 — Deterministic contract evaluator
+
+## Goal
+
+Convert:
+
+```text
+StepContract
++
+ExecutionEvidence
+```
+
+into:
 
 ```text
 EvaluationScores
 ```
 
-This first implementation must be intentionally simple and transparent.
+without an LLM.
 
-Do not pretend the mappings are scientifically calibrated.
+Implement:
 
-Mark them clearly as:
-
-```text
-v0.2 reference heuristic
+```python
+class ContractEvaluator:
+    def evaluate(
+        self,
+        contract: StepContract,
+        evidence: ExecutionEvidence,
+    ) -> EvaluationScores:
+        ...
 ```
 
 ---
 
-## Suggested acceptance mapping
+## Acceptance
+
+Calculate acceptance primarily from explicit contract checks.
+
+For example:
+
+```text
+A =
+passed required acceptance checks
+/
+total required acceptance checks
+```
+
+Optional checks may contribute separately if desired.
+
+Keep the exact formula visible and tested.
+
+Never silently treat missing required evidence as passing.
+
+---
+
+## Cost
+
+Calculate cost from the contract budget.
 
 Example:
 
 ```text
-A = mean of available completion signals
+retry_cost =
+actual retries / max retries
+
+tool_cost =
+actual tool calls / max tool calls
+
+token_cost =
+actual tokens / max tokens
+
+runtime_cost =
+actual runtime / max runtime
 ```
 
-Possible inputs:
+Cap individual normalized values at:
 
 ```text
-test_pass_rate
-required_checks_passed
-lint status
-type-check status
+1.0
 ```
 
-Boolean values may map to:
+Calculate `C` as the mean of available budget dimensions.
+
+If no budget exists:
 
 ```text
-True = 1.0
-False = 0.0
+C = 0.0
 ```
 
-Ignore unavailable signals rather than defaulting missing values to zero.
-
-Raise a clear error if no acceptance evidence is available.
+and provenance must explain that no cost budget was defined.
 
 ---
 
-## Suggested risk mapping
+## Risk
 
-Risk may include:
+Derive risk from explicit failed risk checks and observable safety signals.
+
+A failed risk check contributes according to its configured severity.
+
+Also consider:
 
 ```text
-unexpected file changes
+unexpected artifacts
 rollback unavailable
-large change surface
-failed checks
 ```
 
-Keep the exact rule visible in code.
-
-Example only:
-
-```text
-risk increases when unexpected_files_changed > 0
-risk increases when rollback_available is False
-```
-
-Do not create opaque magic constants without documenting them.
-
----
-
-## Suggested cost mapping
-
-Cost may use:
-
-```text
-retry count
-tool calls
-token usage
-execution time
-```
-
-Normalization must be configuration-driven.
-
-For example:
-
-```python
-class WorkflowNormalization(BaseModel):
-    max_expected_retries: int = 5
-    max_expected_tool_calls: int = 50
-    max_expected_tokens: int = 100_000
-    max_expected_runtime_seconds: float = 3600.0
-```
-
-Normalize using explicit caps.
-
-For example:
-
-```python
-normalized_tool_calls = min(
-    tool_call_count / max_expected_tool_calls,
-    1.0,
-)
-```
-
-Do not normalize against hidden constants.
+Keep the formula deterministic and documented.
 
 ---
 
 ## Influence
 
-Do not fake downstream influence when no evidence exists.
+Do not invent downstream influence.
 
-For v0.2, either:
+Default:
 
 ```text
-influence = 0.0
+I = 0.0
 ```
 
-with an explicit explanation,
+unless explicit downstream evidence exists.
 
-or allow it to be provided externally.
-
-Prefer honesty over invented sophistication.
+Semantic influence evaluation may be added later.
 
 ---
 
-# Phase 7 — Explain score provenance
+# Phase 8 — Evidence provenance
 
 ## Goal
 
-Make every score inspectable.
+Every automatically derived score must be explainable.
 
-Add provenance metadata.
+For each dimension record:
 
-Suggested model:
+```text
+input evidence
+normalization
+contribution
+final score
+```
+
+Example:
+
+```text
+Acceptance
+
+✓ invalid_input_rejected
+✓ valid_input_accepted
+✓ existing_tests_pass
+✗ lint_passes
+
+A = 3 / 4
+A = 0.75
+```
+
+Example:
+
+```text
+Cost
+
+tool calls:
+12 / 20 = 0.60
+
+retries:
+1 / 3 = 0.33
+
+C = mean(0.60, 0.33)
+C = 0.465
+```
+
+A user must be able to understand why BOUND produced every score.
+
+---
+
+# Phase 9 — Automatic plan workflow
+
+## Goal
+
+Provide a high-level orchestration API.
+
+Suggested interface:
 
 ```python
-class ScoreEvidence(BaseModel):
-    source: str
-    value: float
-    contribution: float | None = None
-    description: str | None = None
+workflow = BoundWorkflow(
+    contract_generator=generator,
+    evaluator=evaluator,
+    policy=policy,
+)
 ```
 
-Or a simpler structured equivalent.
+Then:
 
-The result should allow a consumer to understand:
+```python
+bound_plan = workflow.prepare(
+    goal=user_goal,
+    plan=agent_plan,
+    context=context,
+)
+```
+
+The output is a validated:
 
 ```text
-Why is A = 0.85?
-Why is R = 0.30?
-Why is C = 0.20?
+BoundPlan
 ```
 
-Example:
+Execution remains controlled by the consuming agent.
 
-```text
-Acceptance:
-- tests: 1.0
-- lint: 1.0
-- required checks: 0.75
-
-Computed A: 0.92
-```
-
-Do not require provenance for manually supplied `StaticEvaluator` scores.
-
-But deterministic evaluators should expose it.
+BOUND should not become an agent framework.
 
 ---
 
-# Phase 8 — Update steering prompts
+# Phase 10 — Step evaluation workflow
 
-## Goal
+Provide a high-level operation such as:
 
-Make prompts reflect the new decision semantics.
-
-Examples:
-
-## ACCEPT
-
-```text
-The current result meets the required acceptance threshold and does not exceed the configured risk boundary.
-
-Further optimization of this step is not required.
-
-Continue toward the next goal.
+```python
+result = workflow.evaluate_step(
+    contract=step_contract,
+    evidence=execution_evidence,
+)
 ```
 
-## RETRY
+Internally:
 
 ```text
-The current result is close to the required acceptance threshold.
-
-Stay with the same general approach and make one focused attempt to close the remaining gap.
+StepContract
+      +
+ExecutionEvidence
+      │
+      ▼
+ContractEvaluator
+      │
+      ▼
+A / I / R / C
+      │
+      ▼
+BoundPolicy
+      │
+      ▼
+EvaluationResult
 ```
 
-## REPLAN
-
-```text
-The current result is materially below the required acceptance threshold.
-
-Do not keep iterating on the same approach.
-
-Choose a different strategy that better addresses the goal.
-```
-
-## ROLLBACK
-
-```text
-The action exceeds the configured acceptable risk boundary.
-
-Avoid or revert the action where possible before continuing.
-```
-
-The prompt should include:
-
-```text
-score
-threshold
-distance from threshold
-risk
-rollback threshold
-decision
-```
-
-Keep it concise.
+The final decision remains deterministic.
 
 ---
 
-# Phase 9 — CLI v0.2
-
-Keep direct-score mode.
-
-Example:
-
-```bash
-bound evaluate \
-  --action "Refactor authentication" \
-  --goal "Ship secure login" \
-  --acceptance 0.8 \
-  --influence 0.1 \
-  --risk 0.2 \
-  --cost 0.3 \
-  --threshold 0.7
-```
-
-Add optional weights:
-
-```text
---acceptance-weight
---influence-weight
---risk-weight
---cost-weight
-```
+# Phase 11 — Multi-step workflow example
 
 Add:
 
 ```text
---retry-margin
---rollback-risk-threshold
+examples/automatic_plan_workflow.py
 ```
 
-Do not remove the existing CLI without a migration path.
+The example must demonstrate an entire multi-step plan.
 
----
-
-## Optional workflow mode
-
-Add only if it can remain clean:
-
-```bash
-bound evaluate-workflow \
-  --action "Implement feature X" \
-  --goal "Complete issue #123" \
-  --test-pass-rate 1.0 \
-  --lint-passed \
-  --type-check-passed \
-  --retry-count 2 \
-  --tool-call-count 14 \
-  --rollback-available
-```
-
-This command should use:
+Example goal:
 
 ```text
-CodingWorkflowEvaluator
+Add safe input validation to the user registration endpoint.
 ```
 
-No LLM.
-
-No network.
-
-If adding a second CLI mode makes v0.2 too large, prioritize the Python API and experiment harness instead.
-
----
-
-# Phase 10 — Real agent-loop experiment harness
-
-## Goal
-
-Test the actual BOUND hypothesis.
-
-The central v0.2 research question is:
-
-> Can BOUND stop a coding agent after a sufficiently good solution has been reached, reducing unnecessary work without materially reducing task success?
-
-Build a small experiment harness.
-
-Do not integrate deeply into an agent framework yet.
-
-Use recorded or manually captured trajectories if necessary.
-
----
-
-## Experiment input
-
-Represent an agent trajectory as sequential states:
-
-```python
-class AgentStep(BaseModel):
-    step_index: int
-    signals: CodingWorkflowSignals
-    scores: EvaluationScores | None = None
-```
-
-A trajectory:
-
-```python
-class AgentTrajectory(BaseModel):
-    task_id: str
-    steps: list[AgentStep]
-```
-
----
-
-## BOUND simulation
-
-For each step:
+Example generated or static plan:
 
 ```text
-1. calculate scores
-2. calculate S
-3. apply BOUND decision
-4. record the first step that produces ACCEPT
+Step 1
+Implement validation.
+
+Step 2
+Add validation tests.
+
+Step 3
+Run required verification.
+
+Step 4
+Optional additional refactoring.
 ```
 
-This gives:
+Each step must have its own `StepContract`.
+
+Simulate execution evidence.
+
+The example should demonstrate at least:
 
 ```text
-BOUND stop step
+REPLAN
+RETRY
+ACCEPT
 ```
 
-Compare against:
-
-```text
-actual agent stop step
-```
-
----
-
-# Required experiment metrics
-
-At minimum calculate:
-
-```text
-steps_saved
-tool_calls_saved
-tokens_saved, when available
-runtime_saved, when available
-```
-
-Also track:
-
-```text
-did tests still pass at BOUND stop?
-did required checks pass?
-did later steps introduce regressions?
-```
-
-A particularly important metric:
-
-```text
-post-solution unnecessary steps
-```
-
-Define:
-
-```text
-the number of agent steps executed after the earliest state that already satisfied the task's acceptance criteria
-```
-
-BOUND should aim to reduce this.
-
----
-
-# Phase 11 — Add benchmark fixtures
-
-## Goal
-
-Stop validating BOUND only on the flight example.
-
-Add at least 5 coding-agent trajectory fixtures.
-
-Examples:
-
-```text
-1. Agent solves task, then performs unnecessary refactor.
-2. Agent gets close, retries once, then succeeds.
-3. Agent repeatedly patches the same failing approach.
-4. Agent proposes a high-risk destructive action.
-5. Agent passes tests but changes unexpected files.
-```
-
-Each fixture should have expected policy behavior.
-
-At least one fixture should demonstrate:
+and show that after:
 
 ```text
 ACCEPT
 ```
 
-At least one:
+the current optimization loop stops.
+
+---
+
+# Phase 12 — Plan-to-contract example
+
+Add:
 
 ```text
-RETRY
+examples/plan_to_contract.py
 ```
 
-At least one:
+Input:
 
 ```text
-REPLAN
+Goal:
+Add JWT authentication.
+
+Plan:
+1. Add token creation.
+2. Add authentication middleware.
+3. Protect private endpoints.
+4. Add tests.
 ```
 
-At least one:
+Output:
 
 ```text
-ROLLBACK
+BoundPlan
+```
+
+with explicit contracts such as:
+
+```text
+Step 1
+
+Acceptance checks:
+- valid credentials produce a token
+- generated token can be verified
+
+Risk checks:
+- no plaintext secret is committed
+- token expiry is configured
+
+Expected artifacts:
+- authentication implementation
+- authentication tests
+
+Budget:
+- max tool calls: 20
+- max retries: 3
+```
+
+This example should work with `StaticContractGenerator`.
+
+If an optional LLM adapter exists, document how the same interface can generate the contract automatically.
+
+---
+
+# Phase 13 — README workflow documentation
+
+Add the full architecture:
+
+```text
+User goal
+    │
+    ▼
+Agent plan
+    │
+    ▼
+ContractGenerator
+    │
+    ▼
+BoundPlan
+    │
+    ▼
+StepContract
+    │
+    ▼
+Agent executes step
+    │
+    ▼
+EvidenceCollector
+    │
+    ▼
+ExecutionEvidence
+    │
+    ▼
+ContractEvaluator
+    │
+    ▼
+A / I / R / C
+    │
+    ▼
+BOUND policy
+    │
+    ▼
+Decision
+```
+
+Explain clearly:
+
+```text
+The LLM may define what should be measured.
+
+The environment provides evidence.
+
+Deterministic code calculates the scores.
+
+BOUND makes the final decision.
 ```
 
 ---
 
-# Phase 12 — Document assumptions honestly
+# Phase 14 — Automatic contract generation experiment
 
-Update README with a section:
+## Goal
 
-```text
-Current status
-```
+Test whether automatically generated contracts are actually useful.
 
-State clearly:
+Create a small benchmark of at least 10 plans.
 
-```text
-BOUND v0.2 is an experimental deterministic control policy.
-
-The score formula and default heuristics are hypotheses.
-
-They have not yet been broadly validated across production agent workloads.
-```
-
-Document that:
+For each plan evaluate:
 
 ```text
-A/I/R/C are not naturally commensurable quantities.
+Are the acceptance checks measurable?
+Are they relevant to the goal?
+Are required checks missing?
+Are unnecessary checks introduced?
+Are risk checks meaningful?
+Can deterministic evidence evaluate the contract?
 ```
 
-The weights are explicit policy parameters.
+Do not evaluate only whether the JSON is valid.
 
-Do not imply that the defaults are universally correct.
+The important question is:
+
+```text
+Did the generated contract define useful success criteria?
+```
 
 ---
 
-# Phase 13 — Clarify what "bounded" means
+# Phase 15 — Contract quality model
 
-Add documentation explaining:
+Add a validation report:
 
-BOUND does not currently mean:
-
-```text
-the mathematical utility function itself has a bounded or concave shape
+```python
+class ContractQualityReport(BaseModel):
+    measurable_ratio: float
+    acceptance_check_count: int
+    risk_check_count: int
+    has_budget: bool
+    warnings: list[str]
 ```
 
-BOUND currently means:
+Detect obvious problems such as:
 
 ```text
-optimization is bounded by an explicit acceptance threshold
+no acceptance checks
+too many vague checks
+duplicate checks
+no observable verification method
+extremely large contract
 ```
 
-In other words:
-
-```text
-once S >= T:
-    stop optimizing this step
-```
-
-This is a satisficing policy.
-
-Use precise language.
-
-Do not overclaim mathematical novelty.
+Do not use an LLM for basic structural validation.
 
 ---
 
-# Phase 14 — Competitive positioning
+# Phase 16 — Tests
 
-Add a concise section to README.
+By the end of v0.3, test at minimum:
 
-Do not claim the formula is the moat.
+## Contracts
 
-BOUND's intended differentiation is:
+* valid plan
+* empty plan rejected
+* step without acceptance checks rejected
+* invalid risk severity rejected
+* invalid budgets rejected
+
+## Evidence
+
+* valid evidence
+* missing evidence
+* unknown check IDs
+* duplicate evidence
+* failed required checks
+
+## Contract evaluation
+
+* all checks pass
+* partial acceptance
+* no cost budget
+* budget exceeded
+* failed high-severity risk check
+* rollback unavailable
+* deterministic repeatability
+
+## Workflow
+
+* plan preparation
+* multi-step evaluation
+* first ACCEPT stops current optimization loop
+* RETRY keeps same step
+* REPLAN requires new strategy
+* ROLLBACK overrides acceptance
+
+## Architecture
+
+Verify:
 
 ```text
-provider-agnostic
-deterministic final policy
-auditable score decomposition
-explicit stop condition
-no mandatory LLM judge
-workflow evidence before semantic judgement
+no mandatory LLM dependency
+no network required
+no API key required
+final decision remains deterministic
 ```
-
-The future value is primarily in:
-
-```text
-signal collection
-score derivation
-threshold calibration
-agent-loop integration
-```
-
-not in the one-line score formula alone.
-
----
-
-# Required tests
-
-By the end of v0.2, tests must cover:
-
-## Score calculation
-
-* all four independent weights
-* default v0.1-equivalent behavior
-* positive and negative influence
-* negative final scores
-* no clamping
-
-## Decision policy
-
-* hard risk rollback
-* high score but unsafe -> rollback
-* score exactly at threshold -> accept
-* score above threshold -> accept
-* score just below threshold within retry margin -> retry
-* score outside retry margin -> replan
-* exact retry-margin boundary
-* every decision is reachable
-
-## Workflow signals
-
-* valid signals
-* invalid ranges
-* missing optional signals
-* no acceptance evidence
-* deterministic normalization
-
-## Evaluator
-
-* deterministic same-input same-output
-* no network
-* no model dependency
-* explicit provenance
-
-## Experiment harness
-
-* correct first ACCEPT step
-* correct steps saved
-* regression-after-accept scenario
-* trajectory with no ACCEPT result
 
 ---
 
 # Definition of Done
 
-BOUND v0.2 is complete when:
+BOUND v0.3 is complete when:
 
 ```bash
 uv run ruff check .
 uv run pytest -q
 ```
 
-pass and all four decisions are meaningfully reachable.
-
-The package must support:
+pass and the following workflow is possible:
 
 ```text
-manual score input
+natural-language plan
+        │
+        ▼
+evaluation contracts
+        │
+        ▼
+execution evidence
+        │
+        ▼
+automatic A / I / R / C
+        │
+        ▼
+deterministic BOUND decision
 ```
 
-and at least one:
+A user should no longer need to manually provide all four scores for a contract-based workflow.
 
-```text
-deterministic coding workflow evaluator
-```
+The package must still work entirely without an LLM.
 
-The repository must contain a reproducible experiment showing:
-
-```text
-where BOUND would stop an agent trajectory
-```
-
-and:
-
-```text
-how much work would have been avoided
-```
-
-Do not claim success based only on the existence of the framework.
-
-The important v0.2 output is evidence.
+LLM-based contract generation is an optional convenience layer, not a requirement.
 
 ---
 
-# Out of scope for v0.2
+# Out of scope for v0.3
 
 Do not implement:
 
-* Anthropic integration
-* OpenAI integration
-* DeepSeek integration
-* model-specific judges
-* Cline plugin
+* LLM-based final BOUND decisions
+* mandatory model provider dependencies
+* deep Cline integration
 * Cursor integration
-* MCP integration
+* persistent mission memory
 * learned thresholds
 * reinforcement learning
-* production calibration
-* automatic model routing
-* persistent mission memory
+* opaque learned scoring functions
 
-These may come later.
+The central v0.3 question is:
 
----
-
-# Priority order
-
-If time or complexity becomes an issue, prioritize:
-
-```text
-1. Fix decision semantics
-2. Add symmetric weights
-3. Reconcile documentation
-4. Add deterministic workflow signals
-5. Add experiment harness
-6. Add benchmark trajectories
-7. Improve CLI
-```
-
-Do not sacrifice the experiment harness for extra packaging features.
-
-The key question for v0.2 is no longer:
-
-```text
-Does the calculator work?
-```
-
-It is:
-
-```text
-Does BOUND stop an agent at a useful moment?
-```
+> Can BOUND automatically turn an explicit plan into measurable execution contracts and use real evidence to decide when an agent should continue, retry, replan, or roll back?

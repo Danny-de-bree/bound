@@ -7,7 +7,7 @@
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/v/bound-policy.svg" alt="PyPI"></a>
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Python"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/Danny-de-bree/bound"><img src="https://img.shields.io/badge/tests-239%20passed-brightgreen.svg" alt="Tests"></a>
+  <a href="https://github.com/Danny-de-bree/bound"><img src="https://img.shields.io/badge/tests-375%20passed-brightgreen.svg" alt="Tests"></a>
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv"></a>
 </p>
 
@@ -382,6 +382,174 @@ point is to prove BOUND inputs can be derived without an LLM and to make the
 derivation auditable through `ScoreEvidence` provenance, so a consumer can
 answer "why is `A = 0.85`?".
 
+## Contract-based workflow (v0.3)
+
+v0.3 removes the need to manually assign most `A / I / R / C` scores. Instead of
+asking the user (or an LLM) for the scores, v0.3 asks **before** an agent
+executes a step: *what would success look like here?* The answer becomes an
+explicit, machine-readable **evaluation contract**. After the step runs, the
+environment supplies evidence, deterministic code scores it, and BOUND makes
+the final decision.
+
+```text
+User goal + agent plan
+        │
+        ▼
+ContractGenerator ──→ BoundPlan ──→ StepContract   (what should be measured)
+        │
+        ▼
+Agent executes the step
+        │
+        ▼
+EvidenceCollector ──→ ExecutionEvidence              (what was observed)
+        │
+        ▼
+ContractEvaluator ──→ A / I / R / C                  (deterministic scores)
+        │
+        ▼
+BOUND policy ──→ ACCEPT / RETRY / REPLAN / ROLLBACK   (deterministic decision)
+```
+
+The key principle is a clean separation of concerns:
+
+> The LLM may define *what* should be measured. The environment provides
+> evidence. Deterministic code calculates the scores. BOUND makes the final
+> decision.
+
+The contract and the evidence carry all the structure; the final `A / I / R /
+C` is a pure, fully-documented, bit-for-bit reproducible function of those two
+inputs. There is no network access and no LLM SDK on this path.
+
+### The contract models
+
+| Model | Role |
+| ----- | ---- |
+| `AcceptanceCheck` | One measurable, observable outcome a step must satisfy (`required=True` fails the step; `False` is advisory). |
+| `RiskCheck` | A named risk with a `severity` in `[0, 1]`; violated risk contributes to `R`. |
+| `StepBudget` | Optional ceilings on retries, tool calls, tokens, and runtime. |
+| `StepContract` | The per-step contract: acceptance checks, risk checks, budget, expected artifacts. |
+| `BoundPlan` | A validated, ordered sequence of `StepContract`s plus a top-level goal. |
+
+### Evidence and scoring
+
+After execution an `EvidenceCollector` (a `Protocol` — environment-agnostic,
+deliberately typed against `object`) records an `ExecutionEvidence`: which
+`CheckEvidence` passed/failed, which artifacts appeared, retry/tool/token/runtime
+usage, and whether a clean rollback is still possible. BOUND's core never
+introspects the execution handle, so a Cline session, a CI log, or a test
+fixture all flow through the same seam — concrete collectors are integrated
+later and live outside the core.
+
+The `ContractEvaluator` then turns `StepContract + ExecutionEvidence` into
+`A / I / R / C` with full `ScoreEvidence` provenance, using honest,
+documented v0.3 reference heuristics (not calibrated weights):
+
+- **Acceptance `A`** — `passed_required / total_required`. Each required
+  `AcceptanceCheck` is reconciled against `CheckEvidence` by `id`; a required
+  check with **no** matching evidence counts as **FAILED** (never silently
+  passing). Optional checks are advisory only.
+- **Risk `R`** — `min(1.0, Σ contributions)`: each violated `RiskCheck`
+  contributes its `severity` (a check with no evidence is treated
+  conservatively as violated), plus unexpected artifacts and an unavailable
+  rollback.
+- **Cost `C`** — mean of available budget dimensions, each
+  `min(actual / max, 1.0)`. Unmeasured telemetry for a *declared* budget is
+  conservatively saturated to `1.0`. No budget → `C = 0.0`.
+- **Influence `I`** — `0.0` by default with an explicit honesty note (no
+  downstream-influence evidence is derivable from contract evidence), or
+  supplied externally.
+
+### `BoundWorkflow`: prepare + evaluate_step
+
+`BoundWorkflow` is the thin orchestration seam that wires the pipeline
+end-to-end **without** becoming an agent framework. The consuming agent owns
+*when* to call each method and *how* to react to the decision; the workflow
+never decides. It exposes exactly two operations:
+
+- `prepare(goal, plan, context=None)` → a Pydantic-validated `BoundPlan`, via
+  the bound `ContractGenerator`.
+- `evaluate_step(contract, evidence, criteria)` → an `EvaluationResult` whose
+  `decision` comes from the `BoundPolicy` (never from the workflow) and whose
+  `provenance` carries the `ContractEvaluator`'s per-dimension evidence.
+
+### Works entirely without an LLM
+
+The package ships a dependency-free `StaticContractGenerator` that returns a
+pre-supplied `BoundPlan`. Tests, examples, and the CLI drive the full contract
+pipeline end-to-end with it — no API key, no network, no LLM SDK:
+
+```python
+from bound import (
+    AcceptanceCheck, BoundPlan, StaticContractGenerator,
+    ContractEvaluator, BoundWorkflow, StepContract,
+)
+from bound.evidence import CheckEvidence, ExecutionEvidence
+from bound.evaluator import StaticEvaluator
+from bound.policy import BoundPolicy
+from bound.models import BoundCriteria, EvaluationScores
+
+step = StepContract(
+    id="write-tests",
+    description="Add unit tests for the parser",
+    goal="Ship the parser",
+    acceptance_checks=[AcceptanceCheck(id="tests-pass", description="All tests pass")],
+)
+step_plan = BoundPlan(goal="Ship the parser", steps=[step])
+# The policy's own Evaluator is a vestigial placeholder on the contract path —
+# evaluate_step scores via the ContractEvaluator and rebinds this seam — but
+# BoundPolicy still requires one at construction. Its scores are never used.
+placeholder_scores = EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
+workflow = BoundWorkflow(
+    contract_generator=StaticContractGenerator(step_plan),
+    evaluator=ContractEvaluator(),
+    policy=BoundPolicy(StaticEvaluator(placeholder_scores)),
+)
+
+plan = workflow.prepare(goal="Ship the parser", plan="1. write tests  2. ship")
+# ... agent executes the first step; environment records evidence ...
+evidence = ExecutionEvidence(
+    acceptance=[CheckEvidence(check_id="tests-pass", passed=True, source="test-runner")],
+)
+result = workflow.evaluate_step(
+    contract=plan.steps[0], evidence=evidence, criteria=BoundCriteria(threshold=0.6),
+)
+print(result.decision)   # deterministic ACCEPT / RETRY / REPLAN / ROLLBACK
+```
+
+### Optional LLM contract generation (out of core)
+
+LLM-backed contract generators are an **optional convenience layer**, never a
+requirement. They live **outside** the deterministic core — in a separate
+adapter module or behind an optional dependency group (e.g.
+`pip install bound[llm]`); an LLM SDK is never a mandatory install dependency
+of `bound`, and the `bound` package imports none (see the documented
+`bound.llm_adapters` seam).
+
+When an LLM adapter is supplied, its job is to emit **structured data only**:
+
+- what success looks like (`AcceptanceCheck`),
+- what risks matter (`RiskCheck`),
+- what artifacts are expected,
+- what execution budgets apply (`StepBudget`).
+
+It must **not** return a BOUND decision (ACCEPT / RETRY / REPLAN / ROLLBACK)
+and must **not** assign final `A / I / R / C` scores — those remain the
+exclusive responsibility of the deterministic `ContractEvaluator` and
+`BoundPolicy`. Whatever an LLM emits must round-trip through Pydantic
+validation before BOUND can use it, so a malformed or hallucinated contract is
+rejected rather than silently trusted.
+
+### Contract quality (structural, no LLM)
+
+`ContractQualityReport` (via `assess_contract`) is a deterministic, structural
+smell test over a compiled `BoundPlan`: it scores how *measurable* the
+acceptance checks read and flags obvious problems (no checks, too many vague
+checks, duplicate ids, no observable verification method, an extremely large
+contract). It performs **no LLM call and no semantic judgement** — it can
+answer "are the checks *measurable-looking*?" but not "are they *relevant* to
+the goal?" That blind spot is made explicit in the bundled experiment corpus
+under `benchmarks/contracts`.
+
 ## What "bounded" means
 
 "BOUND" does **not** mean the utility function itself has a bounded or concave
@@ -403,15 +571,16 @@ condition and the auditable derivation of the inputs, not in the arithmetic.
 
 ## Current status
 
-BOUND v0.2 is an experimental deterministic control policy. The score formula,
+BOUND v0.3 is an experimental deterministic control policy. The score formula,
 the default workflow heuristics, and the threshold defaults are **hypotheses**.
 They have not yet been broadly validated across production agent workloads.
 
 `A / I / R / C` are not naturally commensurable quantities; the weights are
 explicit policy parameters, and the defaults are not implied to be universally
-correct. The v0.2 experiment harness is designed to produce reproducible
-evidence of where BOUND would stop a trajectory and how much work would have been
-avoided — not to assert that BOUND already improves outcomes.
+correct. The contract-evaluation heuristics and the v0.2 experiment harness are
+designed to produce reproducible evidence of where BOUND would stop a
+trajectory and how much work would have been avoided — not to assert that BOUND
+already improves agent outcomes.
 
 ## Competitive positioning
 
@@ -448,8 +617,12 @@ See [`roadmap.md`](roadmap.md) for the full staged plan. Highlights:
 - **v0.1** — deterministic core, Pydantic models, CLI, unit tests, prompts.
 - **v0.2** — symmetric weights, coherent decision semantics, deterministic
   coding-workflow signals + `CodingWorkflowEvaluator` with provenance, threshold
-  introspection, experiment harness. *(this release)*
-- **v0.3** — composite evaluators, optional semantic evaluator, hybrid scoring.
+  introspection, experiment harness.
+- **v0.3** — evaluation contracts + `ContractGenerator` abstraction (with the
+  dependency-free `StaticContractGenerator`), evidence models +
+  `EvidenceCollector`, `ContractEvaluator` with provenance, `BoundWorkflow`
+  orchestration (`prepare` + `evaluate_step`), `ContractQualityReport` +
+  benchmark corpus, examples. *(this release)*
 - **v0.4** — integration into a real coding-agent workflow, production data
   collection, threshold calibration.
 - **Later** — hierarchical BOUND, adaptive/learned thresholds, mission-level
@@ -461,7 +634,7 @@ See [`roadmap.md`](roadmap.md) for the full staged plan. Highlights:
 git clone https://github.com/Danny-de-bree/bound.git
 cd bound
 uv sync
-uv run pytest          # 239 tests
+uv run pytest          # 375 tests
 uv run ruff check .
 ```
 

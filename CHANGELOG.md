@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-15
+
+### Added
+
+- **Evaluation contracts** (`bound.contracts`): machine-readable models that
+  describe what success means *before* an agent executes a step —
+  `AcceptanceCheck` (measurable, observable outcomes; `required` vs advisory),
+  `RiskCheck` (named risk with `severity`), `StepBudget` (optional retries /
+  tool-call / token / runtime ceilings), `StepContract`, and `BoundPlan`
+  (validated, ordered sequence of step contracts plus a top-level goal).
+- **`ContractGenerator` abstraction** (`bound.contracts`): a provider-agnostic
+  Protocol that compiles a natural-language goal + plan into a validated
+  `BoundPlan`. Ships a dependency-free `StaticContractGenerator` so the full
+  contract pipeline runs with no API key, network, or LLM SDK. LLM-backed
+  generators are optional and live outside the core (see the documented,
+  import-free `bound.llm_adapters` seam).
+- **Evidence models** (`bound.evidence`): `CheckEvidence` and
+  `ExecutionEvidence` record what was *actually observed* after execution
+  (which checks passed/failed, produced/unexpected artifacts, retry/tool/token/
+  runtime usage, rollback availability), plus the environment-agnostic
+  `EvidenceCollector` Protocol (typed against `object` so any execution handle
+  flows through the same seam). The core never introspects the execution handle.
+- **`ContractEvaluator`** (`bound.contract_evaluator`): the deterministic seam
+  that turns a `StepContract` + `ExecutionEvidence` into `A / I / R / C` with
+  full `ScoreEvidence` provenance — same contract + evidence → same scores, no
+  network or LLM. Honest v0.3 reference heuristics (not calibrated weights):
+  acceptance is reconciled by `id` with missing required evidence counted as
+  FAILED; risk is additive and capped; cost is cap-normalized with conservative
+  saturation for unmeasured declared budgets; influence defaults to `0.0` with
+  an explicit honesty note.
+- **`BoundWorkflow`** (`bound.bound_workflow`): thin orchestration of the
+  contract pipeline via `prepare` (goal + plan → validated `BoundPlan`) and
+  `evaluate_step` (executed step → `EvaluationResult`). It never decides; the
+  decision comes from the deterministic `BoundPolicy`, and the contract scores
+  are fed through the policy's unchanged decision pipeline via a throwaway
+  `StaticEvaluator` (no double-scoring), with the `ContractEvaluator`
+  provenance wired onto the result.
+- **`ContractQualityReport`** (`bound.contract_quality`): a deterministic,
+  structural smell test over a compiled `BoundPlan` (`measurable_ratio`,
+  `acceptance_check_count`, `risk_check_count`, `has_budget`, `warnings`)
+  detecting no checks, too many vague checks, duplicate ids, no observable
+  verification method, and oversized contracts. No LLM, no semantic judgement —
+  it judges whether a generated contract *appears* to define useful success
+  criteria.
+- **Automatic-contract experiment** (`bound.contract_quality`): a corpus of
+  plans under `benchmarks/contracts` (≥10 fixtures, including a deliberate
+  `measurable_but_irrelevant` blind spot) plus
+  `run_contract_quality_experiment` and `summarize_contract_quality_experiment`
+  that record per-plan findings and an honest account of what structural
+  validation can and cannot judge.
+- New public package exports: `AcceptanceCheck`, `RiskCheck`, `StepBudget`,
+  `StepContract`, `BoundPlan`, `ContractGenerator`, `StaticContractGenerator`,
+  `CheckEvidence`, `ExecutionEvidence`, `EvidenceCollector`,
+  `ContractEvaluator`, `BoundWorkflow`, `ContractQualityReport`.
+
+### Changed
+
+- README gained a full v0.3 "Contract-based workflow" section documenting the
+  `User goal → ContractGenerator → BoundPlan → StepContract → Agent executes →
+  EvidenceCollector → ExecutionEvidence → ContractEvaluator → A/I/R/C → BOUND
+  policy → Decision` architecture, the `prepare` / `evaluate_step` workflow, the
+  no-LLM `StaticContractGenerator` path, the optional LLM-adapter boundary
+  (structured data only — never a BOUND decision or A/I/R/C score), and the
+  contract-quality report.
+- The package module docstring lists the new v0.3 modules (`evidence`,
+  `contract_evaluator`, `bound_workflow`, `contract_quality`, `llm_adapters`).
+- Version bumped to `0.3.0`.
+
+### Architecture invariants
+
+- The package still works entirely without an LLM: no LLM SDK is a mandatory
+  install dependency, importing `bound` loads no provider SDK, and the core
+  reaches a deterministic decision with the socket primitive blocked. LLM-based
+  contract generation is an optional convenience layer, not a requirement. No
+  claim is made that BOUND improves agent performance; v0.3 produces
+  reproducible evidence of the contract-based decision path.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added
@@ -92,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.1.0
