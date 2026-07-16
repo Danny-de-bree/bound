@@ -1,0 +1,45 @@
+{
+  "trajectory_id": "cline-dogfood-baseline",
+  "status": "PENDING_REAL_RUN",
+  "description": "BASELINE trajectory template. Copy to baseline_trajectory.json and fill in only values actually observed from a real, uncontrolled Cline run. Leave unobservable fields null. Do not fabricate.",
+  "run_metadata": {
+    "operator": null,
+    "run_date_utc": null,
+    "cline_version": null,
+    "model": null,
+    "bound_policy_version": null,
+    "repo_commit_at_start": null,
+    "endpoint_under_test": null,
+    "notes": "Replace each null with the observed value after a real run."
+  },
+  "metrics": {
+    "task_success": null,
+    "task_success_checks_passed": ["valid_input_passes", "invalid_input_rejected", "edge_cases_handled"],
+    "tests": {
+      "added": null,
+      "passing": null,
+      "failing": null,
+      "removed": null,
+      "modified": null
+    },
+    "agent_steps_total": null,
+    "retries": null,
+    "replans": null,
+    "tool_calls": null,
+    "token_usage": null,
+    "runtime_seconds": null,
+    "bound_accept_step_index": null,
+    "first_satisfactory_step_index": null,
+    "work_after_satisfactory": null,
+    "work_after_satisfactory_description": null
+  },
+  "per_step": {
+    "description": "Optional ordered list of observed steps. Fill from the real transcript. Each step may carry the ExecutionEvidence snapshot collected at that step (field names match bound.evidence.ExecutionEvidence). Omit the list if per-step detail is not available.",
+    "steps": []
+  },
+  "honesty_notes": {
+    "unobservable_fields_left_null": ["tool_calls", "token_usage", "runtime_seconds"],
+    "task_success_method": "deterministic test suite against the three required acceptance checks; no LLM-as-judge",
+    "fabrication": false
+  }
+}

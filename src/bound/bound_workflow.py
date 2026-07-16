@@ -25,30 +25,28 @@ Score / decision boundary
 The :class:`~bound.contract_evaluator.ContractEvaluator` scores an *executed*
 step (``StepContract + ExecutionEvidence -> EvaluationScores``) and is **not**
 an :class:`~bound.evaluator.Evaluator` (which scores a proposed
-:class:`~bound.models.Action`). :meth:`~bound.policy.BoundPolicy.evaluate`, by
-contrast, is built around the :class:`~bound.evaluator.Evaluator` Protocol
-(``Action -> EvaluationScores``) and owns the decision rule (``_decide``) plus
-the :class:`~bound.models.EvaluationResult` assembly.
+:class:`~bound.models.Action`). The decision rule and
+:class:`~bound.models.EvaluationResult` assembly live in **one place** —
+:meth:`~bound.policy.BoundPolicy.decide` — which accepts pre-computed scores
+directly.
 
-To keep the decision in **one place** (the policy) and avoid recomputing the
-contract scores, :meth:`evaluate_step` bridges the two seams with a throwaway
-:class:`~bound.evaluator.StaticEvaluator` wrapping the contract scores: it
-temporarily rebinds the policy's evaluator to that
-:class:`~bound.evaluator.StaticEvaluator`, calls the policy's *unchanged*
-:meth:`~bound.policy.BoundPolicy.evaluate` (so ``calculate_components`` and the
-decision rule run exactly once, inside the policy), then restores the original
-evaluator. Because the :class:`~bound.evaluator.StaticEvaluator` simply returns
-the already-computed scores, no contract is re-scored — there is no
-double-computation. The :class:`~bound.contract_evaluator.ContractEvaluator`'s
-per-dimension ``provenance`` is then wired onto the result, since the
-:class:`~bound.evaluator.StaticEvaluator` bridge carries none.
+To keep the decision in that one place and avoid recomputing the contract
+scores, :meth:`evaluate_step` scores the step with the bound
+:class:`~bound.contract_evaluator.ContractEvaluator` and feeds the resulting
+:class:`~bound.models.EvaluationScores` straight into
+:meth:`~bound.policy.BoundPolicy.decide`. The policy's
+``calculate_components`` and decision rule therefore run exactly once, inside
+the policy, and the contract is never re-scored. The
+:class:`~bound.contract_evaluator.ContractEvaluator`'s per-dimension
+``provenance`` is forwarded into :meth:`~bound.policy.BoundPolicy.decide` so the
+result explains "why A / I / R / C?".
 
-The policy's own injected :class:`~bound.evaluator.Evaluator` is therefore a
-vestigial placeholder in the contract workflow: contract scores always come
-from the bound :class:`~bound.contract_evaluator.ContractEvaluator`. It is
-retained (and restored) so a caller that injected a specific
-:class:`~bound.policy.BoundPolicy` instance still sees its decision logic and
-its evaluator unchanged after every evaluation.
+Because the contract workflow reaches the decision via
+:meth:`~bound.policy.BoundPolicy.decide` rather than the Action-based
+:meth:`~bound.policy.BoundPolicy.evaluate`, no
+:class:`~bound.evaluator.Evaluator` placeholder is ever required: a plain
+``BoundPolicy()`` (no injected evaluator) is the default policy for the contract
+pipeline, and ``BoundWorkflow()`` constructs one automatically.
 
 The module performs no network access and imports no LLM SDK; once a
 :class:`~bound.contracts.BoundPlan` and
@@ -60,9 +58,8 @@ from __future__ import annotations
 
 from bound.contract_evaluator import ContractEvaluator
 from bound.contracts import BoundPlan, ContractGenerator, StepContract
-from bound.evaluator import StaticEvaluator
 from bound.evidence import ExecutionEvidence
-from bound.models import Action, BoundCriteria, EvaluationResult
+from bound.models import BoundCriteria, EvaluationResult
 from bound.policy import BoundPolicy
 
 
@@ -83,7 +80,8 @@ class BoundWorkflow:
 
     Attributes:
         contract_generator: The :class:`~bound.contracts.ContractGenerator`
-            used by :meth:`prepare`.
+            used by :meth:`prepare`, or ``None`` when the workflow was
+            constructed without one (in which case :meth:`prepare` raises).
         evaluator: The :class:`~bound.contract_evaluator.ContractEvaluator`
             used to score an executed step against its contract.
         policy: The :class:`~bound.policy.BoundPolicy` that owns the final
@@ -92,35 +90,49 @@ class BoundWorkflow:
 
     def __init__(
         self,
-        contract_generator: ContractGenerator,
-        evaluator: ContractEvaluator,
-        policy: BoundPolicy,
+        contract_generator: ContractGenerator | None = None,
+        evaluator: ContractEvaluator | None = None,
+        policy: BoundPolicy | None = None,
     ) -> None:
-        """Bind the workflow to its three deterministic components.
+        """Bind the workflow to its deterministic components.
+
+        Every component has a sensible default, so the minimal contract
+        pipeline is a placeholder-free ``BoundWorkflow()`` followed by
+        :meth:`evaluate_step`. Only :meth:`prepare` requires a
+        ``contract_generator`` (it compiles a goal + plan into a
+        :class:`~bound.contracts.BoundPlan`), so a workflow used purely for
+        ``evaluate_step`` need not supply one.
 
         Args:
             contract_generator: Any object satisfying the
-                :class:`~bound.contracts.ContractGenerator` Protocol. It turns a
-                natural-language goal + plan into a validated
+                :class:`~bound.contracts.ContractGenerator` Protocol, or
+                ``None`` (the default) when :meth:`prepare` will not be used.
+                It turns a natural-language goal + plan into a validated
                 :class:`~bound.contracts.BoundPlan` and must never produce a
                 BOUND decision or A/I/R/C scores.
             evaluator: The :class:`~bound.contract_evaluator.ContractEvaluator`
                 that scores an executed step into
-                :class:`~bound.models.EvaluationScores`. It must never produce a
-                BOUND decision.
+                :class:`~bound.models.EvaluationScores`, or ``None`` to use a
+                fresh default evaluator. It must never produce a BOUND
+                decision.
             policy: The :class:`~bound.policy.BoundPolicy` that owns the final
-                decision. Its injected :class:`~bound.evaluator.Evaluator` is
-                not used for contract scoring — :meth:`evaluate_step` scores via
-                the ``evaluator`` and feeds those scores through the policy's
-                decision pipeline (see the module docstring).
+                decision, or ``None`` to construct a default ``BoundPolicy()``.
+                No injected :class:`~bound.evaluator.Evaluator` is required:
+                :meth:`evaluate_step` scores via the contract ``evaluator`` and
+                feeds those scores straight through
+                :meth:`~bound.policy.BoundPolicy.decide`.
         """
         self._contract_generator = contract_generator
-        self._evaluator = evaluator
-        self._policy = policy
+        self._evaluator = evaluator if evaluator is not None else ContractEvaluator()
+        self._policy = policy if policy is not None else BoundPolicy()
 
     @property
-    def contract_generator(self) -> ContractGenerator:
-        """The :class:`~bound.contracts.ContractGenerator` bound to this workflow."""
+    def contract_generator(self) -> ContractGenerator | None:
+        """The :class:`~bound.contracts.ContractGenerator` bound to this workflow.
+
+        ``None`` when the workflow was constructed without one, in which case
+        :meth:`prepare` raises.
+        """
         return self._contract_generator
 
     @property
@@ -157,7 +169,17 @@ class BoundWorkflow:
         Returns:
             A :class:`~bound.contracts.BoundPlan` that has passed Pydantic
             validation.
+
+        Raises:
+            RuntimeError: If the workflow was constructed without a
+                ``contract_generator``.
         """
+        if self._contract_generator is None:
+            raise RuntimeError(
+                "BoundWorkflow.prepare requires a contract_generator; construct "
+                "one with BoundWorkflow(contract_generator=...), or call "
+                "evaluate_step directly when you already hold a StepContract."
+            )
         return self._contract_generator.generate(
             goal=goal,
             plan=plan,
@@ -174,19 +196,17 @@ class BoundWorkflow:
         """Score one executed step into a deterministic :class:`EvaluationResult`.
 
         The pipeline is ``StepContract + ExecutionEvidence -> ContractEvaluator
-        -> EvaluationScores (A / I / R / C) -> BoundPolicy ->
+        -> EvaluationScores (A / I / R / C) -> BoundPolicy.decide ->
         EvaluationResult (ACCEPT / RETRY / REPLAN / ROLLBACK)``. The contract
         scores come from the bound
         :class:`~bound.contract_evaluator.ContractEvaluator` (the single
         deterministic source, which also exposes per-dimension ``provenance``);
         the decision comes from the bound
-        :class:`~bound.policy.BoundPolicy` — never from the workflow. The
-        contract scores are fed through the policy's *unchanged*
-        :meth:`~bound.policy.BoundPolicy.evaluate` via a throwaway
-        :class:`~bound.evaluator.StaticEvaluator`, so the policy's
-        ``calculate_components`` and decision rule run exactly once and the
-        contract is never re-scored. See the module docstring for the full
-        rationale.
+        :class:`~bound.policy.BoundPolicy` — never from the workflow. The scores
+        are fed straight into :meth:`~bound.policy.BoundPolicy.decide`, the
+        single place where ``calculate_components`` and the decision rule run,
+        so the contract is never re-scored and no placeholder evaluator is
+        involved. See the module docstring for the full rationale.
 
         Args:
             contract: The :class:`~bound.contracts.StepContract` whose declared
@@ -208,25 +228,10 @@ class BoundWorkflow:
         scores = self._evaluator.evaluate(contract, evidence)
         contract_provenance = self._evaluator.provenance or None
 
-        # 2. Bridge the contract scores into BoundPolicy's Action-based
-        #    pipeline. BoundPolicy.evaluate(action, criteria) scores via its
-        #    own Evaluator (Action -> EvaluationScores); the ContractEvaluator
-        #    is NOT an Evaluator (it scores StepContract + ExecutionEvidence).
-        #    A StaticEvaluator wrapping the already-computed scores lets the
-        #    policy's calculate_components + decision rule run unchanged, in
-        #    one place, without re-scoring the contract. The policy's evaluator
-        #    is restored afterwards so the injected policy is left unchanged.
-        action = Action(description=contract.description, goal=contract.goal)
-        bridge = StaticEvaluator(scores)
-        previous_evaluator = self._policy.evaluator
-        self._policy._evaluator = bridge  # rebinding the Action-based seam
-        try:
-            result = self._policy.evaluate(action, criteria)
-        finally:
-            self._policy._evaluator = previous_evaluator
-
-        # 3. The StaticEvaluator bridge carries no provenance, so the policy
-        #    sets result.provenance = None. Forward the ContractEvaluator's
-        #    per-dimension evidence so a consumer can answer "why A/I/R/C?".
-        result.provenance = contract_provenance
-        return result
+        # 2. Decision in one place: feed the contract scores straight into the
+        #    policy's decide() (calculate_components + decision rule), passing
+        #    the contract provenance so the result explains "why A/I/R/C?".
+        #    No StaticEvaluator bridge and no rebinding of the policy's
+        #    evaluator — the contract workflow never needs an Action-based
+        #    evaluator at all.
+        return self._policy.decide(scores, criteria, provenance=contract_provenance)

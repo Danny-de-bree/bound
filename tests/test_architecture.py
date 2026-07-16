@@ -426,7 +426,7 @@ def test_importing_bound_does_not_load_any_provider_sdk() -> None:
     assert not offenders, (
         f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
     )
-    assert bound.__version__ == "0.3.0"
+    assert bound.__version__ == "0.4.0"
 
 
 # ---------------------------------------------------------------------------

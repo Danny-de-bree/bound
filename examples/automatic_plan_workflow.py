@@ -75,10 +75,8 @@ from bound.contracts import (
     StepBudget,
     StepContract,
 )
-from bound.evaluator import StaticEvaluator
 from bound.evidence import CheckEvidence, ExecutionEvidence
-from bound.models import BoundCriteria, EvaluationScores
-from bound.policy import BoundPolicy
+from bound.models import BoundCriteria
 
 #: The top-level goal of the plan, exactly as stated in ``todo.md`` Phase 11.
 GOAL = "Add safe input validation to the user registration endpoint."
@@ -498,18 +496,13 @@ def main() -> int:
     prepared = generator.generate(goal=GOAL, plan=PLAN_TEXT)
     assert prepared is plan, "StaticContractGenerator must return the plan by identity"
 
-    # 2. Wire the deterministic workflow. The BoundPolicy's injected evaluator
-    #    is a vestigial placeholder here: BoundWorkflow.evaluate_step scores via
-    #    the ContractEvaluator and feeds those scores through the policy's
-    #    unchanged decision rule (see bound_workflow.py).
+    # 2. Wire the deterministic workflow. No placeholder evaluator is needed:
+    #    BoundWorkflow.evaluate_step scores via the ContractEvaluator and feeds
+    #    those scores straight through BoundPolicy.decide (the single decision
+    #    point). A default BoundPolicy() is constructed automatically.
     workflow = BoundWorkflow(
         contract_generator=generator,
         evaluator=ContractEvaluator(),
-        policy=BoundPolicy(
-            StaticEvaluator(
-                EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
-            )
-        ),
     )
 
     attempts = _simulated_attempts()

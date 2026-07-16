@@ -472,6 +472,32 @@ def test_result_rejects_both_weight_and_non_default_weights() -> None:
         _result(weight=2.0, weights=BoundWeights(influence=2.0))
 
 
+def test_result_revalidation_is_idempotent_with_non_default_weights() -> None:
+    """Nesting a non-default-weights result in another model does not raise.
+
+    Pydantic v2 re-validates nested model instances, so the ``weight``/
+    ``weights`` reconciliation must be idempotent: once ``weight`` is synced to
+    ``weights.acceptance``, re-validating the same instance (e.g. when it is a
+    field of :class:`~bound.integration.AgentControlResult`) must not spuriously
+    raise "Cannot supply both". This guards the Phase 1 integration layer and
+    any other consumer that nests an :class:`EvaluationResult`.
+    """
+    from pydantic import BaseModel
+
+    class _Wrapper(BaseModel):
+        result: EvaluationResult
+
+    result = _result(weights=BoundWeights(acceptance=2.0))
+    assert result.weight == 2.0
+    assert result.weights.acceptance == 2.0
+
+    wrapped = _Wrapper(result=result)
+    assert wrapped.result.weight == 2.0
+    assert wrapped.result.weights.acceptance == 2.0
+    assert wrapped.result.decision == "ACCEPT"
+
+
+
 def test_result_defaults_rollback_risk_threshold_and_retry_margin() -> None:
     """When omitted, the audit fields default to the criteria defaults."""
     result = _result()

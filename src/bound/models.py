@@ -260,17 +260,26 @@ class EvaluationResult(BaseModel):
         """Reconcile the deprecated ``weight`` alias with ``weights``.
 
         Mirrors :meth:`BoundCriteria._reconcile_weights`: supplying both a
-        ``weight`` and a non-default ``weights`` is rejected; otherwise
-        ``weight`` is kept in sync with ``weights.acceptance``.
+        ``weight`` and a non-default ``weights`` that *conflict* is rejected;
+        otherwise ``weight`` is kept in sync with ``weights.acceptance``. The
+        conflict check is idempotent: a value equal to ``weights.acceptance`` is a
+        consistent (already-reconciled) state, not an ambiguity, so re-validating
+        an existing instance (e.g. when it is nested inside another model) does
+        not spuriously raise.
 
         Returns:
             The reconciled result (mutated in place).
 
         Raises:
             ValueError: If both ``weight`` and a non-default ``weights`` are
-                supplied.
+                supplied with conflicting values (``weight !=
+                weights.acceptance``).
         """
-        if self.weight is not None and self.weights != _DEFAULT_WEIGHTS:
+        if (
+            self.weight is not None
+            and self.weights != _DEFAULT_WEIGHTS
+            and self.weight != self.weights.acceptance
+        ):
             raise ValueError(
                 "Cannot supply both 'weight' and a non-default 'weights'; "
                 "use 'weights' (BoundWeights) only."

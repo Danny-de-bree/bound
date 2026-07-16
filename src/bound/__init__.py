@@ -53,6 +53,13 @@ from bound.evidence import (
     EvidenceCollector,
     ExecutionEvidence,
 )
+from bound.integration import (
+    AgentControlResult,
+    NextAction,
+    evaluate_agent_step,
+    render_feedback,
+)
+from bound.integration_spec import integration_spec
 from bound.models import (
     Action,
     AgentStep,
@@ -70,6 +77,7 @@ from bound.models import (
 __all__ = [
     "AcceptanceCheck",
     "Action",
+    "AgentControlResult",
     "AgentStep",
     "AgentTrajectory",
     "BoundCriteria",
@@ -86,12 +94,16 @@ __all__ = [
     "EvaluationScores",
     "EvidenceCollector",
     "ExecutionEvidence",
+    "NextAction",
     "RiskCheck",
     "ScoreEvidence",
     "StaticContractGenerator",
     "StepBudget",
     "StepContract",
     "WorkflowNormalization",
+    "evaluate_agent_step",
+    "integration_spec",
+    "render_feedback",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

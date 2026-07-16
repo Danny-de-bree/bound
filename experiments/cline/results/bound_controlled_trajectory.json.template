@@ -1,0 +1,74 @@
+{
+  "trajectory_id": "cline-dogfood-bound-controlled",
+  "status": "PENDING_REAL_RUN",
+  "description": "BOUND-CONTROLLED trajectory template. Copy to bound_controlled_trajectory.json and fill in only values actually observed from a real Cline run using the BOUND integration prompt. Field names for the contract and criteria match experiments/cline/expected_contract.json. Each per-step entry should record the real bound.integration.AgentControlResult (decision, next_action, score, threshold) produced by evaluate_agent_step. Leave unobservable fields null. Do not fabricate.",
+  "run_metadata": {
+    "operator": null,
+    "run_date_utc": null,
+    "cline_version": null,
+    "model": null,
+    "bound_policy_version": null,
+    "repo_commit_at_start": null,
+    "endpoint_under_test": null,
+    "integration_prompt_used": "integrations/cline/INSTALL_BOUND.md",
+    "contract_source": "experiments/cline/expected_contract.json",
+    "notes": "Replace each null with the observed value after a real run."
+  },
+  "metrics": {
+    "task_success": null,
+    "task_success_checks_passed": ["valid_input_passes", "invalid_input_rejected", "edge_cases_handled"],
+    "tests": {
+      "added": null,
+      "passing": null,
+      "failing": null,
+      "removed": null,
+      "modified": null
+    },
+    "agent_steps_total": null,
+    "retries": null,
+    "replans": null,
+    "tool_calls": null,
+    "token_usage": null,
+    "runtime_seconds": null,
+    "bound_accept_step_index": null,
+    "first_satisfactory_step_index": null,
+    "work_after_satisfactory": null,
+    "work_after_satisfactory_description": "Should be zero for the BOUND-controlled trajectory: ACCEPT halts the optimization loop."
+  },
+  "per_step": {
+    "description": "Ordered list of evaluated steps from the real run. Each entry records the deterministic AgentControlResult returned by bound.integration.evaluate_agent_step. decisions are NOT hardcoded — they come from the real pipeline. decision must be one of ACCEPT/RETRY/REPLAN/ROLLBACK; next_action must be one of continue/retry/replan/rollback.",
+    "steps": [
+      {
+        "step_index": 0,
+        "decision": null,
+        "next_action": null,
+        "score": null,
+        "threshold": null,
+        "checks_passed": [],
+        "evidence": {
+          "acceptance": [
+            {"check_id": "valid_input_passes", "passed": null, "source": null},
+            {"check_id": "invalid_input_rejected", "passed": null, "source": null},
+            {"check_id": "edge_cases_handled", "passed": null, "source": null}
+          ],
+          "risks": [
+            {"check_id": "no_tests_removed", "passed": null, "source": null},
+            {"check_id": "no_unexpected_files", "passed": null, "source": null}
+          ],
+          "retry_count": null,
+          "tool_call_count": null,
+          "token_usage": null,
+          "runtime_seconds": null,
+          "rollback_available": null
+        },
+        "feedback": null
+      }
+    ]
+  },
+  "honesty_notes": {
+    "unobservable_fields_left_null": ["tool_call_count", "token_usage", "runtime_seconds"],
+    "task_success_method": "deterministic test suite against the three required acceptance checks; no LLM-as-judge",
+    "decisions_sourced_from": "bound.integration.evaluate_agent_step (deterministic ContractEvaluator + BoundPolicy)",
+    "fabrication": false
+  }
+}

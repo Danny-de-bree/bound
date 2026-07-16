@@ -263,6 +263,18 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_weight_and_threshold_args(workflow)
     workflow.set_defaults(func=_run_evaluate_workflow)
 
+    spec = subparsers.add_parser(
+        "integration-spec",
+        help="Emit the framework-neutral BOUND integration specification as JSON.",
+        description=(
+            "Emit the framework-neutral BOUND integration specification as "
+            "structured JSON to STDOUT. Defines when to call BOUND, when not to, "
+            "the required flow, and the evidence rule. Deterministic: no LLM, "
+            "no network."
+        ),
+    )
+    spec.set_defaults(func=_run_integration_spec)
+
     return parser
 
 
@@ -448,6 +460,26 @@ def _run_evaluate_workflow(args: argparse.Namespace) -> int:
     payload["signals"] = signals.model_dump()
     print(json.dumps(payload, indent=2))
     print(generate_prompt(result), file=sys.stderr)
+    return 0
+
+
+def _run_integration_spec(args: argparse.Namespace) -> int:  # noqa: ARG001
+    """Execute the ``bound integration-spec`` subcommand.
+
+    Emits the framework-neutral BOUND integration specification as structured
+    JSON to STDOUT. The spec is produced deterministically (no LLM, no network)
+    by :func:`bound.integration_spec.integration_spec` and is intended to be
+    consumable by any agent integration.
+
+    Args:
+        args: The parsed namespace. Unused — the subcommand takes no arguments.
+
+    Returns:
+        ``0`` on success.
+    """
+    from bound.integration_spec import integration_spec
+
+    print(json.dumps(integration_spec(), indent=2))
     return 0
 
 

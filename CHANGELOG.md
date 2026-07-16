@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-16
+
+### Added
+
+- **Framework-neutral agent-control layer** (`bound.integration`):
+  `AgentControlResult` and `evaluate_agent_step` run BOUND's deterministic
+  contract pipeline for one executed step and *translate* the resulting
+  decision into a framework-neutral control action — `ACCEPT → continue`,
+  `RETRY → retry`, `REPLAN → replan`, `ROLLBACK → rollback` — plus concise
+  deterministic feedback (under 150 words) the agent can re-inject into its own
+  context. The layer never invents scores, never modifies a BOUND decision,
+  never calls an LLM, knows nothing about any agent framework, and never executes
+  a rollback or retry itself.
+- **Deterministic agent feedback** (`render_feedback`): ACCEPT / RETRY / REPLAN /
+  ROLLBACK feedback derived exclusively from the `EvaluationResult`, the
+  `StepContract`, the `ExecutionEvidence`, and per-dimension provenance. No LLM.
+  Golden snapshot tests pin the exact wording.
+- **Framework-neutral integration specification** (`bound.integration_spec` +
+  `bound integration-spec` CLI subcommand): a pure, JSON-serialisable spec
+  covering *when to call* BOUND, *when not to call*, the *required flow*, the
+  *evidence rule* ("never fabricate unavailable evidence"), the decision →
+  control mapping, and integration invariants. No network, no LLM.
+- **Five integration prompts** under `integrations/`: `generic`, `cline`,
+  `claude-code`, `kilo-code`, `hermes-agent` — each an `INSTALL_BOUND.md`
+  *prompt* (not human docs) designed to be pasted into the named agent so it
+  wires BOUND into its own workflow. Honest "Integration prompt for X" wording;
+  no claims of native framework hooks.
+- **Runnable multi-step agent-loop example**
+  (`examples/agent_control_loop.py`): a real three-attempt trajectory
+  (REPLAN → RETRY → ACCEPT) driven by the exact public API, with no hardcoded
+  decisions, no LLM, and no network.
+- New public package exports: `AgentControlResult`, `NextAction`,
+  `evaluate_agent_step`, `render_feedback`, `integration_spec`.
+
+### Changed
+
+- **Placeholder-free public contract API.** A plain `BoundWorkflow()` followed
+  by `evaluate_step(contract=…, evidence=…, criteria=…)` now runs the full
+  contract pipeline with no vestigial `BoundPolicy(StaticEvaluator(placeholder))`
+  requirement. The contract path reaches the decision via `BoundPolicy.decide`
+  with pre-computed scores, so `BoundPolicy()` (no injected evaluator) is the
+  default policy and `BoundWorkflow()` constructs one automatically. Backwards
+  compatibility is preserved.
+- **README rewritten integration-first** (~240 lines): hero → generated agent
+  workflow image → install → "put BOUND in your agent" links → one tested
+  end-to-end example with real executed output → how the four decisions work →
+  how evidence becomes a score → objective vs subjective evidence → current
+  status → documentation. Detailed material moved into `docs/`.
+- **Documentation restructure:** new `docs/concepts.md`, `docs/contracts.md`,
+  `docs/architecture.md`, `docs/scoring.md`, `docs/integrations.md`, and
+  `docs/status-and-roadmap.md`; the README links to these instead of duplicating.
+  Stale "agent integrations are being added" wording removed now that the prompts
+  exist.
+- **Generated workflow image** (`assets/bound-agent-workflow.png`) rendered
+  deterministically and displayed prominently near the top of the README.
+- Version bumped to `0.4.0`.
+
+### Notes
+
+- **No LLM-as-judge introduced.** An LLM may be used only to draft an evaluation
+  contract (structured data only); the final decision and `A / I / R / C` scores
+  remain the exclusive responsibility of the deterministic `ContractEvaluator`
+  and `BoundPolicy`.
+- The deterministic, network-free core is unchanged.
+
 ## [0.3.0] - 2026-07-15
 
 ### Added
@@ -169,7 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.1.0
