@@ -1,0 +1,54 @@
+{
+  "task_id": "retry_then_accept",
+  "steps": [
+    {
+      "step_index": 0,
+      "signals": {
+        "test_pass_rate": 0.3,
+        "lint_passed": false,
+        "type_check_passed": null,
+        "required_checks_passed": 0.3,
+        "retry_count": 0,
+        "tool_call_count": 4,
+        "token_usage": 3000,
+        "execution_time_seconds": 8,
+        "files_changed": 2,
+        "unexpected_files_changed": 0,
+        "rollback_available": true
+      }
+    },
+    {
+      "step_index": 1,
+      "signals": {
+        "test_pass_rate": 0.6,
+        "lint_passed": false,
+        "type_check_passed": null,
+        "required_checks_passed": 0.6,
+        "retry_count": 1,
+        "tool_call_count": 9,
+        "token_usage": 7000,
+        "execution_time_seconds": 18,
+        "files_changed": 3,
+        "unexpected_files_changed": 0,
+        "rollback_available": true
+      }
+    },
+    {
+      "step_index": 2,
+      "signals": {
+        "test_pass_rate": 1.0,
+        "lint_passed": true,
+        "type_check_passed": true,
+        "required_checks_passed": 1.0,
+        "retry_count": 2,
+        "tool_call_count": 15,
+        "token_usage": 10000,
+        "execution_time_seconds": 30,
+        "files_changed": 4,
+        "unexpected_files_changed": 0,
+        "rollback_available": true
+      }
+    }
+  ],
+  "actual_stop_step": 2
+}

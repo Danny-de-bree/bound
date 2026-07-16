@@ -1,0 +1,30 @@
+{
+  "goal": "Add input validation",
+  "steps": [
+    {
+      "id": "validate-input",
+      "description": "Validate user input",
+      "goal": "Reject invalid input early",
+      "acceptance_checks": [
+        {
+          "id": "validator_rejects_empty",
+          "description": "validate() rejects empty strings",
+          "required": true
+        },
+        {
+          "id": "validator_accepts_valid",
+          "description": "validate() accepts well-formed input",
+          "required": true
+        }
+      ],
+      "risk_checks": [],
+      "expected_artifacts": [],
+      "budget": {
+        "max_retries": 1,
+        "max_tool_calls": 10,
+        "max_tokens": 4000,
+        "max_runtime_seconds": 60.0
+      }
+    }
+  ]
+}
