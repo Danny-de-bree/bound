@@ -5,13 +5,6 @@ pipeline:
 
     Action → Evaluator → EvaluationScores → BoundCalculator → BoundPolicy → EvaluationResult
 
-v0.2 adds symmetric weighting (:class:`BoundWeights`), threshold metadata
-(``distance_to_threshold``, ``retry_margin``, ``rollback_risk_threshold``),
-auditable provenance (:class:`ScoreEvidence`), coding-agent workflow signals
-(:class:`CodingWorkflowSignals`, :class:`WorkflowNormalization`) and the
-experiment-harness trajectory models (:class:`AgentStep`,
-:class:`AgentTrajectory`).
-
 The v0.2 score is ``S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)``. The v0.1
 formula ``S = (W×A) + I - R - C`` is reproduced by the default
 :class:`BoundWeights` (``W_A = W``, ``W_I = W_R = W_C = 1.0``).

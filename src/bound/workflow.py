@@ -1,39 +1,3 @@
-"""Deterministic coding-workflow evaluator (Phases 6 & 7).
-
-The :class:`CodingWorkflowEvaluator` is the first BOUND evaluator that derives
-the four score dimensions from *real, deterministic* evidence instead of asking
-an LLM. It consumes provider-agnostic
-:class:`~bound.models.CodingWorkflowSignals` captured from a coding-agent run
-(test pass rate, lint/type-check status, retry counts, tool calls, token usage,
-file changes, ...) and maps them to :class:`~bound.models.EvaluationScores` using
-transparent, fully-documented rules.
-
-Every mapping is marked as a **v0.2 reference heuristic**: the constants are
-deliberate, visible policy knobs, *not* scientifically calibrated weights. The
-point of v0.2 is to prove BOUND inputs can be derived without an LLM and to make
-the derivation auditable through :class:`~bound.models.ScoreEvidence` provenance
-(Phase 7), so a consumer can answer "why is ``A = 0.85``?".
-
-The evaluator implements the :class:`~bound.evaluator.Evaluator` Protocol
-(structural: it exposes ``evaluate(action) -> EvaluationScores``). It stores the
-signals at construction time and performs no network access and imports no LLM
-SDK; once the signals are supplied the scores are fully deterministic.
-
-Provenance contract
--------------------
-
-:class:`~bound.models.EvaluationScores` has no provenance field, so this
-evaluator exposes the per-dimension evidence two complementary ways:
-
-1. ``CodingWorkflowEvaluator.provenance`` — a ``dict[str, list[ScoreEvidence]]``
-   keyed by ``"acceptance"``, ``"influence"``, ``"risk"``, ``"cost"``, populated
-   on every :meth:`evaluate` call. A policy or experiment harness can read this
-   and attach it to :attr:`EvaluationResult.provenance`.
-2. ``EvaluationScores.reasoning`` — a short, structured, human-readable summary of
-   every rule and the resulting values, so the scores are self-explaining even
-   without the result object.
-"""
-
 from __future__ import annotations
 
 from bound.models import (
