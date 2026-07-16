@@ -1,12 +1,23 @@
 [project]
 name = "bound-policy"
 version = "0.3.0"
-description = "BOUND — a deterministic bounded-utility policy for agentic systems."
+description = "A deterministic, configurable control policy for agent workflows."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-authors = [{ name = "Danny de Bree", email = "danny@example.com" }]
-keywords = ["agents", "policy", "decision", "bounded-utility", "llm", "agent-loop"]
+authors = [
+    { name = "Danny de Bree", email = "ddebree1990@gmail.com" }
+]
+keywords = [
+    "agents",
+    "agentic-ai",
+    "policy",
+    "decision-making",
+    "bounded-utility",
+    "satisficing",
+    "llm",
+    "agent-loop",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -42,6 +53,7 @@ packages = ["src/bound"]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.6.0",
     "pytest>=8.0",
     "ruff>=0.6",
 ]

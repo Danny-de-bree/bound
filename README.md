@@ -1,16 +1,6 @@
-<p align="center">
-  <strong>Agents that know when good enough is enough.</strong>
-</p>
+<p align="center"> <strong>Agents that know when good enough is enough.</strong> </p>
 
-<p align="center">
-  <a href="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml"><img src="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/v/bound-policy.svg" alt="PyPI"></a>
-  <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Python"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://github.com/Danny-de-bree/bound"><img src="https://img.shields.io/badge/tests-375%20passed-brightgreen.svg" alt="Tests"></a>
-  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv"></a>
-</p>
-
+<p align="center"> <a href="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml"> <img src="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml/badge.svg" alt="CI"> </a> <a href="https://pypi.org/project/bound-policy/"> <img src="https://img.shields.io/pypi/v/bound-policy.svg" alt="PyPI version"> </a> <a href="https://pypi.org/project/bound-policy/"> <img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Supported Python versions"> </a> <a href="https://github.com/Danny-de-bree/bound/blob/main/LICENSE"> <img src="https://img.shields.io/github/license/Danny-de-bree/bound.svg" alt="License"> </a> <a href="https://github.com/Danny-de-bree/bound"> <img src="https://img.shields.io/github/actions/workflow/status/Danny-de-bree/bound/ci.yml?label=tests" alt="Tests"> </a> <a href="https://github.com/astral-sh/uv"> <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json" alt="uv"> </a> </p>
 ---
 
 BOUND is a **deterministic bounded-utility policy** for agentic systems.
