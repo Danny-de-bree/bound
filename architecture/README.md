@@ -1,59 +1,64 @@
 # BOUND Architecture and Scoring
 
-This document explains how BOUND turns execution evidence into a deterministic control decision.
+BOUND is a deterministic control harness for AI agent workflows.
 
-## Control loop
+This document describes the mechanics behind the harness: contracts, execution evidence, score calculation, thresholds, and the final policy decision.
+
+## Architecture
 
 ```text
+Agent / framework
+        ↓
 Goal + plan
-    ↓
+        ↓
 StepContract
-    ↓
+        ↓
 Agent executes
-    ↓
+        ↓
 ExecutionEvidence
-    ↓
-ContractEvaluator
-    ↓
+        ↓
+Evaluation layer
+        ↓
 A / I / R / C
-    ↓
-BoundCalculator
-    ↓
+        ↓
 BoundPolicy
-    ↓
+        ↓
 ACCEPT / RETRY / REPLAN / ROLLBACK
+        ↓
+Agent control flow
 ```
 
-BOUND is not an agent framework.
+Responsibilities stay separated:
 
-The agent owns planning and execution. BOUND evaluates meaningful step boundaries.
+```text
+Agent                 → planning and execution
+Contracts + evidence  → evaluation layer
+BoundPolicy           → deterministic decision engine
+BOUND                 → control harness
+```
 
----
+BOUND does not decide what code an agent should write. It evaluates the result of a meaningful step and determines what the control loop should do next.
 
-## Score
+## Mathematical formulation
 
-BOUND uses:
+BOUND evaluates outcomes using:
 
 ```text
 S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
 ```
 
-Where:
-
-| Variable | Meaning |
+| Variable | Description |
 | --- | --- |
-| `S` | Final BOUND score |
-| `A` | Acceptance |
+| `S` | Final score |
+| `A` | Acceptance score |
 | `I` | Downstream influence |
-| `R` | Risk |
-| `C` | Resource cost |
+| `R` | Risk penalty |
+| `C` | Resource penalty |
 | `W_A` | Acceptance weight |
 | `W_I` | Influence weight |
 | `W_R` | Risk weight |
 | `W_C` | Cost weight |
 | `T` | Acceptance threshold |
-
-The objective is not to maximize `S` indefinitely.
 
 The success condition is:
 
@@ -61,42 +66,32 @@ The success condition is:
 S >= T
 ```
 
-Once the threshold is reached, the current step is sufficiently good.
+The objective is **not** to maximize `S` indefinitely.
 
----
+The objective is to cross the configured threshold and continue making progress toward the larger goal.
 
 ## Default weights
 
-All four weights default to:
-
-```text
-1.0
-```
-
-So the default formula is:
+With all weights set to `1.0`:
 
 ```text
 S = A + I - R - C
 ```
 
-Weights are policy configuration.
+Weights are configurable policy parameters. The defaults are reference values, not universally calibrated settings.
 
-They express how strongly each dimension affects the final decision.
+## Acceptance
 
-The defaults are reference values, not scientifically calibrated universal settings.
+Acceptance represents how well the current result satisfies the explicit requirements for a step.
 
----
-
-## Evidence to acceptance
-
-A `StepContract` defines required acceptance checks.
+For deterministic contract evaluation, required checks can be mapped into an acceptance score.
 
 Example:
 
 ```text
-valid input succeeds       PASS
-invalid input is rejected  PASS
-all tests pass             FAIL
+Valid input succeeds       PASS
+Invalid input is rejected  PASS
+All tests pass             FAIL
 ```
 
 Then:
@@ -104,99 +99,76 @@ Then:
 ```text
 A = passed required checks / total required checks
 A = 2 / 3
-A = 0.67
+A ≈ 0.67
 ```
 
-Missing required evidence does not silently pass.
+Missing required evidence must never silently count as success.
 
----
+## Influence
 
-## Evidence to risk
-
-Risk comes from explicit risk checks and observable safety signals.
-
-Example:
-
-```text
-no plaintext secret committed  PASS
-unexpected files changed       NO
-rollback available              YES
-```
-
-This produces a low risk score.
-
-A violated high-severity risk check increases `R`.
-
-The final value remains bounded to:
-
-```text
-R ∈ [0, 1]
-```
-
----
-
-## Evidence to cost
-
-Cost can be derived from explicit resource budgets.
-
-Example contract budget:
-
-```text
-max tool calls = 20
-```
-
-Observed execution:
-
-```text
-tool calls = 5
-```
-
-Then the normalized tool-call contribution is:
-
-```text
-5 / 20 = 0.25
-```
-
-When multiple budget dimensions are available, BOUND combines the normalized values according to the deterministic contract evaluator.
-
-Examples include:
-
-- retries
-- tool calls
-- tokens
-- runtime
-
----
-
-## Downstream influence
-
-Influence represents whether the current result helps or hurts later goals.
+Influence represents the effect of the current result on downstream goals.
 
 ```text
 I ∈ [-1, 1]
 ```
 
-In the deterministic contract path, BOUND does not invent influence when no defensible downstream evidence exists.
+Positive influence helps future progress. Negative influence makes future progress harder.
 
-The default is:
+When no defensible downstream evidence exists, the deterministic path should not invent it. A neutral default is:
 
 ```text
 I = 0.0
 ```
 
-An external evaluator may provide influence evidence later without changing the final BOUND policy.
+## Risk
 
----
+Risk represents potential downside.
 
-## Worked example
+Examples include:
 
-Suppose an agent step produces:
+- violated safety constraints
+- unexpected changes
+- destructive operations
+- unavailable rollback
+- explicitly defined high-risk conditions
 
 ```text
-Acceptance A = 0.90
-Influence  I = 0.20
-Risk       R = 0.10
-Cost       C = 0.20
+R ∈ [0, 1]
+```
+
+Risk also has a hard boundary through `rollback_risk_threshold`. A high utility score therefore cannot override a configured rollback condition.
+
+## Cost
+
+Cost represents resource consumption.
+
+Depending on the workflow, it can include:
+
+- tool calls
+- retries
+- tokens
+- runtime
+
+Example:
+
+```text
+tool-call budget = 20
+observed calls   = 5
+
+normalized contribution = 5 / 20 = 0.25
+```
+
+When multiple cost signals are used, their exact normalization and aggregation rules should remain explicit and deterministic.
+
+## Worked calculation
+
+Suppose:
+
+```text
+A = 0.90
+I = 0.20
+R = 0.10
+C = 0.20
 ```
 
 With default weights:
@@ -219,31 +191,29 @@ S = (1.0 × 0.90)
 S = 0.80
 ```
 
-With:
+If:
 
 ```text
 T = 0.60
 ```
 
-we get:
+then:
 
 ```text
 0.80 >= 0.60
 ```
 
-Therefore:
+The policy returns:
 
 ```text
 ACCEPT
 ```
 
-Further optimization of the current step is not required.
-
----
+The current step crossed the required threshold. Further optimization of that step is not required.
 
 ## Decision order
 
-BOUND applies decisions in this order:
+BOUND evaluates decisions in a fixed order:
 
 ```text
 1. risk >= rollback_risk_threshold  → ROLLBACK
@@ -252,31 +222,45 @@ BOUND applies decisions in this order:
 4. otherwise                        → REPLAN
 ```
 
+The ordering matters.
+
 ### ROLLBACK
 
-Triggered by a hard risk boundary.
+A hard risk boundary has been exceeded.
 
-A high utility score cannot override a configured safety limit.
+```text
+Return to a safe state where possible.
+Then reconsider the approach.
+```
 
 ### ACCEPT
 
-The result crossed the configured threshold.
+The result crossed the acceptance threshold.
 
-Stop optimizing the current step and continue.
+```text
+Stop optimizing this step.
+Continue toward the next goal.
+```
 
 ### RETRY
 
-The result is below threshold but close enough that one focused retry is justified.
+The result is below threshold but within the configured retry margin.
+
+```text
+Keep the current strategy.
+Make one focused correction.
+```
 
 ### REPLAN
 
-The result is too far below threshold.
+The result is too far below threshold for a focused retry.
 
-Choose a materially different strategy.
+```text
+Stop iterating on the current strategy.
+Choose a materially different approach.
+```
 
----
-
-## Threshold distance
+## Distance to threshold
 
 BOUND exposes:
 
@@ -292,7 +276,7 @@ zero      → exactly at threshold
 negative  → below threshold
 ```
 
-Below threshold, retry routing may equivalently use:
+The retry rule uses:
 
 ```text
 gap = T - S
@@ -304,35 +288,72 @@ For below-threshold results:
 gap = -distance_to_threshold
 ```
 
----
+## Multi-step example
 
-## Example multi-step agent workflow
+A real agent loop evaluates more than one attempt.
+
+### Attempt 1 — REPLAN
 
 ```text
-Step 1
-tests failing
-S = 0.31
-→ REPLAN
+A = 0.40
+I = 0.00
+R = 0.05
+C = 0.04
 
-Step 2
-most checks pass
+S = 0.40 + 0.00 - 0.05 - 0.04
+S = 0.31
+
+T = 0.70
+```
+
+The result is far below threshold:
+
+```text
+→ REPLAN
+```
+
+### Attempt 2 — RETRY
+
+After changing strategy:
+
+```text
 S = 0.64
 T = 0.70
-gap = 0.06
-→ RETRY
+retry_margin = 0.10
 
-Step 3
-all required checks pass
+gap = T - S
+gap = 0.70 - 0.64
+gap = 0.06
+
+0.06 <= 0.10
+```
+
+Therefore:
+
+```text
+→ RETRY
+```
+
+The approach is close enough for one focused correction.
+
+### Attempt 3 — ACCEPT
+
+After the correction:
+
+```text
 S = 0.84
 T = 0.70
+
+0.84 >= 0.70
+```
+
+Therefore:
+
+```text
 → ACCEPT
 ```
 
-At that point the agent should stop optimizing the current objective.
-
-A hypothetical later refactor is never executed.
-
----
+The agent should now stop optimizing the current objective and continue toward the next goal.
 
 ## Objective and subjective evidence
 
@@ -344,16 +365,17 @@ BOUND works directly with observable evidence such as:
 - artifacts
 - resource usage
 - retries
+- runtime
 - rollback state
 
 Subjective goals require an external evidence source.
 
-Examples:
+Examples include:
 
 ```text
-"the architecture is elegant"
-"the UX feels polished"
-"the writing is excellent"
+"The architecture is elegant."
+"The UX feels polished."
+"The writing is excellent."
 ```
 
 Possible evidence sources include:
@@ -362,70 +384,70 @@ Possible evidence sources include:
 - deterministic rubrics
 - static analysis
 - reward models
-- future optional semantic evaluators
+- optional semantic evaluators
 
-The final BOUND policy can remain deterministic after the evidence is supplied.
+The evidence source may be probabilistic or model-based. The final `BoundPolicy` decision can still remain deterministic once the scores are supplied.
 
----
+## Configuration
 
-## Architecture principles
-
-### Deterministic final policy
-
-Once inputs are available, calculation and decision selection are reproducible.
-
-### Agent agnostic
-
-BOUND does not depend on Cline, Claude Code, Kilo, Hermes, or another framework.
-
-### Provider agnostic
-
-No model provider is required by the deterministic core.
-
-### Evidence before judgement
-
-Prefer observable evidence over semantic judgement whenever possible.
-
-### Thin integration
-
-Agent frameworks should provide evidence and consume the decision.
-
-They should not duplicate BOUND policy logic.
-
----
-
-## What is configurable?
-
-BOUND can be tuned through:
+The main policy controls are:
 
 ```text
-acceptance threshold
-retry margin
-rollback risk threshold
+threshold
+retry_margin
+rollback_risk_threshold
 acceptance weight
 influence weight
 risk weight
 cost weight
 ```
 
-This allows different operating modes.
-
-For example:
+Examples:
 
 ```text
-higher T
-→ require a stronger result before accepting
+higher threshold
+→ require stronger evidence before accepting
 
-higher W_C
+higher cost weight
 → penalize expensive execution more strongly
 
-higher W_R
-→ penalize risk more strongly
+higher risk weight
+→ make risk more influential in the score
 
 lower rollback risk threshold
-→ enforce a stricter hard safety boundary
+→ trigger the hard safety boundary earlier
 ```
 
-The correct settings depend on the workload.
+There is no universally optimal configuration. Thresholds and weights should be calibrated against the workload.
 
-BOUND does not claim that one universal configuration is optimal.
+## Design principles
+
+### Deterministic final control
+
+Once evaluation inputs are available, score calculation and decision selection are reproducible.
+
+### Agent agnostic
+
+BOUND does not depend on a specific agent framework.
+
+### Provider agnostic
+
+The deterministic core does not depend on an LLM provider.
+
+### Evidence first
+
+Use observable execution evidence whenever possible.
+
+### Thin integrations
+
+Framework integrations should collect evidence and consume BOUND decisions rather than reimplementing the policy.
+
+### Satisficing over endless optimization
+
+BOUND exists to answer:
+
+> **Is the current result good enough to continue?**
+
+Not:
+
+> Can this result be optimized forever?

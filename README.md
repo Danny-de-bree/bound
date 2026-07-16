@@ -11,74 +11,69 @@
 
 # BOUND
 
+**The deterministic control harness for AI agents.**
+
 Coding agents are good at continuing. They are less good at knowing when to stop.
 
-**BOUND adds a deterministic control layer between agent execution and the next decision.**
+BOUND sits between execution and the agent's next decision, turning observable evidence into a deterministic control signal:
+
+**ACCEPT · RETRY · REPLAN · ROLLBACK**
 
 <p align="center">
-  <img
-    src="assets/bound-agent-workflow.png"
-    alt="BOUND deterministic control loop for agent workflows"
-    width="100%"
-  >
+  <img src="assets/bound-agent-workflow.png" alt="BOUND deterministic control harness for AI agent workflows" width="100%">
 </p>
 
 ## Put BOUND in your agent
 
-Install BOUND:
+Choose your agent, open its integration prompt, and paste it into a new session:
 
-Open the integration prompt for your agent and paste it into the agent's
-instructions, skills, rules, or planning context.
-
-- [Generic agent](integrations/generic/INSTALL_BOUND.md)
 - [Cline](integrations/cline/INSTALL_BOUND.md)
 - [Claude Code](integrations/claude-code/INSTALL_BOUND.md)
 - [Kilo Code](integrations/kilo-code/INSTALL_BOUND.md)
 - [Hermes Agent](integrations/hermes-agent/INSTALL_BOUND.md)
+- [Any other agent](integrations/generic/INSTALL_BOUND.md)
 
-Recommended setup flow:
+**That's it.**
 
-```text
-1. Install bound-policy
-2. Open the integration prompt for your agent
-3. Paste it into the agent
-4. Let the agent inspect its own workflow and available hooks
-5. Let it wire BOUND into meaningful execution boundaries
-6. Run a real task
-```
+The prompt tells the agent to install BOUND, inspect its workflow, identify meaningful evaluation boundaries, and wire the harness into its control loop.
 
-For the initial setup, use your agent's strongest **architecture / planning mode**
-or a stronger model if available.
-
-That first pass should focus on:
+For the initial setup, use your agent's strongest **architecture or planning mode** — or a stronger model if available. This first pass should focus on defining the plan, meaningful step boundaries, acceptance criteria, risks, budgets, and observable evidence.
 
 ```text
-current goal
-        ↓
-plan and meaningful step boundaries
-        ↓
-what success means for each step
-        ↓
-what evidence can actually be observed
-        ↓
-where BOUND should evaluate
-        ↓
-how ACCEPT / RETRY / REPLAN / ROLLBACK affect control flow
+Paste integration prompt into agent
+              ↓
+Agent installs BOUND
+              ↓
+Agent inspects project + workflow
+              ↓
+Agent defines goals, contracts, and evidence
+              ↓
+You review the integration plan
+              ↓
+Agent wires BOUND into the workflow
+              ↓
+Run your agent with BOUND
 ```
 
-Once that integration is in place, normal execution can use the resulting contracts,
-evidence, and BOUND decisions deterministically.
+Once configured, the normal execution loop can use BOUND deterministically. No LLM judge is required for observable criteria.
 
-BOUND does not decide what code the agent should write.
+## The control loop
 
-It decides whether the result of the current step is good enough to move on.
+BOUND belongs after a meaningful execution step and before the agent decides whether to keep optimizing the same objective.
 
----
+```text
+Agent executes
+      ↓
+Observable evidence
+      ↓
+BOUND evaluates
+      ↓
+ACCEPT / RETRY / REPLAN / ROLLBACK
+      ↓
+Agent changes its next action
+```
 
-## What happens inside the agent?
-
-BOUND belongs after a meaningful execution step and before the agent decides whether
-to keep optimizing the same objective.
+Conceptually:
 
 ```python
 result = workflow.evaluate_step(
@@ -90,81 +85,48 @@ result = workflow.evaluate_step(
 match result.decision:
     case "ACCEPT":
         continue_to_next_step()
-
     case "RETRY":
         retry_current_approach()
-
     case "REPLAN":
         choose_new_strategy()
-
     case "ROLLBACK":
         rollback()
 ```
 
-The agent still owns:
+The agent still owns planning, reasoning, tool use, code changes, and execution.
 
-- planning
-- reasoning
-- tool use
-- code changes
-- execution
+**BOUND decides whether the current result is good enough to move on.**
 
-BOUND owns the control decision.
+## Four decisions
 
----
+| Decision | Meaning |
+| --- | --- |
+| **ACCEPT** | Good enough. Stop optimizing this step and continue. |
+| **RETRY** | Keep the current approach and make one focused correction. |
+| **REPLAN** | Stop iterating on the current strategy and choose another approach. |
+| **ROLLBACK** | A hard risk boundary was exceeded. Return to a safe state. |
 
-## What BOUND uses
-
-BOUND can evaluate observable evidence such as:
-
-- tests
-- lint and type checks
-- acceptance checks
-- expected and unexpected files
-- retries
-- tool calls
-- tokens
-- runtime
-- rollback availability
-
-Next steps including more looking into semantic varibles.
-
----
-
-## Decisions
-
-```text
-ACCEPT    Good enough. Continue.
-RETRY     Make one focused correction.
-REPLAN    Choose a materially different strategy.
-ROLLBACK  Return to a safe state.
-```
-
-The goal is not to optimize forever.
-
-The goal is to know when the current result is sufficient to continue.
+BOUND can use observable evidence such as tests, lint and type checks, acceptance checks, expected changes, retries, tool calls, token usage, runtime, and rollback availability.
 
 > **Good enough is enough. Keep progressing.**
 
----
-
 ## Why BOUND?
 
-A common agent loop looks like this:
+Without an explicit stopping policy, an agent can continue working after the task is already satisfactory:
 
 ```text
 task solved
     ↓
 tests pass
     ↓
-agent keeps refining
+more refinement
     ↓
 more calls and changes
     ↓
 possible regression
 ```
 
-BOUND adds an explicit stopping policy:
+BOUND adds an explicit control point:
 
 ```text
 task solved
@@ -175,30 +137,62 @@ BOUND evaluates
     ↓
 ACCEPT
     ↓
-continue
+continue to the next goal
 ```
 
----
+BOUND does not replace the agent. It is a thin control harness around the agent's execution loop.
 
-## Learn how BOUND works
+## How it works
 
-The scoring model, evidence mapping, thresholds, weights, and decision rules are
-documented separately:
+BOUND is the **control harness**.
 
-- [Architecture and scoring](architecture/README.md)
+Under the hood:
 
----
+```text
+Contracts + evidence  → evaluation layer
+BoundPolicy           → deterministic decision engine
+BOUND                 → control harness
+Integration prompts   → adoption layer
+```
+
+The scoring model, evidence mapping, thresholds, weights, calculations, and exact decision rules live in the technical documentation:
+
+**[Read the architecture and scoring model →](architecture/README.md)**
+
+## Manual installation
+
+If you want to integrate BOUND directly:
+
+```bash
+pip install bound-policy
+```
+
+Or:
+
+```bash
+uv add bound-policy
+```
+
+The PyPI distribution is `bound-policy`; the Python import and CLI are `bound`.
 
 ## Current status
 
 BOUND is experimental.
 
-The formula, heuristics, weights, and thresholds still need validation on real agent
-workloads.
+The scoring heuristics, weights, thresholds, and integration patterns still need broader validation on real agent workloads.
 
-The next milestone is dogfooding BOUND inside real coding agents and measuring whether
-it reduces unnecessary steps, calls, tokens, retries, and regressions without reducing
-task success.
+The next milestone is dogfooding BOUND inside real coding agents and measuring whether it reduces unnecessary post-solution work, calls, tokens, retries, and regressions without reducing task success.
+
+## Development
+
+```bash
+git clone https://github.com/Danny-de-bree/bound.git
+cd bound
+
+uv sync
+uv run pytest
+uv run ruff check .
+```
 
 ## License
 
