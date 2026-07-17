@@ -4,10 +4,13 @@
 
 <p align="center">
   <a href="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml"><img src="https://github.com/Danny-de-bree/bound/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/v/bound-policy.svg" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/bound-policy/">
+  <img src="https://img.shields.io/pypi/v/bound-policy.svg?cacheSeconds=300" alt="PyPI version"></a>
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Python versions"></a>
   <a href="https://github.com/Danny-de-bree/bound/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Danny-de-bree/bound.svg" alt="License"></a>
-  <a href="https://skills.sh/Danny-de-bree/bound"><img src="https://skills.sh/b/Danny-de-bree/bound" alt="skills.sh installs"></a>
+  <a href="https://skills.sh/Danny-de-bree/bound">
+  <img src="https://img.shields.io/badge/skills.sh-install_BOUND-black" alt="Install BOUND from skills.sh">
+</a>
 </p>
 
 # BOUND

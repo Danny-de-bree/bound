@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-17
+
+- Fixed README image rendering on PyPI.
+- Added working PyPI and skills.sh badges.
+- Updated skill and integration prompt downloads to use GitHub Releases.
+- Improved release packaging and documentation.
+
 ## [0.6.0] - 2026-07-17
 
 BOUND v0.6 makes integrations easier to audit, harder to misconfigure, and
