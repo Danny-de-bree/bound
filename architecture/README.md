@@ -31,13 +31,40 @@ Agent control flow
 Responsibilities stay separated:
 
 ```text
-Agent                 → planning and execution
-Contracts + evidence  → evaluation layer
-BoundPolicy           → deterministic decision engine
-BOUND                 → control harness
+Agent                              → planning and execution
+StepContract + ExecutionEvidence   → evaluation layer
+BoundPolicy                        → deterministic decision engine
+BOUND                              → deterministic control harness
 ```
 
 BOUND does not decide what code an agent should write. It evaluates the result of a meaningful step and determines what the control loop should do next.
+
+## Run lineage
+
+A full run is one lineage from pre-run intent to a post-run execution record. The
+architecture above is the inner per-step loop; the bookends are planner-owned
+intent and an honest execution audit:
+
+```text
+PLAN.md                 → pre-run intent (planner-owned, at the repository root)
+    ↓
+StepContract            → machine-readable contract derived from the plan
+    ↓
+Agent executes          → the owning agent does the work
+    ↓
+ExecutionEvidence       → observed facts only — never fabricated
+    ↓
+BoundPolicy             → deterministic decision engine (ACCEPT / RETRY / REPLAN / ROLLBACK)
+    ↓
+Agent control action    → continue / retry / replan / rollback
+    ↓
+INTEGRATION_REPORT.md   → post-run execution record (an audit, not a rewrite of the plan)
+```
+
+`PLAN.md` records intent before the run; `INTEGRATION_REPORT.md` records what
+actually happened after the run. The report references the plan and preserves the
+same stable step IDs, but it is never a rewritten copy of the plan, and `PLAN.md`
+is never placed inside `bound_integration/`.
 
 ## Mathematical formulation
 

@@ -1,4 +1,4 @@
-"""BOUND v0.4 — runnable multi-step agent control-loop example (Phase 7).
+"""BOUND v0.6 — runnable multi-step agent control-loop example (Phase 7).
 
 Demonstrates a realistic agent trajectory driven by BOUND's *real* public API:
 
@@ -20,6 +20,17 @@ Nothing is hardcoded: scores come from the deterministic
 :class:`BoundPolicy`, and the control action from the deterministic
 :func:`bound.integration.evaluate_agent_step` mapping. No LLM, no network.
 
+Stable plan IDs (v0.6 Phase 6)
+------------------------------
+This step carries the stable identifier ``PHASE-001`` exactly as a repository
+``PLAN.md`` would record it, and that same id is preserved unchanged across
+``PLAN.md -> StepContract(id="PHASE-001") -> printed trajectory``. A replan of
+this step would append ``-R<N>`` (``PHASE-001-R1``) rather than replace the id,
+so the root identity (and its history) is never lost. The example deliberately
+consumes the public :func:`bound.integration.evaluate_agent_step` API and does
+**not** re-implement the BOUND decision->action mapping: that translation has
+exactly one runtime source (``bound.integration._DECISION_TO_ACTION``).
+
 The "avoided hypothetical extra steps" are explicitly labelled *simulated*
 because they are not measured from a real agent run — they illustrate how
 ACCEPT stops unnecessary further optimization.
@@ -37,6 +48,12 @@ from bound.policy import BoundPolicy
 
 #: The coding task this loop advances.
 GOAL = "Add input validation to the registration endpoint."
+
+#: The stable plan step identifier this contract is derived from. The same id
+#: is preserved PLAN.md -> StepContract -> printed trajectory (v0.6 Phase 6).
+#: A replan of this step would become ``PHASE-001-R1`` (append ``-R<N>``), never
+#: an unrelated id, so the plan lineage stays traceable end to end.
+PLAN_STEP_ID = "PHASE-001"
 
 #: With acceptance weight W_A=0.9 and three required checks, the weighted score
 #: S = 0.9 * (passed/3) lands at 0.3 / 0.6 / 0.9 for 1 / 2 / 3 checks passing,
@@ -71,7 +88,7 @@ def _contract() -> StepContract:
         A :class:`StepContract` with the three required acceptance checks.
     """
     return StepContract(
-        id="add-validation",
+        id=PLAN_STEP_ID,
         description="Add input validation to the registration endpoint.",
         goal=GOAL,
         acceptance_checks=list(_CHECKS),
@@ -121,14 +138,7 @@ def main() -> int:
     Returns:
         ``0`` (the example is illustrative and never fails the process).
     """
-    print("BOUND v0.4 — agent control loop example (no LLM, no network)\n")
-    print("=" * 80)
-    print(f"goal: {GOAL}")
-    print(
-        f"criteria: threshold T={THRESHOLD}  retry_margin={RETRY_MARGIN}  "
-        f"W_A={ACCEPTANCE_WEIGHT}"
-    )
-    print("score formula (this task): S = W_A * (passed_required / total_required)")
+    print("BOUND v0.6 — agent control loop example (no LLM, no network)\n")
     print("=" * 80)
 
     # Real public API: ContractEvaluator + BoundPolicy (no placeholder evaluator)
@@ -137,6 +147,20 @@ def main() -> int:
     workflow = BoundWorkflow(evaluator=ContractEvaluator(), policy=BoundPolicy())
     contract = _contract()
     criteria = _criteria()
+
+    # The contract id is the stable plan identity carried verbatim from PLAN.md
+    # (v0.6 Phase 6): PLAN.md "PHASE-001" -> StepContract(id="PHASE-001") -> here.
+    print(f"plan step id: {PLAN_STEP_ID}  (preserved PLAN.md -> StepContract -> trajectory)")
+    print(f"goal: {GOAL}")
+    print(
+        f"contract id: {contract.id}  (matches plan step id: {contract.id == PLAN_STEP_ID})"
+    )
+    print(
+        f"criteria: threshold T={THRESHOLD}  retry_margin={RETRY_MARGIN}  "
+        f"W_A={ACCEPTANCE_WEIGHT}"
+    )
+    print("score formula (this task): S = W_A * (passed_required / total_required)")
+    print("=" * 80)
 
     # Each attempt is one "agent execution + evidence collection" snapshot. The
     # decisions are NOT hardcoded: they are computed by BOUND from the evidence.
@@ -167,7 +191,7 @@ def main() -> int:
             final_score = result.score
 
         print(f"\n{'-' * 80}")
-        print(f"{label}: passing checks = {passed_ids}")
+        print(f"[{contract.id}] {label}: passing checks = {passed_ids}")
         print(
             f"  A={result.scores.acceptance:.4f}  R={result.scores.risk:.4f}  "
             f"C={result.scores.cost:.4f}  S={result.score:.4f}  "
@@ -186,6 +210,7 @@ def main() -> int:
     print("\n" + "=" * 80)
     print("Trajectory summary")
     print("=" * 80)
+    print(f"plan step id:               {contract.id}")
     print(f"attempts evaluated:        {len(decisions)}")
     print(f"decisions observed:        {decisions}")
     print(f"final score (ACCEPT):      {final_score}")

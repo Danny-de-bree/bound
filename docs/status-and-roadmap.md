@@ -2,7 +2,7 @@
 
 ## Current status
 
-BOUND v0.4 is an experimental deterministic control policy. The score formula,
+BOUND v0.4 is an experimental deterministic control harness. The score formula,
 the default workflow heuristics, and the threshold defaults are **hypotheses**.
 They have not yet been broadly validated across production agent workloads.
 

@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-17
+
+BOUND v0.6 makes integrations easier to audit, harder to misconfigure, and
+ships an evidence-backed demo. The focus is the plan-to-report lineage —
+`PLAN.md → StepContract → ExecutionEvidence → BOUND decision →
+INTEGRATION_REPORT.md` — preserved end to end without duplicating BOUND policy
+logic or fabricating evidence.
+
+### Added
+
+- **Deterministic evidence collectors** (`bound.collectors`): pure,
+  side-effect-free parsers for the seam where unavailable evidence most easily
+  becomes a silent PASS. `parse_pytest_summary` / `PytestSummary` count *tests*
+  and deliberately exclude warnings (so `30 passed, 2 warnings` is 30 tests,
+  not 32); `parse_git_status_porcelain` / `GitInspection` track git command
+  success *separately* from the path list, so a failed `git status` can never
+  be read as a clean tree (`is_clean_proven()` returns `False`);
+  `ServiceTestEvidence` keeps the *service-specific* `service-tests-pass` check
+  distinct from the full-suite `tests-pass` check (it passes only when the
+  service run executed ≥1 test *and* the command succeeded).
+- **Added Skills** now you can install skills via skills.sh and via local skill for Openai.
+- **Standardized execution report + run trace** (`bound.report`): `RunTrace`
+  serializes one real BOUND step evaluation to JSON and round-trips losslessly;
+  `render_from_trace` derives the `INTEGRATION_REPORT.md` structure from the
+  trace (never maintained as a second source). The renderer records only values
+  actually returned by BOUND — `token_usage` / `runtime_seconds` /
+  `tool_call_count` / `model_metadata` default to `None` and stay `null` /
+  *unavailable* when unobservable, never fabricated.
+- **Reference integration** (`examples/reference_integration`): runs BOUND's own
+  verification commands (`uv run pytest -q`, `uv run pytest
+  tests/test_calculator.py -q`, `git status --porcelain`), builds a real
+  `ExecutionEvidence` from the captured output via the pure collectors,
+  evaluates it through BOUND's deterministic policy, and writes a real
+  `bound_integration/run.json` (`RunTrace`) plus
+  `bound_integration/INTEGRATION_REPORT.md` (rendered from the same trace).
+- **README demo GIF from real stored evidence**
+  (`scripts/generate_demo.py` + `assets/bound-demo.gif`): a reproducible,
+  stdlib-only script renders the plan → execution → evidence → BOUND evaluation
+  → decision → lineage frames from `bound_integration/run.json`. The GIF is a
+  visualization; the raw evidence and report are the proof.
+- **Plan-to-report lineage** documented in all five integration prompts
+  (`generic`, `cline`, `claude-code`, `kilo-code`, `hermes-agent`) and the
+  integration docs, with the canonical execution lifecycle (human intent →
+  `PLAN.md` → `StepContract` → agent execution → `ExecutionEvidence` → BOUND
+  `EvaluationResult` → control action → `INTEGRATION_REPORT.md`) and a stable
+  plan-ID convention (`PHASE-NNN`, with `-R<n>` replan suffixes and nested
+  forms) carried verbatim from plan to contract to report.
+- **Tests** for the collectors (`tests/test_collectors.py`), the report
+  renderer and `RunTrace` (`tests/test_report.py`), the single-source
+  decision → control mapping and stable plan IDs
+  (`tests/test_integration_mapping.py`), and the v0.6 Definition of Done
+  (`tests/test_v06_dod.py`).
+
+### Changed
+
+- Positioned BOUND consistently as a **deterministic control harness** across
+  the README and docs (`BOUND` → deterministic control harness; `BoundPolicy` →
+  deterministic decision engine; `StepContract` + `ExecutionEvidence` →
+  evaluation layer; `PLAN.md` → pre-run intent; `INTEGRATION_REPORT.md` →
+  post-run execution record).
+- The README demo is now self-sufficient: the evidence lives in BOUND's own
+  `bound_integration/` (a real trace from BOUND's own verification commands),
+  not in the sibling benchmark repository.
+- Version bumped to `0.6.0`, also resolving the `0.4.0` (in `__init__.py`) /
+  `0.5.0` (in `pyproject.toml`) version mismatch.
+
+### Notes
+
+- The deterministic, network-free core is unchanged. The new collectors and
+  report modules import only the standard library and pydantic (plus sibling
+  BOUND models); the forbidden-import architecture scan covers them.
+
+## [0.5.0] - 2026-07-16
+
+A small maintenance release: outdated examples and experiment artifacts were
+retired, dead code pruned, and the README and architecture docs refreshed. No
+public API changed and the deterministic core is unchanged. The benchmark
+corpus (`benchmarks/contracts/`, `benchmarks/trajectories/`) and the
+`examples/agent_control_loop.py` example remain part of the repository.
+
+### Changed
+
+- README and `architecture/README.md` rewritten for clarity and consistency.
+- Version bumped to `0.5.0` (`pyproject.toml`, `src/bound/__init__.py`,
+  `uv.lock`).
+
+### Removed
+
+- Outdated runnable examples: `examples/flight_booking.py`,
+  `examples/plan_to_contract.py`, `examples/automatic_plan_workflow.py`, and
+  `examples/semantic_blind_spot.py`.
+- The Cline dogfooding experiment under `experiments/cline/`.
+- The stale repository-root `todo.md` (superseded integration plans).
+- Dead code in `src/bound/models.py` and `src/bound/workflow.py`.
+
 ## [0.4.0] - 2026-07-16
 
 ### Added
@@ -234,7 +329,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.6.0
+[0.5.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.2.0

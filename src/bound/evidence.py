@@ -1,37 +1,3 @@
-"""BOUND evidence models and the EvidenceCollector abstraction (Phases 5–6).
-
-After an agent executes a step, BOUND needs a provider-agnostic record of *what
-was actually observed*: which checks passed, which artifacts appeared, how many
-retries/tools/tokens were spent, and whether a rollback is still possible. This
-module defines those observations — :class:`CheckEvidence` and
-:class:`ExecutionEvidence` — together with the :class:`EvidenceCollector`
-Protocol that turns an opaque agent execution handle into that record.
-
-The design mirrors the rest of the v0.3 pipeline:
-
-    StepContract → Agent execution → EvidenceCollector → ExecutionEvidence
-        → ContractEvaluator → A / I / R / C → deterministic BOUND decision
-
-The evidence layer deliberately knows nothing about *how* a decision is reached.
-It only records observations; the deterministic
-:class:`~bound.contract_evaluator.ContractEvaluator` and
-:class:`~bound.policy.BoundPolicy` turn those observations into scores and a
-final ACCEPT / RETRY / REPLAN / ROLLBACK.
-
-Provider independence is non-negotiable here. BOUND must **not** depend on
-Cline, Claude Code, Codex, Cursor, GitHub Actions, or pytest. The
-:class:`EvidenceCollector` Protocol is environment-agnostic: its ``execution``
-parameter is deliberately typed as :class:`object` so that any agent execution
-handle — a transcript, a session object, a subprocess result, a test fixture —
-can be funnelled through the same seam. Concrete collectors that bridge to a
-specific agent environment (a Cline session reader, a CI log parser, ...) are
-integrated with those systems LATER and are out of scope for v0.3. The BOUND
-core imports none of them.
-
-Like every other v0.3 module, this one is fully deterministic: standard library
-plus pydantic only, no network access, no LLM SDK.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, runtime_checkable

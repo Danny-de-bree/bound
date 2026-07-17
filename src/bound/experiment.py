@@ -1,31 +1,3 @@
-"""BOUND experiment harness (Phases 10 & 11).
-
-Answers the central v0.2 research question:
-
-    Can BOUND stop a coding agent after a sufficiently good solution has been
-    reached, reducing unnecessary work without materially reducing task success?
-
-It replays a recorded coding-agent trajectory
-(:class:`~bound.models.AgentTrajectory`) through the deterministic BOUND
-pipeline and compares the step at which BOUND would have stopped (the first
-``ACCEPT``) against the step at which the real agent actually stopped
-(:attr:`~bound.models.AgentTrajectory.actual_stop_step`). The output is an
-:class:`ExperimentResult` carrying concrete *evidence* — steps, tool calls,
-tokens and runtime avoided — rather than a framework claim.
-
-The harness is fully deterministic: it builds a
-:class:`~bound.workflow.CodingWorkflowEvaluator` per step when no pre-computed
-scores are supplied, runs the deterministic :class:`~bound.policy.BoundPolicy`,
-and records the first ``ACCEPT``. When a step already carries
-:class:`~bound.models.EvaluationScores` the harness routes them through the same
-policy (via :class:`~bound.evaluator.StaticEvaluator`) so the decision rule is
-never duplicated. No network access, no LLM SDK.
-
-Trajectories are JSON-serialisable through :func:`load_trajectory` /
-:func:`save_trajectory`, and a directory of benchmark fixtures can be loaded
-with :func:`load_trajectories`.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

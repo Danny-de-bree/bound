@@ -25,6 +25,40 @@ BOUND sits between execution and the agent's next decision, turning observable e
 
 ## Put BOUND in your agent
 
+### Install in ChatGPT / OpenAI Skills
+
+1. Download [`BOUND-agent-skill.zip`](BOUND-agent-skill.zip).
+2. In ChatGPT, open **Profile → Skills → Create → Upload from your computer**.
+3. Select the ZIP, review the scan result, and install the skill.
+4. Start a new chat and invoke it with `@BOUND`, or let ChatGPT select it when
+   your request matches the skill description.
+
+The Skills menu must be available for your ChatGPT account or workspace.
+Personal Skills may need to be installed separately in ChatGPT on the web and
+in the desktop app because those installations do not automatically sync.
+
+### Install with skills.sh-compatible agents
+
+BOUND includes an open `SKILL.md` skill for Codex, Claude Code, Cline, Kilo
+Code, and other compatible coding agents:
+
+```bash
+npx skills add Danny-de-bree/bound --skill bound
+```
+
+To install only for Codex without interactive selection:
+
+```bash
+npx skills add Danny-de-bree/bound --skill bound --agent codex -y
+```
+
+The skill lives in [`skills/bound/`](skills/bound/) and teaches the agent to
+install BOUND, establish meaningful evaluation boundaries, collect real
+evidence, report the numeric A/I/R/C/S/T calculation, and react to
+`ACCEPT / RETRY / REPLAN / ROLLBACK`.
+
+### Or use a paste-ready integration prompt
+
 Choose your agent, open its integration prompt, and paste it into a new session:
 
 - [Cline](integrations/cline/INSTALL_BOUND.md)

@@ -1,27 +1,3 @@
-"""BOUND command-line interface (Phase 6, upgraded for v0.2 in Phase 9).
-
-Exposes two subcommands:
-
-* ``bound evaluate`` — direct-score mode. Accepts the four BOUND evaluation
-  dimensions directly from the command line, validates them through the same
-  Pydantic models used by the core, and writes an auditable JSON result to
-  STDOUT and a readable steering prompt to STDERR.
-* ``bound evaluate-workflow`` — workflow mode. Derives the four score
-  dimensions from provider-agnostic coding-workflow signals (test pass rate,
-  lint/type-check status, retry/tool-call counts, ...) via
-  :class:`~bound.workflow.CodingWorkflowEvaluator`, then runs the same
-  deterministic :class:`~bound.policy.BoundPolicy`.
-
-Both modes accept the v0.2 symmetric weights (``--acceptance-weight``,
-``--influence-weight``, ``--risk-weight``, ``--cost-weight``), the
-``--retry-margin`` and ``--rollback-risk-threshold`` knobs, and retain the
-deprecated scalar ``--weight`` as an alias for ``--acceptance-weight``.
-
-Only the standard library and the BOUND core are used: no LLM SDK and no
-network access. CLI output (the JSON result and the steering prompt) is written
-intentionally to STDOUT/STDERR; internal diagnostics use the ``logging`` module.
-"""
-
 from __future__ import annotations
 
 import argparse

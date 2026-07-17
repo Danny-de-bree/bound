@@ -149,6 +149,8 @@ _V0_2_SOURCE_MODULES = ("workflow.py", "experiment.py")
 _V0_3_SOURCE_MODULES = (
     "contracts.py",
     "evidence.py",
+    "collectors.py",
+    "report.py",
     "contract_evaluator.py",
     "bound_workflow.py",
     "contract_quality.py",
@@ -426,7 +428,7 @@ def test_importing_bound_does_not_load_any_provider_sdk() -> None:
     assert not offenders, (
         f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
     )
-    assert bound.__version__ == "0.4.0"
+    assert bound.__version__ == "0.6.0"
 
 
 # ---------------------------------------------------------------------------

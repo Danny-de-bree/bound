@@ -1,33 +1,3 @@
-"""Contract quality assessment + automatic-contract experiment (v0.3 Phases 14-15).
-
-Phase 15 adds a *deterministic, structural* quality report over a compiled
-:class:`~bound.contracts.BoundPlan`. Given a plan, :func:`assess_contract`
-scores how *measurable* its acceptance checks read and flags obvious structural
-problems (no checks, vague checks, duplicate ids, no observable verification
-method, an extremely large contract). It deliberately performs **no LLM call and
-no network access** — it is a lexical/structural smell test, not a semantic
-judgement. The final BOUND decision remains the responsibility of the
-deterministic evaluator and policy; this module only judges whether a generated
-contract *appears* to define useful success criteria.
-
-Phase 14 turns that report into a small experiment: a corpus of plans under
-:mod:`benchmarks.contracts` is loaded and assessed, and
-:func:`run_contract_quality_experiment` records per-plan findings plus an honest
-account of what structural validation can and cannot judge. The central question
-is:
-
-    Did the generated contract define useful success criteria?
-
-Structural validation can answer "are the checks *measurable-looking* and
-non-vague?" but it cannot answer "are they *relevant* to the goal?" — that is
-semantic. The ``measurable_but_irrelevant`` fixture exists precisely to make
-that blind spot concrete: it scores perfectly on the structural report while
-checking the wrong thing entirely.
-
-As everywhere else in v0.3, this module is fully deterministic: standard library
-plus pydantic only, no network access, no LLM SDK.
-"""
-
 from __future__ import annotations
 
 import re

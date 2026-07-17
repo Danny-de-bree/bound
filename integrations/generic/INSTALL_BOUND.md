@@ -13,6 +13,9 @@ control flow reacts to its decision.
 
 BOUND is framework-neutral. It does not know anything about your editor, your
 task runner, your CI, or your agent loop. You are the one who wires it in.
+This prompt does not imply a native integration. Do not assume hooks, modes,
+instruction files, commands, checkpoints, or lifecycle events; inspect the
+current environment and use only mechanisms confirmed there.
 
 ## The BOUND control loop
 
@@ -124,10 +127,50 @@ integrating into:
   pytest exit code is observable; "code quality" is not).
 - Is there a notion of git rollback / a clean checkpoint you can return to?
   Confirm it, do not assume it.
+- Search for existing integration records such as `INTEGRATION.md`,
+  `INTEGRATION_REPORT.md`, and files under `bound_integration/`. Treat them
+  as prior claims to verify, not as authoritative evidence. Record which were
+  found and whether they contain enough contract, evidence, criteria, and
+  execution metadata to reproduce their reported score.
 
 Record your findings. Be honest about what is observable and what is not.
 
-## Step 2 — Identify meaningful plan-step boundaries
+## Step 2 — Establish the plan and BOUND execution lineage
+
+Before implementation, establish the plan that BOUND will evaluate. For a
+multi-step, multi-phase, or multi-agent task, create or maintain `PLAN.md` at
+the repository root. A genuinely small one-step task may use an inline plan.
+
+Use the strongest planning mechanism that this environment actually exposes;
+do not invent one. Define each meaningful phase with a stable id, goal,
+observable acceptance checks, risk checks, exact verification commands,
+budget, expected artifacts, and—when relevant—owner and dependencies. Those
+phases are the source of the corresponding `StepContract`s.
+
+Keep intent, wiring, and observed results separate:
+
+```text
+PLAN.md                              what should happen
+bound_integration/                   thin agent-to-BOUND wiring
+bound_integration/INTEGRATION_REPORT.md
+                                     what actually happened
+```
+
+The lineage must remain inspectable:
+
+```text
+Intent -> PLAN.md phase -> StepContract -> execution -> ExecutionEvidence
+       -> BOUND EvaluationResult -> control action -> INTEGRATION_REPORT.md
+```
+
+When a strategy changes materially, preserve the original phase and create a
+derived id instead of rewriting history solely to hide the deviation:
+
+```text
+PHASE-002 -> REPLAN -> PHASE-002-R1 -> RETRY -> PHASE-002-R1 -> ACCEPT
+```
+
+## Step 3 — Identify meaningful plan-step boundaries
 
 BOUND must be called at **meaningful** boundaries, not after every tool call.
 
@@ -148,7 +191,7 @@ of "done" (acceptance checks) and at least one observable risk worth guarding
 against. A step that has no observable success criteria is too small or too
 vague to evaluate — do not map it to a `StepContract`.
 
-## Step 3 — Identify observable evidence already available
+## Step 4 — Identify observable evidence already available
 
 For each step boundary you chose, enumerate the evidence that is **already**
 observable in this project. The deterministic `ExecutionEvidence` model holds:
@@ -173,7 +216,7 @@ left unset or set honestly to what you observed), and let the configured
 deterministic policy handle it. Never convert an assumption into a passing
 check.
 
-## Step 4 — Report the proposed integration BEFORE modifying anything
+## Step 5 — Report the proposed integration BEFORE modifying anything
 
 Do not write or change any file until you have printed the following report and
 waited for it to be accepted (or, in an autonomous run, recorded it in a
@@ -211,7 +254,7 @@ Files to modify:
 ```
 
 Only after this report is produced may you begin implementation.
-## Step 5 — Implement the integration
+## Step 6 — Implement the integration
 
 1. **Create or map meaningful steps to `StepContract`.** Each step needs an
    `id`, `description`, `goal`, at least one `AcceptanceCheck` (the contract
@@ -290,7 +333,49 @@ Only after this report is produced may you begin implementation.
    print(result.decision, result.score, result.threshold)
    ```
 
-4. **Apply the returned control action.** Branch on `result.decision` (or on
+4. **Print and persist the complete numeric evaluation.** Read every value
+   from the returned BOUND objects; do not calculate or estimate these values
+   yourself. If using `evaluate_agent_step`, read scores from
+   `agent_result.evaluation` and the action from
+   `agent_result.next_action`. Otherwise apply only the exact deterministic
+   decision-to-action mapping defined above.
+
+   Emit this block for every evaluation:
+
+   ```text
+   BOUND evaluation
+   Acceptance (A): <evaluation.scores.acceptance to 4 decimals>
+   Influence (I): <evaluation.scores.influence to 4 decimals>
+   Risk (R): <evaluation.scores.risk to 4 decimals>
+   Cost (C): <evaluation.scores.cost to 4 decimals>
+   Score (S): <evaluation.score to 4 decimals>
+   Threshold (T): <evaluation.threshold to 4 decimals>
+   Decision: <evaluation.decision>
+   Next action: <continue|retry|replan|rollback>
+   ```
+
+   Also preserve the exposed weights, weighted components, retry margin,
+   rollback-risk threshold, and score provenance/reasoning so the calculation
+   is auditable. Numeric output without the real underlying evidence is not a
+   valid report.
+
+5. **Validate any existing integration report.** When `INTEGRATION.md`,
+   `INTEGRATION_REPORT.md`, or equivalent prior output exists:
+
+   - compare its contract, evidence, criteria, budgets, scores, decision, and
+     next action with the current run;
+   - when the recorded inputs are complete, deserialize/reconstruct them and
+     call BOUND again, then compare the returned A/I/R/C/S/T, decision, and
+     next action with the recorded values;
+   - never reproduce BOUND's formula in report code as a second evaluator;
+   - if inputs are incomplete, mark the historical score `not reproducible`
+     and list the missing fields instead of declaring it correct;
+   - if evidence or configuration changed, mark the old evaluation stale and
+     append a new evaluation rather than silently overwriting history;
+   - treat any mismatch as a failed consistency check, record both values, and
+     investigate before continuing.
+
+6. **Apply the returned control action.** Branch on `result.decision` (or on
    `agent_result.next_action` if you used the helper). Implement exactly the
    four behaviors:
 
@@ -300,9 +385,10 @@ Only after this report is produced may you begin implementation.
      re-collect evidence; re-evaluate.
    - `REPLAN` / `replan`: stop iterating on the current strategy; choose a
      materially different approach; build a new `StepContract` for it.
-   - `ROLLBACK` / `rollback`: restore a safe state (e.g. `git checkout`/revert)
-     where possible; then replan. BOUND does **not** execute the rollback for
-     you — you do.
+   - `ROLLBACK` / `rollback`: restore only a previously confirmed safe
+     checkpoint, without discarding unrelated or pre-existing user changes;
+     then replan. If no safe rollback exists, report that honestly and do not
+     perform a destructive approximation. BOUND does **not** execute rollback.
 
 ## Rules you must not break
 
@@ -319,15 +405,17 @@ Only after this report is produced may you begin implementation.
 - **Do not modify `src/bound/`** or the BOUND package itself. You are a
   consumer, not a maintainer of BOUND.
 
-## Step 6 — Add an end-to-end test
+## Step 7 — Add an end-to-end test
 
 Add one end-to-end test that exercises the real public API against this
 project's own verification commands (or a deterministic stub of them when a
 real command is not available in CI). The test must:
 
 1. Build a `StepContract` for a real step in this project.
-2. Collect real `ExecutionEvidence` (or honestly-stubbed evidence that is
-   clearly labeled as such).
+2. Run the real verification commands and collect `ExecutionEvidence` from
+   their observed results. If a command is unavailable in CI, test the
+   collector separately with explicitly labeled deterministic fixtures, but
+   retain at least one end-to-end path based on real observed evidence.
 3. Evaluate via `BoundWorkflow.evaluate_step` (or `evaluate_agent_step`).
 4. Assert that the returned decision is one of the four valid decisions and
    that the score and threshold are present.
@@ -339,12 +427,62 @@ contract. The test must reflect real evidence, not a wish.
 ## Done
 
 When finished, summarize:
+- the workflow mechanisms you inspected, used, and confirmed to exist,
 - the files you created/modified,
 - the `bound-policy` version you installed,
 - one example `StepContract` + its decision from a real run,
+- the resulting workflow action and final verification,
 - confirmation that no evidence was fabricated and no BOUND policy logic was
   duplicated.
 
+For a significant run, write
+`bound_integration/INTEGRATION_REPORT.md`. Preserve the stable plan ids and
+record planned versus actual outcome, real and unavailable evidence, decisions,
+score data exposed by BOUND, retries/replans, resulting actions, deviations,
+produced and unexpected artifacts, and final verification. Never invent token,
+runtime, cost, or other metrics the environment does not expose.
+
+For every evaluated phase, the report must also contain:
+
+```text
+Execution configuration:
+    Agent:
+    Model:
+    Model settings:
+    Bound-policy version:
+    Retry budget:
+    Tool-call budget:
+    Token budget:
+    Runtime budget:
+
+Observed consumption:
+    Retries:
+    Tool calls:
+    Tokens used:
+    Runtime:
+
+BOUND evaluation:
+    Acceptance (A):
+    Influence (I):
+    Risk (R):
+    Cost (C):
+    Score (S):
+    Threshold (T):
+    Decision:
+    Next action:
+
+Consistency check:
+    Previous integration record:
+    Re-evaluation performed:
+    Recorded values match:
+    Missing/unobservable fields:
+```
+
+`Agent`, `Model`, and model settings are run metadata rather than BOUND
+policy inputs. Record them when exposed so benchmark runs remain comparable.
+Use `unavailable` for anything the environment does not expose. Distinguish
+an unset budget (`None`) from unavailable observed consumption and from a
+measured value of zero.
+
 Remember: **BOUND decides whether to continue, retry, replan, or rollback.
 BOUND does not decide what code to write.**
-

@@ -53,7 +53,14 @@ logger = logging.getLogger("bound.integration")
 
 NextAction = Literal["continue", "retry", "replan", "rollback"]
 
-#: The deterministic BOUND decision -> agent control action mapping.
+#: The deterministic BOUND decision -> agent control action mapping. This is
+#: the **single runtime source** of that translation: :func:`evaluate_agent_step`
+#: looks decisions up here and nowhere else. A *data-only* copy of the same
+#: mapping is also published via :func:`bound.integration_spec.integration_spec`
+#: (``decision_to_control``) so integrations can wire their control flow from
+#: the published spec, but that copy must never be consulted to *make* a runtime
+#: decision independently of BOUND — the decision is owned by the deterministic
+#: :class:`~bound.policy.BoundPolicy` and only *translated* here.
 _DECISION_TO_ACTION: dict[str, NextAction] = {
     "ACCEPT": "continue",
     "RETRY": "retry",

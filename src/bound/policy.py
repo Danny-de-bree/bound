@@ -1,37 +1,3 @@
-"""BOUND decision policy (Phase 2 + Phase 4).
-
-The :class:`BoundPolicy` is the deterministic decision-maker in the BOUND
-pipeline. It wires together three concerns in a fixed order:
-
-    Action → Evaluator → EvaluationScores → BoundCalculator → decision → EvaluationResult
-
-Given an :class:`~bound.models.Action` and :class:`~bound.models.BoundCriteria`,
-the policy:
-
-1. Asks the injected :class:`~bound.evaluator.Evaluator` for the
-   :class:`~bound.models.EvaluationScores` (``A``, ``I``, ``R``, ``C``). The
-   evaluator **never** returns a decision — it only supplies raw scores.
-2. Computes the component breakdown and final score
-   ``S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)`` via the existing
-   :func:`~bound.calculator.calculate_components` so the result and its
-   components stay bit-identical.
-3. Applies the deterministic decision rule (v0.2 semantics):
-
-   * if ``scores.risk >= criteria.rollback_risk_threshold``: **ROLLBACK**
-     (safety boundary — evaluated *before* the utility threshold so a
-     high-scoring but unsafe action is still rolled back).
-   * elif ``S >= T`` (``T`` is the threshold): **ACCEPT**
-   * elif ``gap = T - S`` and ``gap <= criteria.retry_margin``: **RETRY**
-   * else: **REPLAN**
-
-4. Returns an :class:`~bound.models.EvaluationResult` carrying the scores,
-   weights, components, ``S``, ``T``, ``distance_to_threshold``, and the
-   decision, so the whole calculation is auditable from the result alone.
-
-The policy performs no network access and imports no LLM SDK. Once the
-evaluator's scores are supplied, the decision is fully reproducible.
-"""
-
 from __future__ import annotations
 
 from bound.calculator import calculate_components

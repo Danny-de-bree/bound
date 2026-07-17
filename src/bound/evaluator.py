@@ -1,24 +1,3 @@
-"""BOUND evaluator abstraction (Phase 3).
-
-The :class:`Evaluator` Protocol defines the single seam at which an external
-system (an LLM-as-judge, a rule-based scorer, a test fixture, ...) produces the
-four BOUND evaluation dimensions for a proposed :class:`~bound.models.Action`:
-
-    acceptance (A), influence (I), risk (R), cost (C)
-
-Crucially an evaluator only ever returns *scores* — it must **never** choose the
-final BOUND decision (ACCEPT / RETRY / REPLAN / ROLLBACK). That decision is the
-exclusive responsibility of the deterministic :class:`~bound.policy.BoundPolicy`,
-which applies the threshold comparison and risk/cost tie-breakers. Keeping the
-decision out of the evaluator is what makes the BOUND core auditable and
-provider-agnostic: swap in any evaluator and the decision rule never changes.
-
-This module ships one concrete, dependency-free evaluator,
-:class:`StaticEvaluator`, which simply returns scores supplied at construction
-time. It exists so tests, examples, and the CLI can exercise the full BOUND
-pipeline without any network access, API key, or LLM SDK.
-"""
-
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable

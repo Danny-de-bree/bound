@@ -1,0 +1,227 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "PHASE-001",
+  "step_id": "PHASE-001",
+  "run_id": "223a89e9c33c4f4bb6c991f9bfb7cd6f",
+  "bound_version": "0.6.0",
+  "bound_distribution_version": "0.6.0",
+  "timestamp": "2026-07-17T14:41:25.738700+00:00",
+  "contract": {
+    "id": "PHASE-001",
+    "description": "Ship BOUND v0.6 reporting, a real demo trace, and README evidence links — verified by BOUND's own test suite.",
+    "goal": "BOUND v0.6 is verified by a green full `uv run pytest -q` suite and a green service-specific `uv run pytest tests/test_calculator.py -q` run that executed >=1 test, with changes scoped to the v0.6 effort.",
+    "acceptance_checks": [
+      {
+        "id": "tests-pass",
+        "description": "`uv run pytest -q` exits 0 (the full suite is green).",
+        "required": true
+      },
+      {
+        "id": "service-tests-pass",
+        "description": "`uv run pytest tests/test_calculator.py -q` exits 0 AND executed >=1 test (the calculator tests genuinely ran and passed).",
+        "required": true
+      }
+    ],
+    "risk_checks": [
+      {
+        "id": "no-unexpected-files",
+        "description": "No files outside the v0.6 change set were modified or added.",
+        "severity": 0.6
+      }
+    ],
+    "expected_artifacts": [
+      "src/bound/report.py",
+      "examples/reference_integration/",
+      "bound_integration/"
+    ],
+    "budget": {
+      "max_retries": 3,
+      "max_tool_calls": 40,
+      "max_tokens": null,
+      "max_runtime_seconds": null
+    }
+  },
+  "evidence": {
+    "acceptance": [
+      {
+        "check_id": "tests-pass",
+        "passed": true,
+        "source": "uv run pytest -q",
+        "details": "exit_code=0; executed=513"
+      },
+      {
+        "check_id": "service-tests-pass",
+        "passed": true,
+        "source": "uv run pytest tests/test_calculator.py -q",
+        "details": "exit_code=0; executed=34"
+      }
+    ],
+    "risks": [
+      {
+        "check_id": "no-unexpected-files",
+        "passed": true,
+        "source": "git status --porcelain",
+        "details": "no unexpected paths"
+      }
+    ],
+    "produced_artifacts": [
+      "bound_integration/",
+      "examples/reference_integration/",
+      "src/bound/report.py"
+    ],
+    "unexpected_artifacts": [],
+    "retry_count": 0,
+    "tool_call_count": 0,
+    "token_usage": null,
+    "runtime_seconds": null,
+    "rollback_available": null
+  },
+  "evaluation": {
+    "scores": {
+      "acceptance": 1.0,
+      "influence": 0.0,
+      "risk": 0.0,
+      "cost": 0.0,
+      "reasoning": "v0.3 reference heuristic (NOT scientifically calibrated).\nAcceptance A=1.0000: passed_required / total_required. Each required AcceptanceCheck is reconciled against CheckEvidence by id; a required check with no matching evidence counts as FAILED (never silently passing). Optional checks are advisory only.\nRisk R=0.0000: min(1.0, Σ contributions) — each violated RiskCheck contributes its severity (a check with no evidence is treated conservatively as violated), plus unexpected_artifacts (indicator 1.0 when non-empty) and rollback_available is False (indicator 1.0). rollback_available None is skipped.\nCost C=0.0000: mean of available budget dimensions, each min(actual/max, 1.0) with the cap-zero rule. Unmeasured telemetry for a declared dimension is conservatively saturated to 1.0. No budget → C=0.0.\nInfluence I=0.0000: v0.3 does not derive downstream influence from contract evidence; honesty over invented sophistication.\nPer-dimension ScoreEvidence provenance is available via ContractEvaluator.provenance."
+    },
+    "weights": {
+      "acceptance": 1.0,
+      "influence": 1.0,
+      "risk": 1.0,
+      "cost": 1.0
+    },
+    "threshold": 0.75,
+    "acceptance_component": 1.0,
+    "influence_component": 0.0,
+    "risk_component": 0.0,
+    "cost_component": 0.0,
+    "score": 1.0,
+    "distance_to_threshold": 0.25,
+    "decision": "ACCEPT",
+    "rollback_risk_threshold": 0.8,
+    "retry_margin": 0.1,
+    "provenance": {
+      "acceptance": [
+        {
+          "source": "tests-pass",
+          "value": 1.0,
+          "contribution": 0.5,
+          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.5000 to A."
+        },
+        {
+          "source": "service-tests-pass",
+          "value": 1.0,
+          "contribution": 0.5,
+          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.5000 to A."
+        },
+        {
+          "source": "summary",
+          "value": 1.0,
+          "contribution": 1.0,
+          "description": "✓2 of 2 required check(s) passed: tests-pass, service-tests-pass; ✗ none. A = 2/2 = 1.0000."
+        }
+      ],
+      "influence": [
+        {
+          "source": "default",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "v0.3 sets influence=0.0 by default: no downstream-influence evidence is derivable from contract evidence. Honesty over invented sophistication."
+        }
+      ],
+      "risk": [
+        {
+          "source": "no-unexpected-files",
+          "value": 0.6,
+          "contribution": 0.0,
+          "description": "✓ risk check passed (1 record(s)); severity=0.6000 contributes 0.0."
+        },
+        {
+          "source": "unexpected_artifacts",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "✓ no unexpected artifacts observed; contributes 0.0."
+        },
+        {
+          "source": "rollback_available",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "rollback availability unmeasured (None); not scored — pure observable, unmeasured telemetry is not invented."
+        },
+        {
+          "source": "summary",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "R = min(1.0, Σ contributions) = min(1.0, 0.0000) = 0.0000 (sum of 3 indicator contribution(s), capped at 1.0)."
+        }
+      ],
+      "cost": [
+        {
+          "source": "retry_cost",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "normalized=min(0.0/3.0, 1.0)=0.0000; contributes 0.0000 to the mean of 2 available cost dimension(s)."
+        },
+        {
+          "source": "tool_cost",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "normalized=min(0.0/40.0, 1.0)=0.0000; contributes 0.0000 to the mean of 2 available cost dimension(s)."
+        },
+        {
+          "source": "summary",
+          "value": 0.0,
+          "contribution": 0.0,
+          "description": "C = mean of 2 available normalized dimension(s) = 0.0000."
+        }
+      ]
+    },
+    "weight": 1.0
+  },
+  "next_action": "continue",
+  "feedback": "Decision: ACCEPT. The step meets the acceptance threshold (S=1.0000 >= T=0.7500) and stays within the risk boundary. It is sufficiently complete. Continue to the next objective. Do not keep optimizing this step; further refinement is unnecessary and wastes effort.",
+  "raw_commands": {
+    "full_suite": {
+      "command": "uv run pytest -q",
+      "returncode": 0,
+      "stdout": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 42%]\n........................................................................ [ 56%]\n........................................................................ [ 70%]\n........................................................................ [ 84%]\n........................................................................ [ 98%]\n.........                                                                [100%]\n513 passed in 0.77s\n",
+      "stderr": ""
+    },
+    "service_suite": {
+      "command": "uv run pytest tests/test_calculator.py -q",
+      "returncode": 0,
+      "stdout": "..................................                                       [100%]\n34 passed in 0.10s\n",
+      "stderr": ""
+    },
+    "git_status": {
+      "command": "git status --porcelain",
+      "returncode": 0,
+      "stdout": " M CHANGELOG.md\n M README.md\n M architecture/README.md\n M docs/concepts.md\n M docs/integrations.md\n M docs/status-and-roadmap.md\n M examples/agent_control_loop.py\n M integrations/claude-code/INSTALL_BOUND.md\n M integrations/cline/INSTALL_BOUND.md\n M integrations/generic/INSTALL_BOUND.md\n M integrations/hermes-agent/INSTALL_BOUND.md\n M integrations/kilo-code/INSTALL_BOUND.md\n M pyproject.toml\n M src/bound/__init__.py\n M src/bound/contracts.py\n M src/bound/integration.py\n M tests/test_architecture.py\n M uv.lock\n?? assets/bound-demo.gif\n?? bound_integration/\n?? examples/reference_integration/\n?? scripts/\n?? src/bound/collectors.py\n?? src/bound/report.py\n?? tests/test_collectors.py\n?? tests/test_integration_mapping.py\n?? tests/test_report.py\n?? tests/test_v06_dod.py\n",
+      "stderr": ""
+    }
+  },
+  "decision_history": [
+    {
+      "step_id": "PHASE-001",
+      "attempt": 1,
+      "decision": "ACCEPT",
+      "next_action": "continue",
+      "note": "first evaluation; no replan or retry"
+    }
+  ],
+  "retries": [],
+  "replans": [],
+  "trajectory": [
+    "PLAN.md (BOUND v0.6 — reporting + demo step)",
+    "PHASE-001 (StepContract.id, carried verbatim from the plan)",
+    "uv run pytest -q + uv run pytest tests/test_calculator.py -q (real verification)",
+    "ExecutionEvidence (acceptance + risk, observed — not assumed)",
+    "BOUND evaluate_agent_step (deterministic)",
+    "ACCEPT -> continue",
+    "INTEGRATION_REPORT.md + run.json (post-run audit record)"
+  ],
+  "token_usage": null,
+  "runtime_seconds": null,
+  "tool_call_count": null,
+  "model_metadata": null
+}

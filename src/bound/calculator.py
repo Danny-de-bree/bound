@@ -1,35 +1,3 @@
-"""BOUND calculator — the pure mathematical core (Phase 1).
-
-Implements the deterministic, provider-agnostic bounded-utility score:
-
-    S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
-
-Where:
-
-* ``W_A`` — acceptance weight (:attr:`BoundWeights.acceptance`).
-* ``W_I`` — influence weight (:attr:`BoundWeights.influence`).
-* ``W_R`` — risk weight (:attr:`BoundWeights.risk`).
-* ``W_C`` — cost weight (:attr:`BoundWeights.cost`).
-* ``A`` — acceptance (:attr:`EvaluationScores.acceptance`).
-* ``I`` — downstream influence (:attr:`EvaluationScores.influence`).
-* ``R`` — risk penalty (:attr:`EvaluationScores.risk`).
-* ``C`` — resource/cost penalty (:attr:`EvaluationScores.cost`).
-
-The weights are read from :attr:`BoundCriteria.weights` (a
-:class:`~bound.models.BoundWeights`). Every weight defaults to ``1.0`` so the
-v0.1 formula ``S = (W × A) + I - R - C`` is reproduced exactly when only the
-(deprecated) acceptance ``weight`` is set: ``W_A = W``, ``W_I = W_R = W_C =
-1.0``.
-
-The score is returned **raw**: it is never clamped to ``[0, 1]``, never
-normalized, never rounded, and never passed through a sigmoid or any other
-non-linear transform. Every term is a plain floating-point product/sum, so the
-result is bit-for-bit reproducible from the inputs alone.
-
-This module depends only on the v0.2 Pydantic models in :mod:`bound.models`
-and the standard library. It performs no network access and imports no LLM SDK.
-"""
-
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict

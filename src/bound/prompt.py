@@ -1,18 +1,3 @@
-"""BOUND steering-prompt rendering (Phase 5 / updated for v0.2 in Phase 8).
-
-Produces a deterministic, mathematically-correct plain-text steering prompt
-purely from an :class:`~bound.models.EvaluationResult`. No LLM is involved: the
-prompt is assembled from the result's score, threshold, weights, components and
-decision so it is bit-for-bit reproducible from the inputs alone.
-
-The prompt always carries the final score ``S``, the acceptance threshold
-``T``, the signed distance to the threshold, the risk ``R``, the rollback risk
-threshold, the four-weight substituted formula
-``S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)``, and the BOUND decision.
-The per-decision wording reflects the v0.2 decision semantics and is kept under
-:data:`MAX_WORDS` words.
-"""
-
 from __future__ import annotations
 
 from bound.models import EvaluationResult

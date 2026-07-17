@@ -1,76 +1,101 @@
 # Integration prompt for Cline — Install BOUND
 
 > This document is **not documentation for a human.** It is a prompt designed
-> to be pasted directly into **Cline**. Paste everything below the line into a
-> Cline session and let it run.
+> to be pasted directly into Cline. Paste everything below the line
+> into a Cline session and let it run.
 
 ---
 
 You are Cline. Your job is to integrate **BOUND** — a deterministic
-bounded-utility policy for agentic systems — into *this* project's workflow,
-so that BOUND evaluates meaningful execution boundaries and your control flow
-reacts to its decision.
+bounded-utility policy for agentic systems — into *this* project's existing
+workflow, so that BOUND evaluates meaningful execution boundaries and your
+control flow reacts to its decision.
 
-This is an **integration prompt for Cline**, not a native Cline plugin. BOUND
-ships no Cline-specific code. Do not assume any undocumented Cline hook,
-event, or extension point. Before relying on a mechanism, **inspect what is
-actually available in this environment** and use only that.
+BOUND is framework-neutral. It does not know anything about your editor, your
+task runner, your CI, or your agent loop. Cline is the execution surface that wires it in.
 
-## What BOUND is, and what it is not
+This is an integration prompt, not a native Cline plugin. BOUND ships no
+Cline-specific code. Do not assume hooks, rules, modes, MCP servers, browser
+actions, checkpoints, or lifecycle events. Inspect the installed version and
+workspace, and use only mechanisms confirmed there.
 
-BOUND is framework-neutral. It does not know about Cline, your workspace, your
-MCP servers, or your tool set. It turns a `StepContract` + `ExecutionEvidence`
-into a deterministic `EvaluationResult` with a `.decision` in
-`ACCEPT / RETRY / REPLAN / ROLLBACK`.
+## The BOUND control loop
+
+    StepContract          (what "done" and "risk" mean for one step)
+        ↓
+    you execute the step
+        ↓
+    ExecutionEvidence     (only what you actually observed — never fabricated)
+        ↓
+    BOUND evaluates       (deterministic: BoundWorkflow.evaluate_step)
+        ↓
+    EvaluationResult      (.decision ∈ ACCEPT / RETRY / REPLAN / ROLLBACK)
+        ↓
+    you apply the control action
 
 > **BOUND decides whether to continue, retry, replan, or rollback. BOUND does
-> not decide what code to write.** You (Cline) decide what code to write; BOUND
-> decides whether the step you just took is good enough to move on.
-
-## The conceptual integration boundary
-
-    Cline executes a meaningful task / subtask
-            ↓
-    verification runs (tests, lint, type-check, build — whatever this project has)
-            ↓
-    evidence collected (only what was actually observed)
-            ↓
-    BOUND evaluates  (deterministic)
-            ↓
-    Cline reacts to the decision
-
-You own the first and last boxes. BOUND owns the middle evaluation. The seam
-between them is plain data: `StepContract` in, `ExecutionEvidence` in,
-`EvaluationResult` out.
+> not decide what code to write.** You (Cline) decide what code to write; BOUND decides
+> whether the step you just took is good enough to move on, close enough to
+> retry once, too far off to keep the same strategy, or unsafe enough to roll
+> back.
 
 ## Step 0 — Install and inspect (do this before anything else)
 
-1. Install the latest stable `bound-policy`:
+1. Install the latest stable `bound-policy` into this project's environment:
 
    ```bash
    pip install bound-policy
    ```
 
-2. **Inspect the installed public API; do not assume it.** Confirm the names
-   against the *installed* package:
+   Do not pin a speculative version. Do not install from a fork unless
+   explicitly instructed. Use the latest stable release.
+
+2. **Inspect the installed public API; do not assume it.** The names below are
+   accurate as of this writing, but you must confirm them against the
+   *installed* package before using them. Run:
 
    ```bash
    python -c "import bound; print(bound.__version__); print(bound.__all__)"
    ```
 
-   You should find (confirm each): `BoundWorkflow` (with `prepare(...)` and
-   `evaluate_step(*, contract, evidence, criteria)`), `StepContract`,
-   `AcceptanceCheck`, `RiskCheck`, `StepBudget`, `BoundPlan`,
-   `StaticContractGenerator`, `ExecutionEvidence`, `CheckEvidence`,
-   `EvidenceCollector`, `BoundCriteria`, `EvaluationResult`, `Decision`.
+   Then read the actual signatures you intend to call. For example:
 
-   There may also be a higher-level helper for agent consumers,
-   `evaluate_agent_step(...) -> AgentControlResult`, carrying `.evaluation`,
-   `.next_action` (`continue`/`retry`/`replan`/`rollback`), and deterministic
-   `.feedback`. **Inspect the installed API to confirm whether it exists and
-   its exact name/signature.** If it exists, prefer it. If it does not, use
-   `BoundWorkflow.evaluate_step(...)` and map the decision yourself with the
-   exact deterministic mapping:
+   ```python
+   import bound, inspect
+   print(inspect.signature(bound.BoundWorkflow.evaluate_step))
+   ```
+
+   You should find these public names (confirm each exists):
+
+   - `BoundWorkflow` — orchestration seam. Construct with `BoundWorkflow()`.
+     - `workflow.prepare(*, goal, plan, context=None)` → `BoundPlan`
+     - `workflow.evaluate_step(*, contract, evidence, criteria)` → `EvaluationResult`
+   - `StepContract` — `StepContract(id, description, goal, acceptance_checks=[...], risk_checks=[], expected_artifacts=[], budget=None)`.
+   - `AcceptanceCheck` — `AcceptanceCheck(id, description, required=True)`.
+   - `RiskCheck` — `RiskCheck(id, description, severity)` (`severity ∈ [0,1]`; `1.0` is a hard safety boundary).
+   - `StepBudget` — `StepBudget(max_retries=None, max_tool_calls=None, max_tokens=None, max_runtime_seconds=None)`. `None` means *no explicit budget*, not a zero budget.
+   - `BoundPlan` — `BoundPlan(goal, steps=[...])`.
+   - `StaticContractGenerator` — `StaticContractGenerator(plan)`. Returns the same plan every call. Use it for tests and deterministic paths.
+   - `ExecutionEvidence` — `ExecutionEvidence(acceptance=[...], risks=[...], produced_artifacts=[...], unexpected_artifacts=[...], retry_count=0, tool_call_count=0, token_usage=None, runtime_seconds=None, rollback_available=None)`.
+   - `CheckEvidence` — `CheckEvidence(check_id, passed, detail="")`. `check_id` must match an acceptance/risk check id on the contract.
+   - `EvidenceCollector` — a Protocol (`collect(*, contract, execution) -> ExecutionEvidence`). You may implement your own collector; the core never introspects your `execution` handle.
+   - `BoundCriteria` — `BoundCriteria(threshold, retry_margin=0.1, rollback_risk_threshold=0.8, weights=BoundWeights())`. `weights` defaults to all-`1.0`.
+   - `EvaluationResult` — carries `.scores`, `.decision`, `.score`, `.threshold`, `.weights`, components, and `.provenance`.
+   - `Decision` — `Literal["ACCEPT", "RETRY", "REPLAN", "ROLLBACK"]`.
+
+   There may also be a higher-level helper intended for agent consumers:
+
+   ```python
+   evaluate_agent_step(contract, evidence, criteria, ...) -> AgentControlResult
+   ```
+
+   where `AgentControlResult` would carry `.evaluation` (the `EvaluationResult`),
+   `.next_action` (`Literal["continue", "retry", "replan", "rollback"]`), and
+   `.feedback` (deterministic, derived only from result + contract + evidence +
+   provenance). **Inspect the installed API to confirm whether this helper
+   exists and its exact name/signature.** If it exists, prefer it. If it does
+   not, use `BoundWorkflow.evaluate_step(...)` directly and map the decision
+   yourself with the exact, deterministic mapping:
 
    ```text
    ACCEPT   -> continue
@@ -79,7 +104,7 @@ between them is plain data: `StepContract` in, `ExecutionEvidence` in,
    ROLLBACK -> rollback
    ```
 
-   Do not invent a fifth action.
+   Do not invent a different mapping. Do not invent a fifth action.
 
 3. Read the machine-readable integration spec if the CLI exposes it:
 
@@ -87,88 +112,159 @@ between them is plain data: `StepContract` in, `ExecutionEvidence` in,
    bound integration-spec
    ```
 
-   If present, treat it as authoritative for "when to call BOUND" / "when not
-   to" / "required flow".
+   If the subcommand exists, use it as the authoritative "when to call BOUND"
+   / "when not to" / "required flow" reference. If it does not exist yet, fall
+   back to the rules in "Step 2" below.
 
-## Step 1 — Inspect what Cline mechanisms are ACTUALLY available here
+## Step 1 — Inspect this project and its workflow
 
-Do **not** assume undocumented Cline hooks (custom events, lifecycle callbacks,
-tool interceptors, plugin APIs, hidden configuration keys). Cline's available
-mechanisms vary by version and workspace configuration.
+Before writing any integration code, understand the environment you are
+integrating into:
 
-Inspect and record what is actually available in *this* environment:
+- What is this project? What language, build tool, and test runner does it use?
+- How is work already organized (tasks, subtasks, todos, plan files)?
+- What verification commands already exist and are run today? (tests, lint,
+  type-check, build). List the **exact commands**.
+- What is observable *for free* after a step runs, and what is not? (e.g. a
+  pytest exit code is observable; "code quality" is not).
+- Is there a notion of git rollback / a clean checkpoint you can return to?
+  Confirm it, do not assume it.
+- Search for existing integration records such as `INTEGRATION.md`,
+  `INTEGRATION_REPORT.md`, and files under `bound_integration/`. Treat them
+  as prior claims to verify, not as authoritative evidence. Record which were
+  found and whether they contain enough contract, evidence, criteria, and
+  execution metadata to reproduce their reported score.
+- Inspect whether this workspace actually provides Cline rules, modes, MCP
+  tools, commands, task boundaries, or checkpoints. Treat each as unavailable
+  until confirmed.
 
-- **Execution surface**: What can Cline run as a "meaningful step"? (A task,
-  a subtask, a checkpoint between tool batches, an explicitly delimited
-  phase in your plan.) Which of these is the right granularity to evaluate?
-- **Verification commands**: What exact commands does this project use for
-  tests, lint, type-check, build? Run them and capture real exit codes /
-  stdout. List them verbatim.
-- **Observability**: Which of these can you actually observe after a step?
-  - tests (pass/fail, counts)
-  - lint (clean / not clean)
-  - type checks (clean / not clean)
-  - expected files present
-  - unexpected files present (e.g. via `git status` / `git diff --name-only`)
-  - failed commands (non-zero exit codes you ran)
-  - retries (your own retry counter for this step)
-  - tool calls where observable (your own count of tool invocations)
-  - tokens where observable (only if Cline/the provider exposes it)
-  - runtime where observable (wall-clock you can measure)
-  - rollback availability (is the working tree clean / is there a checkpoint?)
-- **Rollback**: Is there a clean checkpoint to return to? (e.g. a git commit,
-  a stash, a Cline checkpoint.) Confirm it concretely; do not assume.
+Record your findings. Be honest about what is observable and what is not.
 
-Record these findings honestly. Signals you cannot observe here stay
-unobservable — never fabricated.
+## Step 2 — Establish the plan and BOUND execution lineage
 
-## Step 2 — Identify meaningful step boundaries
+Before implementation, establish the plan that BOUND will evaluate. For a
+multi-step, multi-phase, or multi-agent task, create or maintain `PLAN.md` at
+the repository root. A genuinely small one-step task may use an inline plan.
 
-Call BOUND at **meaningful** boundaries: after a task/subtask completes and
-its verification runs, after a retry, before deciding to keep refining the same
-objective. Do **not** call BOUND after every token, file read, shell command,
-or low-level tool call.
+Use the strongest planning mechanism that this environment actually exposes;
+do not invent one. Define each meaningful phase with a stable id, goal,
+observable acceptance checks, risk checks, exact verification commands,
+budget, expected artifacts, and—when relevant—owner and dependencies. Those
+phases are the source of the corresponding `StepContract`s.
 
-Choose task/subtask granularity such that each has a real, observable
-definition of "done" (acceptance checks) and at least one observable risk worth
-guarding against.
+Keep intent, wiring, and observed results separate:
 
-## Step 3 — Report the proposed integration BEFORE modifying anything
+```text
+PLAN.md                              what should happen
+bound_integration/                   thin agent-to-BOUND wiring
+bound_integration/INTEGRATION_REPORT.md
+                                     what actually happened
+```
 
-Do not change any file until you have printed (or recorded) this report with
-exactly these headings:
+The lineage must remain inspectable:
+
+```text
+Intent -> PLAN.md phase -> StepContract -> execution -> ExecutionEvidence
+       -> BOUND EvaluationResult -> control action -> INTEGRATION_REPORT.md
+```
+
+When a strategy changes materially, preserve the original phase and create a
+derived id instead of rewriting history solely to hide the deviation:
+
+```text
+PHASE-002 -> REPLAN -> PHASE-002-R1 -> RETRY -> PHASE-002-R1 -> ACCEPT
+```
+
+## Step 3 — Identify meaningful plan-step boundaries
+
+BOUND must be called at **meaningful** boundaries, not after every tool call.
+
+Call BOUND after:
+- a meaningful plan step completes,
+- implementation plus verification,
+- a retry,
+- before deciding to continue refining the same objective.
+
+Do **not** call BOUND after:
+- every token,
+- every file read,
+- every shell command,
+- every low-level tool call.
+
+Choose step granularity such that each step has a real, observable definition
+of "done" (acceptance checks) and at least one observable risk worth guarding
+against. A step that has no observable success criteria is too small or too
+vague to evaluate — do not map it to a `StepContract`.
+
+## Step 4 — Identify observable evidence already available
+
+For each step boundary you chose, enumerate the evidence that is **already**
+observable in this project. The deterministic `ExecutionEvidence` model holds:
+
+- `acceptance`: a `CheckEvidence` per acceptance check (pass/fail + detail).
+- `risks`: a `CheckEvidence` per risk check that was probed.
+- `produced_artifacts`: paths/ids of expected artifacts that appeared.
+- `unexpected_artifacts`: paths/ids of artifacts that appeared but were *not*
+  expected (a real risk signal).
+- `retry_count`, `tool_call_count`, `token_usage` (optional), `runtime_seconds`
+  (optional).
+- `rollback_available`: whether a clean rollback is still possible.
+
+Map each `CheckEvidence.check_id` to a check id you declared on the
+`StepContract`. Evidence for a check you did not declare is allowed (the
+evaluator reconciles it), but missing evidence for a *required* acceptance
+check is treated as failure — never silently passing.
+
+**Never fabricate unavailable evidence.** If a signal cannot be observed in
+this project, represent it as unavailable (`passed`/`rollback_available`/etc.
+left unset or set honestly to what you observed), and let the configured
+deterministic policy handle it. Never convert an assumption into a passing
+check.
+
+## Step 5 — Report the proposed integration BEFORE modifying anything
+
+Do not write or change any file until you have printed the following report and
+waited for it to be accepted (or, in an autonomous run, recorded it in a
+clearly labeled section). The report must contain exactly these headings:
 
 ```text
 Integration point:
-    Where in the Cline workflow BOUND is called (e.g. after the verification
-    commands for a subtask, before deciding to refine or move on).
+    Where in the workflow BOUND is called (e.g. after `pytest` + `ruff` for
+    the "implement feature X" step).
 
 Step boundary:
-    The concrete Cline tasks/subtasks you will map to StepContracts, and why
-    each granularity is meaningful.
+    The concrete steps you will map to StepContracts, with their granularity
+    and why each is meaningful.
 
 Available evidence:
-    The observable signals this environment actually produces per step
-    (exact commands and what they yield). Be specific to THIS Cline setup.
+    The observable signals this project already produces per step (exact
+    commands and what they yield).
 
 Missing evidence:
-    The signals that are NOT observable here (e.g. token usage if not exposed),
-    and how you will represent them as unavailable rather than fabricating them.
+    The signals that are NOT observable here, and how you will represent them
+    as unavailable rather than fabricating them.
 
 Control-flow mapping:
-    How each BOUND decision changes what Cline does next (see Step 5).
+    How each BOUND decision will change what you do next:
+        ACCEPT   -> continue to next plan objective (stop refining this one)
+        RETRY    -> preserve strategy, make one focused correction, re-evaluate
+        REPLAN   -> abandon current strategy, choose a materially different one
+        ROLLBACK -> restore a safe state, then replan
     Reference the exact mapping (ACCEPT->continue, RETRY->retry,
     REPLAN->replan, ROLLBACK->rollback).
 
 Files to modify:
-    The exact list of files you intend to create or change. Keep it small;
-    the integration must be thin and removable.
+    The exact list of files you intend to create or change to wire BOUND in.
+    Keep this list small. The integration must be thin and removable.
 ```
 
 Only after this report is produced may you begin implementation.
-## Step 4 — Build contracts and collect evidence
+## Step 6 — Implement the integration
 
-1. Map each meaningful Cline task/subtask to a `StepContract`:
+1. **Create or map meaningful steps to `StepContract`.** Each step needs an
+   `id`, `description`, `goal`, at least one `AcceptanceCheck` (the contract
+   rejects an empty acceptance list), optional `RiskCheck`s, optional
+   `expected_artifacts`, and an optional `StepBudget`.
 
    ```python
    from bound import (
@@ -176,123 +272,222 @@ Only after this report is produced may you begin implementation.
    )
 
    contract = StepContract(
-       id="implement-validation",
-       description="Add input validation to the POST /items endpoint",
-       goal="Invalid input is rejected with a 400",
+       id="add-validation-endpoint",
+       description="Add robust input validation to the /items POST endpoint",
+       goal="Reject invalid input with a clear 400 response",
        acceptance_checks=[
            AcceptanceCheck(id="tests-pass", description="pytest is green"),
            AcceptanceCheck(id="lint-clean", description="ruff is clean"),
-           AcceptanceCheck(id="typecheck-clean", description="mypy is clean"),
            AcceptanceCheck(id="rejects-invalid",
                            description="invalid input returns 400"),
        ],
        risk_checks=[
            RiskCheck(id="no-tests-removed",
-                      description="No existing tests deleted",
+                      description="No existing tests were deleted",
                       severity=0.8),
-           RiskCheck(id="no-unexpected-files",
-                      description="No files outside expected scope changed",
-                      severity=0.6),
        ],
-       expected_artifacts=["src/app/items.py"],
+       expected_artifacts=["src/app/items.py", "tests/test_items_validation.py"],
        budget=StepBudget(max_retries=3, max_tool_calls=40),
    )
    ```
 
-2. Collect `ExecutionEvidence` from only what you observed. Potential evidence
-   in a Cline run: tests, lint, type checks, expected files present, unexpected
-   files (e.g. `git diff --name-only`), failed commands, retries (your own
-   counter), tool calls where observable, tokens where observable, runtime
-   where observable, rollback availability.
+2. **Implement an `EvidenceCollector`** (or a plain function that returns
+   `ExecutionEvidence`) that reads *only* what this project actually observes.
+   Do not import a framework the project does not have. Do not assume a hook
+   that does not exist.
 
    ```python
    from bound import CheckEvidence, ExecutionEvidence
 
-   evidence = ExecutionEvidence(
-       acceptance=[
-           CheckEvidence(check_id="tests-pass", passed=tests_ok, detail=detail),
-           CheckEvidence(check_id="lint-clean", passed=lint_ok),
-           CheckEvidence(check_id="typecheck-clean", passed=mypy_ok),
-           CheckEvidence(check_id="rejects-invalid",
-                         passed=invalid_rejected, detail=detail),
-       ],
-       risks=[
-           CheckEvidence(check_id="no-tests-removed",
-                         passed=no_tests_removed),
-           CheckEvidence(check_id="no-unexpected-files",
-                         passed=no_unexpected, detail=detail),
-       ],
-       produced_artifacts=produced,
-       unexpected_artifacts=unexpected,
-       retry_count=retries,
-       tool_call_count=tool_calls,
-       rollback_available=checkpoint_exists,
-   )
+   def collect_evidence(contract, *, subprocess_results) -> ExecutionEvidence:
+       # Read real observations: test exit code, lint exit code, git status, etc.
+       ...
+       return ExecutionEvidence(
+           acceptance=[
+               CheckEvidence(check_id="tests-pass", passed=tests_ok),
+               CheckEvidence(check_id="lint-clean", passed=lint_ok),
+               CheckEvidence(check_id="rejects-invalid",
+                             passed=invalid_rejected, detail=detail),
+           ],
+           risks=[
+               CheckEvidence(check_id="no-tests-removed",
+                             passed=no_tests_removed),
+           ],
+           produced_artifacts=produced,
+           unexpected_artifacts=unexpected,
+           retry_count=retries,
+           tool_call_count=tool_calls,
+           rollback_available=git_clean,
+       )
    ```
 
-   Never fabricate. If token usage or runtime is not observable here, leave
-   those fields unset.
+3. **Evaluate with BOUND.** Use the high-level helper if it exists
+   (`evaluate_agent_step`), otherwise `BoundWorkflow.evaluate_step`. Pick a
+   `BoundCriteria` whose threshold is calibrated to *this* workload; the
+   defaults are reference defaults, not universal truths.
 
-## Step 5 — Evaluate and react to the decision
+   ```python
+   from bound import BoundWorkflow, BoundCriteria
 
-Evaluate with BOUND (use `evaluate_agent_step` if it exists, else
-`BoundWorkflow.evaluate_step`), then react to the decision exactly as follows:
+   workflow = BoundWorkflow()
+   result = workflow.evaluate_step(
+       contract=contract,
+       evidence=evidence,
+       criteria=BoundCriteria(threshold=0.75),
+   )
+   print(result.decision, result.score, result.threshold)
+   ```
 
-- **ACCEPT** → stop refining the current step. Continue to the next plan
-  objective. Explicitly do not keep optimizing an already-accepted step.
-- **RETRY** → preserve the current strategy. Make one focused correction
-  targeting the remaining failed/missing evidence. Re-collect evidence and
-  re-evaluate. Respect the step's `StepBudget` (e.g. `max_retries`).
-- **REPLAN** → stop iterating on the current strategy. Choose a materially
-  different approach and build a new `StepContract` for it.
-- **ROLLBACK** → restore a safe state where possible (e.g. restore the Cline
-  checkpoint / `git checkout`). Then replan. BOUND does not execute the
-  rollback; you (Cline) do, using the mechanism you confirmed in Step 1.
+4. **Print and persist the complete numeric evaluation.** Read every value
+   from the returned BOUND objects; do not calculate or estimate these values
+   yourself. If using `evaluate_agent_step`, read scores from
+   `agent_result.evaluation` and the action from
+   `agent_result.next_action`. Otherwise apply only the exact deterministic
+   decision-to-action mapping defined above.
 
-```python
-from bound import BoundWorkflow, BoundCriteria
+   Emit this block for every evaluation:
 
-result = BoundWorkflow().evaluate_step(
-    contract=contract,
-    evidence=evidence,
-    criteria=BoundCriteria(threshold=0.75),
-)
-decision = result.decision  # ACCEPT | RETRY | REPLAN | ROLLBACK
-```
+   ```text
+   BOUND evaluation
+   Acceptance (A): <evaluation.scores.acceptance to 4 decimals>
+   Influence (I): <evaluation.scores.influence to 4 decimals>
+   Risk (R): <evaluation.scores.risk to 4 decimals>
+   Cost (C): <evaluation.scores.cost to 4 decimals>
+   Score (S): <evaluation.score to 4 decimals>
+   Threshold (T): <evaluation.threshold to 4 decimals>
+   Decision: <evaluation.decision>
+   Next action: <continue|retry|replan|rollback>
+   ```
+
+   Also preserve the exposed weights, weighted components, retry margin,
+   rollback-risk threshold, and score provenance/reasoning so the calculation
+   is auditable. Numeric output without the real underlying evidence is not a
+   valid report.
+
+5. **Validate any existing integration report.** When `INTEGRATION.md`,
+   `INTEGRATION_REPORT.md`, or equivalent prior output exists:
+
+   - compare its contract, evidence, criteria, budgets, scores, decision, and
+     next action with the current run;
+   - when the recorded inputs are complete, deserialize/reconstruct them and
+     call BOUND again, then compare the returned A/I/R/C/S/T, decision, and
+     next action with the recorded values;
+   - never reproduce BOUND's formula in report code as a second evaluator;
+   - if inputs are incomplete, mark the historical score `not reproducible`
+     and list the missing fields instead of declaring it correct;
+   - if evidence or configuration changed, mark the old evaluation stale and
+     append a new evaluation rather than silently overwriting history;
+   - treat any mismatch as a failed consistency check, record both values, and
+     investigate before continuing.
+
+6. **Apply the returned control action.** Branch on `result.decision` (or on
+   `agent_result.next_action` if you used the helper). Implement exactly the
+   four behaviors:
+
+   - `ACCEPT` / `continue`: stop refining this step; move to the next plan
+     objective. Explicitly do **not** keep optimizing an already-accepted step.
+   - `RETRY` / `retry`: keep the current strategy; make one focused correction;
+     re-collect evidence; re-evaluate.
+   - `REPLAN` / `replan`: stop iterating on the current strategy; choose a
+     materially different approach; build a new `StepContract` for it.
+   - `ROLLBACK` / `rollback`: restore only a previously confirmed safe
+     checkpoint, without discarding unrelated or pre-existing user changes;
+     then replan. If no safe rollback exists, report that honestly and do not
+     perform a destructive approximation. BOUND does **not** execute rollback.
 
 ## Rules you must not break
 
-- **Never assume undocumented Cline hooks.** Only use mechanisms you inspected
-  and confirmed are available in this environment.
 - **Never fabricate evidence.** Unobservable signals stay unobservable.
 - **Never duplicate BOUND's policy logic.** Do not reimplement the score
-  formula or decision rule. Call BOUND and use its result.
+  formula, the decision rule, or the threshold semantics. Call BOUND and use
+  its result.
 - **Never add an LLM evaluator / LLM-as-judge.** BOUND's decision is
-  deterministic. You may use an LLM only to draft contracts, never to make the
-  decision or assign A/I/R/C scores.
-- **Do not hardcode Cline-specific behavior into `src/bound/`.** All
-  Cline-specific wiring lives in this project's integration files, not in the
-  BOUND package. BOUND must remain framework-neutral.
-- **Keep the integration thin and removable.** Removing BOUND must not require
+  deterministic. You may use an LLM only to *draft* contracts (turning intent
+  into structured data), never to make the decision or assign A/I/R/C scores.
+- **Keep the integration thin and removable.** All BOUND wiring should sit in
+  a small number of clearly labeled files. Removing BOUND must not require
   restructuring the project.
+- **Do not modify `src/bound/`** or the BOUND package itself. You are a
+  consumer, not a maintainer of BOUND.
 
-## Step 6 — Add an end-to-end test
+## Step 7 — Add an end-to-end test
 
 Add one end-to-end test that exercises the real public API against this
-project's real verification commands (or a clearly-labeled deterministic stub
-when a command is unavailable in CI). The test must build a real
-`StepContract`, collect real `ExecutionEvidence`, evaluate via BOUND, assert the
-decision is one of the four valid decisions, and assert the control-flow branch
-you would take. Do not hardcode "ACCEPT" unless the evidence genuinely
-satisfies the contract.
+project's own verification commands (or a deterministic stub of them when a
+real command is not available in CI). The test must:
+
+1. Build a `StepContract` for a real step in this project.
+2. Run the real verification commands and collect `ExecutionEvidence` from
+   their observed results. If a command is unavailable in CI, test the
+   collector separately with explicitly labeled deterministic fixtures, but
+   retain at least one end-to-end path based on real observed evidence.
+3. Evaluate via `BoundWorkflow.evaluate_step` (or `evaluate_agent_step`).
+4. Assert that the returned decision is one of the four valid decisions and
+   that the score and threshold are present.
+5. Assert the control-flow branch you would take for that decision.
+
+Do not assert a hardcoded "ACCEPT" unless the evidence genuinely satisfies the
+contract. The test must reflect real evidence, not a wish.
 
 ## Done
 
-Summarize: the Cline mechanisms you actually used (and confirmed exist), the
-files you created/modified, the `bound-policy` version installed, one real
-`StepContract` + decision from a run, and confirmation that no evidence was
-fabricated and no BOUND policy logic was duplicated.
+When finished, summarize:
+- the workflow mechanisms you inspected, used, and confirmed to exist,
+- the files you created/modified,
+- the `bound-policy` version you installed,
+- one example `StepContract` + its decision from a real run,
+- the resulting workflow action and final verification,
+- confirmation that no evidence was fabricated and no BOUND policy logic was
+  duplicated.
+
+For a significant run, write
+`bound_integration/INTEGRATION_REPORT.md`. Preserve the stable plan ids and
+record planned versus actual outcome, real and unavailable evidence, decisions,
+score data exposed by BOUND, retries/replans, resulting actions, deviations,
+produced and unexpected artifacts, and final verification. Never invent token,
+runtime, cost, or other metrics the environment does not expose.
+
+For every evaluated phase, the report must also contain:
+
+```text
+Execution configuration:
+    Agent:
+    Model:
+    Model settings:
+    Bound-policy version:
+    Retry budget:
+    Tool-call budget:
+    Token budget:
+    Runtime budget:
+
+Observed consumption:
+    Retries:
+    Tool calls:
+    Tokens used:
+    Runtime:
+
+BOUND evaluation:
+    Acceptance (A):
+    Influence (I):
+    Risk (R):
+    Cost (C):
+    Score (S):
+    Threshold (T):
+    Decision:
+    Next action:
+
+Consistency check:
+    Previous integration record:
+    Re-evaluation performed:
+    Recorded values match:
+    Missing/unobservable fields:
+```
+
+`Agent`, `Model`, and model settings are run metadata rather than BOUND
+policy inputs. Record them when exposed so benchmark runs remain comparable.
+Use `unavailable` for anything the environment does not expose. Distinguish
+an unset budget (`None`) from unavailable observed consumption and from a
+measured value of zero.
 
 Remember: **BOUND decides whether to continue, retry, replan, or rollback.
 BOUND does not decide what code to write.**
-

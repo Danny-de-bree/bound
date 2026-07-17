@@ -6,10 +6,11 @@ background lives here.
 
 ## What BOUND is
 
-BOUND is a **deterministic bounded-utility policy** for agentic systems. Most
-agents are optimised to find the *best possible* action. BOUND helps an agent
-decide whether a proposed action is **good enough to continue** toward the
-larger goal — and when to retry, replan, or roll back.
+BOUND is a **deterministic control harness** for agentic systems. At its core sits
+`BoundPolicy`, the deterministic decision engine that applies a bounded-utility
+policy: most agents are optimised to find the *best possible* action, while BOUND
+helps an agent decide whether a proposed action is **good enough to continue**
+toward the larger goal — and when to retry, replan, or roll back.
 
 The core is **deterministic, model-agnostic, and network-free**: once
 evaluation scores are supplied, every downstream calculation is reproducible and

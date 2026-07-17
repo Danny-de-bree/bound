@@ -1,76 +1,70 @@
-"""BOUND evaluation contracts (v0.3 Phases 1-4).
-
-This module defines the machine-readable evaluation contracts that describe
-what success means *before* an agent executes a step, plus the
-provider-agnostic :class:`ContractGenerator` seam that turns a natural-language
-goal + plan into a validated :class:`BoundPlan`.
-
-The v0.3 pipeline becomes:
-
-    Natural-language goal + plan
-                │
-                ▼
-        ContractGenerator
-                │
-                ▼
-           BoundPlan
-                │
-                ▼
-         StepContract
-                │
-                ▼
-        Agent execution
-                │
-                ▼
-       EvidenceCollector
-                │
-                ▼
-      ContractEvaluator
-                │
-                ▼
-          A / I / R / C
-                │
-                ▼
-            BOUND
-
-The key v0.3 principle is: *use an LLM to translate intent into an explicit
-evaluation contract, not to make the final BOUND decision.* The final policy
-remains deterministic.
-
-LLM / provider boundary (Phase 4)
----------------------------------
-LLM-backed contract generators are **optional** and must live **outside** the
-deterministic core — preferably in a separate adapter module or behind an
-optional dependency group (e.g. ``pip install bound[llm]``). An LLM SDK must
-**never** be a mandatory installation dependency of the ``bound`` package, and
-this module imports none (and performs no network access).
-
-When an LLM adapter is supplied, its job is to emit *structured data only*:
-
-* what success looks like (:class:`AcceptanceCheck`),
-* what risks matter (:class:`RiskCheck`),
-* what artifacts are expected (``expected_artifacts``),
-* what execution budgets apply (:class:`StepBudget`).
-
-It must **not** return BOUND decisions (ACCEPT / RETRY / REPLAN / ROLLBACK) and
-must **not** assign final ``A / I / R / C`` scores — those remain the exclusive
-responsibility of the deterministic :class:`~bound.evaluator.Evaluator` and
-:class:`~bound.policy.BoundPolicy`. Whatever an LLM emits must round-trip
-through Pydantic validation before BOUND can use it, so a malformed or
-hallucinated contract is rejected rather than silently trusted. See
-:mod:`bound.llm_adapters` for the documented (import-free) seam.
-
-This module ships one concrete, dependency-free generator,
-:class:`StaticContractGenerator`, which returns a plan supplied at construction
-time. It exists so tests, examples, and the CLI can exercise the full contract
-pipeline without any network access, API key, or LLM SDK.
-"""
-
 from __future__ import annotations
 
+import re
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+#: Regular expression backing :func:`is_valid_phase_id`. Matches the documented
+#: stable-ID convention ``PHASE-NNN`` with an optional nested sub-phase suffix
+#: (``-A``, ``-B``, ...) and/or an optional replan suffix (``-R1``, ``-R2``),
+#: in either order. It is intentionally permissive about the numeric width so
+#: ``PHASE-001`` and ``PHASE-042`` are both accepted.
+_PHASE_ID_RE = re.compile(
+    r"^PHASE-\d+(?:-[A-Z])?(?:-R\d+)?$"
+    r"|"
+    r"^PHASE-\d+(?:-R\d+)?(?:-[A-Z])?$"
+)
+
+
+def is_valid_phase_id(phase_id: str) -> bool:
+    """Return ``True`` when ``phase_id`` matches the BOUND stable-ID convention.
+
+    BOUND v0.6 recommends that every meaningful planned step carry a stable,
+    human-readable identifier that is preserved unchanged across the whole
+    execution lineage::
+
+        PLAN.md -> StepContract(id=...) -> ExecutionEvidence -> report
+
+    so a reader can follow a single phase from intent to outcome. The
+    recommended convention is::
+
+        PHASE-001            base phase
+        PHASE-002            another base phase
+        PHASE-002-A          nested sub-phase of PHASE-002
+        PHASE-002-B          a second nested sub-phase
+        PHASE-001-R1         first replan of PHASE-001 (history preserved)
+        PHASE-001-R2         second replan of PHASE-001
+
+    This helper validates that shape. It is a *pure, optional* utility: it
+    performs no network access, calls no LLM, and — crucially — is **not** wired
+    into :class:`StepContract` validation. The contract ``id`` field stays a
+    free-form ``str`` so non-``PHASE`` identifiers (e.g. ``write-tests``) remain
+    legal; this function only lets integrations and tests *opt in* to the
+    documented convention. Replans must append ``-R<N>`` rather than replacing
+    the id, so the root identity (and its history) is never lost.
+
+    Args:
+        phase_id: The candidate identifier to validate.
+
+    Returns:
+        ``True`` if ``phase_id`` matches the ``PHASE-NNN[-R<n>][-<letter>]``
+        convention (suffixes in either order); ``False`` otherwise (including
+        for empty or non-string input rendered as a string).
+
+    Example:
+        >>> is_valid_phase_id("PHASE-001")
+        True
+        >>> is_valid_phase_id("PHASE-002-A")
+        True
+        >>> is_valid_phase_id("PHASE-001-R1")
+        True
+        >>> is_valid_phase_id("PHASE-001-R2-A")
+        True
+        >>> is_valid_phase_id("write-tests")
+        False
+    """
+    return bool(_PHASE_ID_RE.match(phase_id))
 
 
 class AcceptanceCheck(BaseModel):
@@ -156,7 +150,26 @@ class StepContract(BaseModel):
     once evidence is collected.
 
     Attributes:
-        id: Stable identifier for the step within the plan.
+        id: Stable identifier for the step within the plan. BOUND v0.6
+            recommends (but does not require) a ``PHASE-NNN`` stable-ID
+            convention so the same identifier is preserved unchanged across the
+            whole execution lineage — ``PLAN.md -> StepContract(id=...) ->
+            ExecutionEvidence -> INTEGRATION_REPORT.md`` — and a reader can
+            follow one phase from intent to outcome. The documented forms are::
+
+                PHASE-001          base phase
+                PHASE-002          another base phase
+                PHASE-002-A        nested sub-phase of PHASE-002
+                PHASE-002-B        a second nested sub-phase
+                PHASE-001-R1       first replan of PHASE-001 (history kept)
+                PHASE-001-R2       second replan of PHASE-001
+
+            Replans must append ``-R<N>`` to the existing id rather than replace
+            it, so the root identity (and its history) is never lost. Do not
+            silently replace a human-readable plan identity with an unrelated
+            contract id. The field itself remains a free-form ``str``; the
+            optional :func:`is_valid_phase_id` helper lets integrations and
+            tests opt in to the convention without making it mandatory.
         description: Human-readable summary of what the step does.
         goal: The specific goal this step advances (a refinement of the plan
             goal).

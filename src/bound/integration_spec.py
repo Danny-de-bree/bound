@@ -1,23 +1,3 @@
-"""Framework-neutral integration specification (BOUND v0.4 Phase 3).
-
-A single, machine-readable description of how an agent should consume BOUND,
-expressed purely in framework-neutral terms so any agent — Cline, Claude Code,
-Codex, Cursor, or a custom loop — can read the same spec and wire itself in.
-
-The spec is produced deterministically by :func:`integration_spec` (a pure
-function: no network, no LLM) and exposed via the ``bound integration-spec`` CLI
-subcommand as structured JSON. It defines exactly the four sections mandated by
-Phase 3 of the v0.4 TODO:
-
-* WHEN TO CALL BOUND
-* WHEN NOT TO CALL BOUND
-* THE REQUIRED FLOW
-* EVIDENCE RULE
-
-It also carries the deterministic decision -> control-action mapping so a
-consumer can wire its control flow straight from the spec.
-"""
-
 from __future__ import annotations
 
 from typing import Any

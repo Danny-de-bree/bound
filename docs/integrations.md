@@ -4,6 +4,47 @@ How to wire BOUND into an agent. BOUND is framework-neutral: it ships **no**
 native plugin for any agent. Each integration below is an *integration prompt*
 you paste into an agent so it wires BOUND into its own workflow.
 
+## The execution lineage
+
+The full run, end to end, is one lineage from human intent to a post-run audit
+record. Every agent integration must preserve this lineage without duplicating
+BOUND's policy logic or fabricating evidence.
+
+```text
+Human intent
+    ↓
+PLAN.md                         (planner-owned intent — pre-run)
+    ↓
+StepContract                    (machine-readable contract derived from the plan)
+    ↓
+Agent execution                 (the owning agent does the work)
+    ↓
+ExecutionEvidence               (observed facts only — never fabricated)
+    ↓
+BOUND EvaluationResult         (deterministic evaluation + control decision)
+    ↓
+Agent control action            (continue / retry / replan / rollback)
+    ↓
+INTEGRATION_REPORT.md           (post-run audit record — not a rewrite of the plan)
+```
+
+Each stage has one job; it does not reach into the next stage's responsibility:
+
+| Stage | Responsibility |
+| ----- | --------------- |
+| `PLAN.md` | **Planner-owned intent.** What the run is meant to achieve, written *before* execution. Lives at the repository root, never inside `bound_integration/`. |
+| `StepContract` | **A machine-readable contract derived from the plan.** The plan's intent, distilled into measurable acceptance checks, named risks, expected artifacts, and budgets for one step. Each meaningful step carries a stable ID preserved across the lineage (see [contracts.md](contracts.md) for the models). |
+| Agent execution | **The owning agent does the work.** BOUND never decides what code to write or which tools to call; the agent executes the step and exposes what it actually did. |
+| `ExecutionEvidence` | **Observed facts only.** What was actually seen after execution — never what it *means* for BOUND. Unobservable signals stay unset (`None`); they are never invented into a pass (see [contracts.md](contracts.md)). |
+| BOUND `EvaluationResult` | **Deterministic evaluation and the control decision.** Same contract + evidence → same `EvaluationResult` (`ACCEPT / RETRY / REPLAN / ROLLBACK`). BOUND never executes a rollback or retry; it returns the decision. See [architecture.md](architecture.md) for the per-step pipeline internals. |
+| Agent control action | **Translate the decision into a framework action.** The integration layer maps `EvaluationResult.decision` to `continue / retry / replan / rollback` (table below) and re-injects deterministic feedback. It never modifies a BOUND decision and never calls an LLM for it. |
+| `INTEGRATION_REPORT.md` | **A post-run audit record — *not* a rewrite of the plan.** It records what actually happened: real execution, real evidence, the actual BOUND decisions and control actions taken. It references `PLAN.md` and preserves the same stable step IDs. It never rewrites `PLAN.md` after the fact to match the outcome, and replans preserve history rather than erasing it. Lives with the thin, removable `bound_integration/` package. |
+
+The inner per-step loop — `StepContract` → agent execution → `ExecutionEvidence`
+→ `EvaluationResult` → control action — is the same lineage, just one step at a
+time; the agent owns that loop and calls BOUND once per meaningful step. The
+section below covers that inner loop.
+
 ## The control loop
 
 ```text

@@ -1,18 +1,3 @@
-"""Pydantic domain models for the BOUND bounded-utility policy.
-
-This module defines the core data structures that flow through the BOUND
-pipeline:
-
-    Action → Evaluator → EvaluationScores → BoundCalculator → BoundPolicy → EvaluationResult
-
-The v0.2 score is ``S = (W_A×A) + (W_I×I) - (W_R×R) - (W_C×C)``. The v0.1
-formula ``S = (W×A) + I - R - C`` is reproduced by the default
-:class:`BoundWeights` (``W_A = W``, ``W_I = W_R = W_C = 1.0``).
-
-All models are provider-agnostic and deterministic: no network access, no LLM
-SDK.
-"""
-
 from __future__ import annotations
 
 from typing import Literal
