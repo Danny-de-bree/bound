@@ -7,6 +7,7 @@
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/v/bound-policy.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Python versions"></a>
   <a href="https://github.com/Danny-de-bree/bound/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Danny-de-bree/bound.svg" alt="License"></a>
+  <a href="https://skills.sh/Danny-de-bree/bound"><img src="https://skills.sh/b/Danny-de-bree/bound" alt="skills.sh installs"></a>
 </p>
 
 # BOUND
@@ -27,7 +28,7 @@ BOUND sits between execution and the agent's next decision, turning observable e
 
 ### Install in ChatGPT / OpenAI Skills
 
-1. Download [`BOUND-agent-skill.zip`](BOUND-agent-skill.zip).
+1. Download [`BOUND-agent-skill.zip`](https://github.com/Danny-de-bree/bound/releases/latest/download/BOUND-agent-skill.zip).
 2. In ChatGPT, open **Profile → Skills → Create → Upload from your computer**.
 3. Select the ZIP, review the scan result, and install the skill.
 4. Start a new chat and invoke it with `@BOUND`, or let ChatGPT select it when
