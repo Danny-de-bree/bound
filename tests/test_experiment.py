@@ -1,19 +1,3 @@
-"""Tests for the BOUND experiment harness (Phase 10).
-
-These tests pin down the four scenarios the v0.2 ``Experiment harness`` section
-of ``todo.md`` requires:
-
-* correct first ``ACCEPT`` step,
-* correct steps saved,
-* regression-after-accept (BOUND stops before the agent breaks its own work),
-* trajectory with no ``ACCEPT`` result.
-
-They drive the harness both from the JSON benchmark fixtures
-(``benchmarks/trajectories/``) and from in-code trajectories so a failure can be
-localised to either the harness logic or a fixture. Every test is deterministic
-and network-free.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,14 +1,3 @@
-"""Tests for the v0.6 report renderer and RunTrace (Phases 8, 9, 11).
-
-Covers:
-
-* :class:`bound.report.RunTrace` round-trips losslessly through JSON.
-* :func:`bound.report.render_from_trace` renders the required subsections,
-  preserves the step id, and does not fabricate unavailable telemetry.
-* ``scripts/generate_demo.py`` builds demo frames from a stored trace (the
-  frame-building logic is tested directly to avoid binary assertions).
-"""
-
 from __future__ import annotations
 
 import importlib.util

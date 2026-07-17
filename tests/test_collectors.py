@@ -1,25 +1,3 @@
-"""Unit tests for the BOUND v0.6 pure evidence parsers (Phases 3, 4, 5).
-
-These tests pin down the three "missing evidence must not become a passing
-check" fixes from the v0.6 todo, expressed against the pure, deterministic
-parsers in :mod:`bound.collectors`:
-
-* Phase 4 — :func:`bound.collectors.parse_pytest_summary` counts *tests*,
-  never warnings/deselected/rerun. ``30 passed, 2 warnings`` is 30 tests,
-  not 32; the no-summary case is 0; warnings are never counted.
-* Phase 3 — :class:`bound.collectors.GitInspection` tracks command success
-  *separately* from the path list, so a *failed* ``git status`` (empty paths
-  because git could not report) is never misread as a clean tree via
-  :meth:`GitInspection.is_clean_proven`.
-* Phase 5 — :class:`bound.collectors.ServiceTestEvidence` keeps the
-  *service-specific* ``service-tests-pass`` check distinct from the
-  full-suite ``tests-pass`` check: it passes only when the command succeeded
-  AND at least one test executed.
-
-The parsers are pure (no subprocess, no network, no filesystem), so these
-tests feed captured strings only.
-"""
-
 from __future__ import annotations
 
 import pytest

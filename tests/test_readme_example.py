@@ -1,20 +1,3 @@
-"""Executable test for the README end-to-end example (Phase 16).
-
-The README's "End-to-end example (runs against the real API)" block asserts it
-was *executed before copying — no numbers invented*. This test runs that exact
-example code in-process and pins the documented per-attempt numbers so:
-
-* the README example is genuinely executable (Phase 16: "README example or
-  equivalent executable example");
-* the numbers printed in the README cannot silently drift from what the
-  deterministic ``ContractEvaluator`` + ``BoundPolicy`` actually produce.
-
-The example evaluates two attempts of an "add input validation" step against a
-``StepContract`` with three required acceptance checks and a 20-tool-call
-budget, using ``evaluate_agent_step`` (the v0.4 public integration helper). No
-LLM, no network, no subprocess.
-"""
-
 from __future__ import annotations
 
 import pytest

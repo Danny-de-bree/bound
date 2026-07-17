@@ -1,38 +1,3 @@
-"""Unit tests for the BOUND orchestration workflow (v0.3 Phases 9, 10, 16).
-
-These tests pin the :class:`bound.bound_workflow.BoundWorkflow` contract mandated
-by the v0.3 TODO ("Workflow" section of Phase 16):
-
-* plan preparation (``prepare`` returns a validated :class:`BoundPlan`),
-* multi-step evaluation (evaluate several steps, each producing a decision),
-* the first ``ACCEPT`` stops the current optimization loop (the *caller* breaks;
-  BOUND itself never loops),
-* ``RETRY`` keeps the same step (the caller re-evaluates the same contract),
-* ``REPLAN`` requires a new strategy (the caller prepares a new plan),
-* ``ROLLBACK`` overrides acceptance (high risk + high score -> ``ROLLBACK``),
-* and the :class:`~bound.contract_evaluator.ContractEvaluator` provenance flows
-  onto the :class:`~bound.models.EvaluationResult`.
-
-All tests use :class:`~bound.contracts.StaticContractGenerator` +
-:class:`~bound.contract_evaluator.ContractEvaluator` +
-:class:`~bound.policy.BoundPolicy`: no network access, no API key, and no LLM
-SDK. The decision always comes from the deterministic policy, never from the
-workflow.
-
-Design note on the policy's evaluator
--------------------------------------
-:class:`~bound.policy.BoundPolicy` requires an
-:class:`~bound.evaluator.Evaluator` at construction (its
-:meth:`~bound.policy.BoundPolicy.evaluate` scores an
-:class:`~bound.models.Action`). In the contract workflow the scores always come
-from the :class:`~bound.contract_evaluator.ContractEvaluator`, so the policy's
-own evaluator is a *vestigial placeholder*: :meth:`evaluate_step` rebinds it per
-call to a :class:`~bound.evaluator.StaticEvaluator` of the contract scores and
-restores it afterwards (see :mod:`bound.bound_workflow`). The tests therefore
-inject a throwaway :class:`~bound.evaluator.StaticEvaluator` whose scores are
-never used.
-"""
-
 from __future__ import annotations
 
 import pytest

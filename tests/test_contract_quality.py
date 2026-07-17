@@ -1,18 +1,3 @@
-"""Unit + experiment tests for contract quality assessment (v0.3 Phases 14-15).
-
-These tests pin three things:
-
-1. :class:`ContractQualityReport` enforces its structural contract (forbid extra
-   fields, ratio in ``[0, 1]``, non-negative counts).
-2. :func:`assess_contract` is a deterministic structural smell test: a good plan
-   is clean, and vague / duplicate-id / oversized / empty-checks plans each fire
-   the expected warning — with no LLM and no network.
-3. The Phase 14 experiment over ``benchmarks/contracts`` runs reproducibly and,
-   honestly, *cannot* judge goal-relevance — demonstrated by the
-   ``measurable_but_irrelevant`` fixture scoring perfectly while checking the
-   wrong domain.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

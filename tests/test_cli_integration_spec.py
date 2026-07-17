@@ -1,12 +1,3 @@
-"""Tests for the ``bound integration-spec`` CLI subcommand (Phase 3).
-
-Pins that the command emits a framework-neutral, machine-readable integration
-specification as structured JSON to STDOUT, with the four mandated sections
-(WHEN TO CALL / WHEN NOT / REQUIRED FLOW / EVIDENCE RULE), the deterministic
-decision->control mapping, and a clean process exit. The spec is produced
-deterministically (no LLM, no network).
-"""
-
 from __future__ import annotations
 
 import json

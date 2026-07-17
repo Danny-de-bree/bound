@@ -1,50 +1,3 @@
-"""Architecture / dependency-hygiene tests for the BOUND v0.2 core.
-
-The BOUND core is contractually:
-
-* driven by a deterministic evaluator — the manual :class:`StaticEvaluator`
-  (direct-score mode) and the v0.2 :class:`CodingWorkflowEvaluator`
-  (workflow-signal mode) both reach a decision fully offline;
-* network-free — it must reach a decision fully offline, including the new
-  workflow evaluator and the experiment harness that replays trajectories;
-* API-key-free — no credentials are required to evaluate an action or to
-  replay an experiment;
-* free of any LLM / provider SDK in its installed dependencies or imports.
-
-These invariants are part of the project's "Final test requirements" under the
-*Architecture* heading. They are asserted directly here rather than inferred
-from the happy-path tests, so a future regression that silently introduces a
-network call, an API-key read, or a provider dependency into the core —
-including the v0.2 ``workflow.py`` and ``experiment.py`` modules — is caught
-loudly.
-
-The checks combine three complementary strategies:
-
-1. **Dependency metadata** — the installed ``bound`` distribution's requirements
-   must not list any known LLM / provider SDK.
-2. **Static import scan** — the ``bound`` package source (including the v0.2
-   ``workflow.py`` and ``experiment.py`` modules) must not import any
-   networking or provider module (parsed with :mod:`ast`, so comments and
-   strings cannot produce false positives).
-3. **Runtime** — running the policy, the CLI (both ``evaluate`` and
-   ``evaluate-workflow``), the :class:`CodingWorkflowEvaluator`, the
-   experiment harness, and the v0.3 contract workflow
-   (:class:`BoundWorkflow` + :class:`ContractEvaluator`) with a sanitized
-   environment and a blocked socket must still produce the deterministic
-   decision, proving no network access or API key is actually exercised at
-   runtime.
-
-v0.3 extends the same invariants to the contract pipeline
-(:mod:`bound.contracts`, :mod:`bound.evidence`,
-:mod:`bound.contract_evaluator`, :mod:`bound.bound_workflow`,
-:mod:`bound.contract_quality`, :mod:`bound.llm_adapters`). The LLM-backed
-contract generator is an *optional* convenience layer; the deterministic
-core must reach an ``ACCEPT`` purely from a :class:`StaticContractGenerator`
-+ :class:`ContractEvaluator` + :class:`BoundPolicy` with simulated
-:class:`ExecutionEvidence` — no LLM, no network, no API key — which is the
-project's Definition of Done for v0.3.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -428,7 +381,7 @@ def test_importing_bound_does_not_load_any_provider_sdk() -> None:
     assert not offenders, (
         f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
     )
-    assert bound.__version__ == "0.6.0"
+    assert bound.__version__ == "0.6.1"
 
 
 # ---------------------------------------------------------------------------

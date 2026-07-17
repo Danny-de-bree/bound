@@ -1,27 +1,3 @@
-"""Architecture test: no agent-framework dependency in the BOUND core (Phase 16).
-
-Phase 16 explicitly requires a test that the deterministic core has **no
-framework dependency** — i.e. it must not pull in (or import) any agent /
-orchestration framework (LangGraph, AutoGen, CrewAI, LlamaIndex, smolagents,
-…) any more than it may pull an LLM provider SDK. BOUND is *framework-neutral*:
-an agent wires itself in by reading ``bound integration-spec`` and calling the
-thin ``evaluate_agent_step`` helper — BOUND never imports the agent's framework.
-
-The companion ``tests/test_architecture.py`` guards the LLM-provider / network
-invariant. This file adds the explicit, positively-named framework invariant:
-
-1. **Dependency metadata** — the installed ``bound`` distribution's *runtime*
-   requirements must be a subset of the allow-list ``{pydantic}`` (a data
-   modelling library is not a framework). A *positive* check: not just "no
-   forbidden package present" but "the only thing we need at runtime is the
-   data-modelling layer".
-2. **Static import scan** — no ``.py`` file under ``src/bound`` may import any
-   known agent-framework module root (AST-parsed so docstrings/comments cannot
-   false-positive).
-3. **Runtime** — importing ``bound`` loads no agent framework into
-   ``sys.modules``.
-"""
-
 from __future__ import annotations
 
 import ast

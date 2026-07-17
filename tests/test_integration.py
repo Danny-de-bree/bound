@@ -1,19 +1,3 @@
-"""Unit tests for the framework-neutral agent control layer (Phase 1).
-
-Pins the exact, deterministic mapping from BOUND's decision to an agent control
-action and the guarantees the integration layer must uphold:
-
-* ACCEPT   -> continue
-* RETRY    -> retry
-* REPLAN   -> replan
-* ROLLBACK -> rollback
-
-The layer must not invent scores, modify the BOUND decision, call an LLM, know
-about any framework, or execute rollback/retries. These tests assert it merely
-*translates* the deterministic :class:`~bound.models.EvaluationResult` produced
-by the real contract pipeline (no LLM, no network).
-"""
-
 from __future__ import annotations
 
 import pytest

@@ -1,22 +1,3 @@
-"""Unit tests for the deterministic coding-workflow evaluator (Phases 6 & 7).
-
-These tests pin the :class:`bound.workflow.CodingWorkflowEvaluator` contract
-mandated by the v0.2 TODO ("Workflow signals" + "Evaluator" sections):
-
-* valid signals map to the documented A / I / R / C values,
-* invalid signal ranges are rejected by the model (Pydantic does the heavy
-  lifting here),
-* missing optional signals are *ignored* rather than defaulted to zero,
-* the absence of any acceptance evidence raises a clear error,
-* the same inputs always produce the same outputs (determinism),
-* the evaluator pulls in no network or LLM SDK,
-* and every score is backed by explicit :class:`ScoreEvidence` provenance so a
-  consumer can answer "why is ``A = 0.85``?".
-
-All mappings are v0.2 reference heuristics — these tests assert the *documented*
-behaviour of those heuristics, not scientific calibration.
-"""
-
 from __future__ import annotations
 
 import pytest

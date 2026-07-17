@@ -1,18 +1,3 @@
-"""Unit tests for the BOUND evaluation contracts (v0.3 Phases 1-4).
-
-These tests pin the two load-bearing guarantees of the contract layer:
-
-1. The Pydantic models enforce the structural invariants a contract must hold —
-   a plan has at least one step, a step has at least one acceptance check, risk
-   severities and budgets stay in range — so a malformed or hallucinated
-   contract is rejected at validation time rather than silently trusted.
-2. :class:`ContractGenerator` is a structural :class:`typing.Protocol` — any
-   object with a ``generate(self, *, goal, plan, context=None) -> BoundPlan``
-   method satisfies it, with no inheritance required. This is what lets future
-   LLM-backed adapters slot in without touching the deterministic core, while
-   :class:`StaticContractGenerator` keeps every unit test offline.
-"""
-
 from __future__ import annotations
 
 import pytest

@@ -1,17 +1,3 @@
-"""Smoke test for the Phase 7 runnable agent-loop example.
-
-Runs :func:`examples.agent_control_loop.main` (in-process, capturing STDOUT) and
-asserts the mandated multi-step trajectory is produced by BOUND's deterministic
-pipeline — not hardcoded:
-
-    Attempt 1 -> REPLAN
-    Attempt 2 -> RETRY
-    Attempt 3 -> ACCEPT
-
-and that the summary reports attempts, decisions, final score, threshold, and
-the simulated avoided extra steps. No subprocess, no network, no LLM.
-"""
-
 from __future__ import annotations
 
 import importlib

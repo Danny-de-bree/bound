@@ -1,17 +1,3 @@
-"""Unit tests for the BOUND evaluator abstraction (Phase 3).
-
-These tests pin down the two contracts the evaluator layer must hold:
-
-1. :class:`Evaluator` is a structural :class:`typing.Protocol` — any object with
-   an ``evaluate(self, action) -> EvaluationScores`` method satisfies it, with
-   no inheritance required. This is what lets future LLM-as-judge adapters slot
-   in without touching the deterministic core.
-2. :class:`StaticEvaluator` returns *exactly* the scores it was given (by
-   identity and by value), performs no network access, and never produces a
-   decision. It is the fixture that lets the rest of the pipeline be tested
-   deterministically.
-"""
-
 from __future__ import annotations
 
 from bound.evaluator import Evaluator, StaticEvaluator

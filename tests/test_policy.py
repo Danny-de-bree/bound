@@ -1,28 +1,3 @@
-"""Unit tests for the BOUND decision policy (Phase 2 + Phase 4).
-
-These tests pin down the v0.2 deterministic decision rule and the
-auditability of the returned :class:`~bound.models.EvaluationResult`.
-
-Decision rule (applied exactly, in order):
-
-* ``scores.risk >= criteria.rollback_risk_threshold`` -> ``ROLLBACK``
-  (safety boundary, checked *first*; a high-scoring but unsafe action still
-  rolls back).
-* ``score >= criteria.threshold`` -> ``ACCEPT``
-  (boundary-inclusive: ``S == T`` accepts).
-* ``gap = threshold - score`` and ``gap <= retry_margin`` -> ``RETRY``.
-* otherwise -> ``REPLAN`` (fall-through; no longer gated on ``risk == cost``).
-
-This replaces the v0.1 ``risk > cost`` / ``cost > risk`` / ``risk == cost``
-rule entirely. ``REPLAN`` is now reachable whenever the score is too far below
-the threshold to retry — no exact-float-equality trap.
-
-The policy must derive ``S`` via the existing calculator's
-:func:`~bound.calculator.calculate_components` so the components it reports are
-bit-identical to the score, and the decision must come from the policy — never
-from the evaluator.
-"""
-
 from __future__ import annotations
 
 import pytest

@@ -1,26 +1,3 @@
-"""Tests for the v0.4 simplified public contract API (Phase 0).
-
-Phase 0 removed the vestigial placeholder requirement from the contract
-evaluation path. Before v0.4 a caller had to construct a throwaway
-``BoundPolicy(StaticEvaluator(placeholder_scores))`` and rely on
-``BoundWorkflow.evaluate_step`` mutating ``policy._evaluator`` per call. That
-was internal-implementation knowledge leaking into every integration.
-
-These tests pin the simplified, placeholder-free API:
-
-* ``BoundWorkflow()`` (no args) is a valid construction.
-* ``workflow.evaluate_step(contract=, evidence=, criteria=)`` reaches a
-  deterministic decision with no placeholder objects in user code.
-* ``BoundPolicy()`` (no evaluator) is valid; ``BoundPolicy.decide`` works without
-  one and ``BoundPolicy.evaluate`` raises a clear error.
-* ``decide`` produces the same result the Action-based ``evaluate`` would, so
-  the decision lives in exactly one place.
-* ``prepare`` raises a clear error when no ``contract_generator`` was bound.
-
-Definition of Done for Phase 0: a complete contract evaluation is expressible in
-~20-30 lines of normal user code without placeholder objects (asserted below).
-"""
-
 from __future__ import annotations
 
 import pytest

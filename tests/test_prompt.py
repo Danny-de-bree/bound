@@ -1,16 +1,3 @@
-"""Unit tests for the BOUND steering-prompt rendering (Phase 5).
-
-The prompt is generated purely from an :class:`~bound.models.EvaluationResult`
-(no LLM) and must be:
-
-* deterministic — identical inputs produce identical output;
-* mathematically correct — the substituted formula and final ``S`` match the
-  result's actual values, and the displayed ``S`` / ``T`` are consistent with
-  the decision;
-* under 150 words;
-* always containing ``S``, ``T`` and the decision.
-"""
-
 from __future__ import annotations
 
 import pytest

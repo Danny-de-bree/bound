@@ -1,24 +1,3 @@
-"""Unit tests for the BOUND evidence models and EvidenceCollector (Phases 5–6).
-
-These tests pin down the contracts the evidence layer must hold:
-
-1. :class:`CheckEvidence` and :class:`ExecutionEvidence` are plain observation
-   records — they record *what was seen*, never what it *means* for BOUND. So a
-   failing required check (``passed=False``), an unknown check id, and duplicate
-   evidence for the same id are all *valid*: the collector is faithful, and
-   reconciliation/deduplication is the evaluator's job, not the model's.
-2. Empty evidence is valid: a step with no checks recorded is still legitimate
-   evidence (the evaluator scores it conservatively, never optimistically).
-3. Numeric telemetry is range-validated (``ge=0``): negative retries, tool calls,
-   tokens, or runtime are rejected because they are impossible observations.
-4. ``extra="forbid"`` keeps the records auditable — stray fields are a modelling
-   bug, not a silent extension point.
-5. :class:`EvidenceCollector` is a structural ``runtime_checkable`` Protocol, so
-   any object exposing ``collect`` satisfies it with no inheritance — this is the
-   seam that lets future environment adapters (Cline, CI, ...) plug in without
-   the core importing them.
-"""
-
 from __future__ import annotations
 
 import pytest

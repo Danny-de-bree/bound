@@ -1,24 +1,3 @@
-"""Tests for the single-source decision->action mapping and stable plan IDs.
-
-These tests pin the two Phase 6 / Phase 7 invariants of BOUND v0.6:
-
-1. The BOUND decision -> agent control-action translation has exactly **one**
-   runtime source (``bound.integration._DECISION_TO_ACTION``), consumed by the
-   public :func:`bound.integration.evaluate_agent_step`. A *data-only* copy of
-   the same mapping is published via :func:`bound.integration_spec.integration_spec`
-   (``decision_to_control``) so integrations can wire control flow from the spec,
-   but that copy must never make a runtime decision independently of BOUND.
-
-2. Stable plan step IDs survive from ``PLAN.md`` into :class:`StepContract.id`
-   unchanged (``PHASE-001`` -> ``StepContract(id="PHASE-001")``), and the
-   :func:`~bound.contracts.is_valid_phase_id` helper recognises the documented
-   ``PHASE-NNN[-R<n>][-<letter>]`` convention.
-
-The ``EXPECTED_DECISION_TO_CONTROL`` mapping below lives **only in these tests**
-— it asserts the public API behaves correctly; it is never used to make a runtime
-decision independently of BOUND.
-"""
-
 from __future__ import annotations
 
 import ast

@@ -1,21 +1,3 @@
-"""Unit tests for the BOUND Pydantic domain models (v0.2).
-
-These tests focus on validation *behaviour* — the function of the models —
-rather than re-testing Pydantic's type machinery. Edge cases (empty strings,
-boundary values, out-of-range scores, weight/weights reconciliation, and the
-distance_to_threshold sign convention) are asserted because they encode the
-BOUND contract:
-
-* actions must carry meaningful content (no empty/whitespace fields),
-* each score dimension must stay within its defined range,
-* weights are non-negative and the v0.1 ``weight`` scalar is reconciled with the
-  v0.2 :class:`BoundWeights` so the two systems never silently compete,
-* ``distance_to_threshold`` is signed (``S - T``): positive = above, zero = at,
-  negative = below,
-* coding-agent workflow signals stay within their provider-agnostic ranges,
-* the trajectory models compose the workflow signals for the experiment harness.
-"""
-
 from __future__ import annotations
 
 from typing import get_args

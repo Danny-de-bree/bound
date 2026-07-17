@@ -1,21 +1,3 @@
-"""Unit and integration tests for the BOUND CLI (Phase 6).
-
-Covers the ``bound evaluate`` subcommand:
-
-* valid invocation writes an auditable JSON result to STDOUT and a readable
-  steering prompt to STDERR, exiting ``0``;
-* the JSON exposes every term of ``S = (W × A) + I - R - C`` so ``S`` can be
-  reconstructed from it alone;
-* all score inputs are validated through Pydantic — out-of-range values exit
-  non-zero with no JSON on STDOUT;
-* ``--help`` (top-level and per-subcommand) and missing-required-argument
-  behaviour work as expected.
-
-Tests call :func:`bound.cli.main` directly (capturing STDOUT/STDERR via
-``capsys``) for speed and determinism, plus one subprocess test that runs the
-real module end-to-end with separate streams.
-"""
-
 from __future__ import annotations
 
 import json

@@ -1,19 +1,3 @@
-"""Unit tests for the BOUND mathematical core (Phase 1).
-
-These tests pin down the exact, raw behaviour of the bounded-utility score:
-
-    S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
-
-The BOUND contract is that the score is returned *as-is*: never clamped to
-``[0, 1]``, never normalized, never rounded, and never passed through a
-sigmoid or any other transform. Each test below asserts one facet of that
-contract and documents *why* it matters for the deterministic, auditable core.
-
-The v0.1 formula ``S = (W × A) + I - R - C`` must remain expressible as the
-default configuration (all weights ``1.0``); the v0.2 tests verify that each
-of the four weights independently affects the score.
-"""
-
 from __future__ import annotations
 
 import pytest

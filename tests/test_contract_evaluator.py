@@ -1,28 +1,3 @@
-"""Unit tests for the deterministic contract evaluator (v0.3 Phases 7 & 8).
-
-These tests pin the :class:`bound.contract_evaluator.ContractEvaluator` contract
-mandated by the v0.3 TODO ("Contract evaluation" section of Phase 16):
-
-* all required checks pass (``A = 1.0``),
-* partial acceptance (3 of 4 → ``A = 0.75``),
-* no cost budget (``C = 0.0`` with provenance explaining the absence),
-* budget exceeded (every normalized dimension saturates at ``1.0`` → ``C = 1.0``),
-* a failed high-severity risk check makes risk "rise by its severity",
-* a confirmed-unavailable rollback raises risk,
-* the same inputs always produce the same outputs (determinism),
-* and a required check with **no** matching evidence counts as **failed**
-  (never silently passing).
-
-Beyond those, the suite also locks in the provenance contract (Phase 8): every
-dimension is backed by :class:`ScoreEvidence` so a consumer can answer "why is
-``A = 0.75``?", optional checks are advisory only, duplicate evidence is
-deduplicated conservatively, and unmeasured telemetry for a *declared* budget
-dimension is conservatively saturated.
-
-All mappings are v0.3 reference heuristics — these tests assert the *documented*
-behaviour of those heuristics, not scientific calibration.
-"""
-
 from __future__ import annotations
 
 import pytest

@@ -1,19 +1,3 @@
-"""Deterministic agent-feedback snapshot/golden tests (Phase 2).
-
-Pins the exact feedback text :func:`bound.integration.render_feedback` produces
-for each of the four BOUND decisions, plus the guarantees:
-
-* feedback is a pure function of (evaluation, contract, evidence) — no LLM;
-* every decision's feedback stays under 150 words;
-* the per-decision behaviour matches the Phase 2 spec (ACCEPT discourages
-  further optimisation, RETRY names remaining failed checks, REPLAN calls for a
-  different approach, ROLLBACK names the risk boundary and asks for a safe
-  state).
-
-These golden strings are frozen so any unintentional change to the feedback
-renderer is caught loudly. (Updating them is a deliberate, reviewed change.)
-"""
-
 from __future__ import annotations
 
 from bound.bound_workflow import BoundWorkflow

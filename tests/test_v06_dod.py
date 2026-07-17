@@ -1,26 +1,3 @@
-"""Definition-of-Done gate for BOUND v0.6 (Phase 13).
-
-These tests pin the headline invariant behind *each* item in the v0.6
-Definition of Done (``todo.md`` lines 508-522). Where a teammate's suite
-already exhaustively covers the internals (``test_collectors``,
-``test_report``, ``test_integration_mapping``), these tests re-assert the
-**cross-cutting DoD invariant** at smoke level rather than re-deriving the
-same parametrized cases, so this file stays a focused gate rather than a
-duplicate of the unit suites.
-
-DoD items covered:
-
-* failed git inspection does not produce optimistic evidence
-* pytest warnings are not counted as tests
-* service test evidence is genuinely service-specific
-* plan IDs are preserved in contracts
-* the decision -> control mapping is not duplicated in runtime integration code
-* the execution report uses real API-returned values (no fabrication)
-* demo generation uses stored trace data
-* no unavailable fields are fabricated
-* the 0.4.0/0.5.0 version mismatch is resolved (version bumped to 0.6.0)
-"""
-
 from __future__ import annotations
 
 import importlib.util
@@ -282,12 +259,12 @@ def test_demo_generation_uses_stored_trace_data() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DoD: the 0.4.0/0.5.0 version mismatch is resolved (bumped to 0.6.0)
+# DoD: the 0.4.0/0.5.0 version mismatch is resolved (bumped to 0.6.1)
 # ---------------------------------------------------------------------------
 
 
 def test_version_bumped_and_consistent() -> None:
-    """``__init__.py`` and ``pyproject.toml`` agree on 0.6.0 (mismatch fixed)."""
+    """``__init__.py`` and ``pyproject.toml`` agree on 0.6.1 (mismatch fixed)."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.6.0"' in pyproject
-    assert bound.__version__ == "0.6.0"
+    assert 'version = "0.6.1"' in pyproject
+    assert bound.__version__ == "0.6.1"
