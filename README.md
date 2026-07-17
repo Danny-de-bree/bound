@@ -21,7 +21,7 @@ BOUND sits between execution and the agent's next decision, turning observable e
 **ACCEPT · RETRY · REPLAN · ROLLBACK**
 
 <p align="center">
-  <img src="assets/bound-agent-workflow.png" alt="BOUND deterministic control harness for AI agent workflows" width="100%">
+  <img src="https://raw.githubusercontent.com/Danny-de-bree/bound/main/assets/bound-agent-workflow.png" alt="BOUND deterministic control harness for AI agent workflows" width="100%">
 </p>
 
 ## Put BOUND in your agent
