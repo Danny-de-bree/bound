@@ -52,6 +52,6 @@ jobs:
           ls -la release/python/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
           packages-dir: release/python/
