@@ -9,6 +9,11 @@ from pathlib import Path
 import pytest
 
 from bound.cli import EXIT_VALIDATION_ERROR, main
+from bound.policy_canon import compute_policy_hash
+from bound.policy_schema import load_policy_yaml
+from tests.conftest import REPO_ROOT
+
+DEFAULT_POLICY = REPO_ROOT / "src" / "bound" / "default_policy.yaml"
 
 # The exact ``bound evaluate`` invocation from the project's definition-of-done.
 _DOD_ARGS = [
@@ -563,3 +568,152 @@ def test_evaluate_workflow_respects_weights(capsys: pytest.CaptureFixture[str]) 
     # Zeroing the cost weight means the cost term cannot drag the score below 1.0.
     assert payload["score"] == pytest.approx(1.0, abs=1e-12)
     assert payload["decision"] == "ACCEPT"
+
+
+# ---------------------------------------------------------------------------
+# Policy configuration subcommands (Phase 4.1)
+# ---------------------------------------------------------------------------
+
+
+def test_policy_validate_default_is_valid(capsys: pytest.CaptureFixture[str]) -> None:
+    """``bound policy validate`` on the shipped default policy exits 0."""
+    rc = main(["policy", "validate", str(DEFAULT_POLICY)])
+    out, err = capsys.readouterr()
+    assert rc == 0
+    assert "coding-default@1.0: valid" in out
+    assert "policy hash: sha256:" in out
+
+
+def test_policy_validate_json_payload(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--json`` emits a machine-readable valid payload with the policy hash."""
+    rc = main(["policy", "validate", str(DEFAULT_POLICY), "--json"])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["valid"] is True
+    assert payload["policy"]["id"] == "coding-default"
+    assert payload["policy"]["version"] == "1.0"
+    assert payload["policy"]["hash"].startswith("sha256:")
+    # The default policy declares a couple of collectors-less blockers -> warnings.
+    assert isinstance(payload["warnings"], list)
+    assert payload["warnings"]
+
+
+def test_policy_validate_missing_file_is_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    """A missing file is a usage error (exit 2), not a schema failure (1)."""
+    rc = main(["policy", "validate", "does-not-exist.yaml"])
+    _, err = capsys.readouterr()
+    assert rc == 2
+    assert "not found" in err
+
+
+def test_policy_validate_invalid_yaml_is_invalid(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A file that fails schema validation exits 1 with a clear error."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(
+        'schema_version: "1.0"\n'
+        'policy: {id: x, version: "1.0"}\n'
+        "acceptance_checks: [{id: dup, description: d}]\n"
+        "quality_checks: [{id: dup, description: d}]\n",
+        encoding="utf-8",
+    )
+    rc = main(["policy", "validate", str(bad)])
+    _, err = capsys.readouterr()
+    assert rc == 1
+    assert "invalid policy" in err
+
+
+def test_policy_validate_warns_on_claimed_only_check(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A check that accepts only CLAIMED evidence is flagged."""
+    p = tmp_path / "p.yaml"
+    p.write_text(
+        'schema_version: "1.0"\n'
+        'policy: {id: p, version: "1.0"}\n'
+        "collectors: {pytest: {type: pytest}}\n"
+        "acceptance_checks:\n"
+        "  - id: claimed-only\n"
+        "    description: d\n"
+        "    importance: blocker\n"
+        "    required: true\n"
+        "    accepted_provenance: [claimed]\n"
+        "    collector: pytest\n",
+        encoding="utf-8",
+    )
+    rc = main(["policy", "validate", str(p)])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    assert "accepts only CLAIMED evidence" in out
+
+
+def test_policy_explain_renders_gates_weights_and_budgets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``bound policy explain`` shows effective gates, weights and budgets."""
+    rc = main(["policy", "explain", str(DEFAULT_POLICY)])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    assert "Policy: coding-default@1.0" in out
+    assert "Acceptance gates" in out
+    assert "Risk gates" in out
+    assert "Quality signals" in out
+    assert "Budgets:" in out
+    # A blocker carries its on_* actions and the collector it binds.
+    assert "on_failure=retry" in out
+    assert "collector=pytest" in out
+    # Effective weights are resolved from importance tiers.
+    assert "effective_weight=0.5" in out  # medium -> 0.5
+
+
+def test_policy_explain_json_is_machine_readable(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``bound policy explain --json`` emits the full config as JSON."""
+    rc = main(["policy", "explain", str(DEFAULT_POLICY), "--json"])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["policy"]["id"] == "coding-default"
+    for key in (
+        "collectors", "acceptance_checks", "quality_checks",
+        "risk_checks", "budgets", "change_scope", "approvals",
+    ):
+        assert key in payload
+
+
+def test_policy_hash_matches_canonical(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``bound policy hash`` prints the canonical sha256 hash from policy_canon."""
+    rc = main(["policy", "hash", str(DEFAULT_POLICY)])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    expected = compute_policy_hash(load_policy_yaml(DEFAULT_POLICY))
+    assert out.strip() == expected
+    assert expected.startswith("sha256:")
+
+
+def test_policy_hash_json(capsys: pytest.CaptureFixture[str]) -> None:
+    """``bound policy hash --json`` emits hash + policy identity."""
+    rc = main(["policy", "hash", str(DEFAULT_POLICY), "--json"])
+    out, _ = capsys.readouterr()
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["hash"].startswith("sha256:")
+    assert payload["policy"]["id"] == "coding-default"
+
+
+def test_policy_hash_invalid_exits_one(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """``bound policy hash`` on an invalid file exits 1."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("not: a mapping\n", encoding="utf-8")
+    rc = main(["policy", "hash", str(bad)])
+    _, err = capsys.readouterr()
+    assert rc == 1
+    assert "invalid policy" in err
+

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from bound.contract_evaluator import ContractEvaluator
 from bound.contracts import BoundPlan, ContractGenerator, StepContract
 from bound.evidence import ExecutionEvidence
 from bound.models import BoundCriteria, EvaluationResult
 from bound.policy import BoundPolicy
+from bound.policy_schema import BoundPolicyConfig
+
+if TYPE_CHECKING:
+    from bound.lineage_api import RunContext
 
 
 class BoundWorkflow:
@@ -136,6 +142,11 @@ class BoundWorkflow:
         contract: StepContract,
         evidence: ExecutionEvidence,
         criteria: BoundCriteria,
+        policy: BoundPolicyConfig | None = None,
+        run: RunContext | None = None,
+        attempt: int = 1,
+        step_id: str | None = None,
+        description: str | None = None,
     ) -> EvaluationResult:
         """Score one executed step into a deterministic :class:`EvaluationResult`.
 
@@ -152,6 +163,27 @@ class BoundWorkflow:
         so the contract is never re-scored and no placeholder evaluator is
         involved. See the module docstring for the full rationale.
 
+        When an active ``policy`` is supplied it governs the
+        evaluation: its weighted quality signals feed the acceptance dimension,
+        and its hard gates / budgets are assessed into a
+        :class:`~bound.contract_evaluator.PolicyGateOutcome` passed to
+        :meth:`~bound.policy.BoundPolicy.decide`, which forces an uncompensable
+        decision when a blocker fails or a budget is breached. The active
+        policy's id/version/hash and the resolved effective weights are recorded
+        on the result for the trace. When ``policy`` is ``None`` (the default)
+        the call is identical to the contract-only path — fully backwards
+        compatible.
+
+        When a ``run`` context is supplied (and lineage is enabled) the
+        step's full lineage — ``step_started`` + ``evaluation_recorded`` +
+        ``outcome_recorded`` — is written automatically by
+        :func:`bound.lineage_api.record_step_evaluation`, deriving the control
+        action and reason codes from the deterministic decision. This is a
+        side effect only: the return type and value are unchanged. When no
+        ``run`` is supplied (and the evaluator carries no
+        :attr:`~bound.contract_evaluator.ContractEvaluator.lineage_run`) the
+        call is completely backwards compatible — no lineage is written.
+
         Args:
             contract: The :class:`~bound.contracts.StepContract` whose declared
                 acceptance checks, risk checks, and budget scope the scoring.
@@ -160,22 +192,65 @@ class BoundWorkflow:
             criteria: The :class:`~bound.models.BoundCriteria` (threshold,
                 weights, retry margin, rollback risk boundary) the policy
                 evaluates against.
+            policy: Optional active :class:`~bound.policy_schema.BoundPolicyConfig`
+                governing gates/weights/budgets for this step. ``None`` (the
+                default) selects the contract-only path (backwards compatible).
+            run: Optional :class:`~bound.lineage_api.RunContext`; when supplied
+                (and enabled) the step's lineage is recorded automatically.
+                Defaults to the evaluator's configured ``lineage_run`` when
+                omitted, or ``None`` (no lineage) when neither is set.
+            attempt: One-based attempt number recorded in lineage (default 1).
+            step_id: Optional explicit step id for lineage; otherwise derived.
+            description: Optional step description for lineage; defaults to the
+                contract's description.
 
         Returns:
             An :class:`~bound.models.EvaluationResult` carrying the contract
             scores, weighted components, final score, threshold metadata, the
             deterministic decision, and the
             :class:`~bound.contract_evaluator.ContractEvaluator`'s provenance.
+            When an active policy governed the step, the result also carries
+            the effective weights and the active-policy id/version/hash.
         """
         # 1. Contract scores (single deterministic source) + provenance. The
-        #    ContractEvaluator populates its `provenance` on every evaluate.
-        scores = self._evaluator.evaluate(contract, evidence)
+        #    ContractEvaluator populates its `provenance`, `assurance_assessment`
+        #    and (when a policy is bound) `policy_gate` on every evaluate.
+        scores = self._evaluator.evaluate(contract, evidence, policy=policy)
         contract_provenance = self._evaluator.provenance or None
+        contract_assurance = getattr(self._evaluator, "assurance_assessment", None)
+        policy_gate = getattr(self._evaluator, "policy_gate", None)
 
         # 2. Decision in one place: feed the contract scores straight into the
         #    policy's decide() (calculate_components + decision rule), passing
-        #    the contract provenance so the result explains "why A/I/R/C?".
-        #    No StaticEvaluator bridge and no rebinding of the policy's
-        #    evaluator — the contract workflow never needs an Action-based
-        #    evaluator at all.
-        return self._policy.decide(scores, criteria, provenance=contract_provenance)
+        #    the contract provenance so the result explains "why A/I/R/C?", the
+        #    assurance assessment so a candidate ACCEPT can be gated on
+        #    decision-critical evidence, and the active-policy gate so a failed
+        #    blocker or breached budget forces an uncompensable decision. No
+        #    StaticEvaluator bridge and no rebinding of the policy's evaluator —
+        #    the contract workflow never needs an Action-based evaluator at all.
+        result = self._policy.decide(
+            scores,
+            criteria,
+            provenance=contract_provenance,
+            assurance_assessment=contract_assurance,
+            policy_gate=policy_gate,
+        )
+
+        # 3. Optional automatic lineage: when a run context is available (either
+        #    passed explicitly or configured on the evaluator) and persistence
+        #    is enabled, record the step's full decision lineage as a side
+        #    effect. The import is local to avoid an import cycle
+        #    (lineage_api -> integration -> bound_workflow).
+        lineage_run = run if run is not None else self._evaluator.lineage_run
+        if lineage_run is not None and lineage_run.enabled:
+            from bound.lineage_api import record_step_evaluation
+
+            record_step_evaluation(
+                lineage_run,
+                contract=contract,
+                result=result,
+                attempt=attempt,
+                step_id=step_id,
+                description=description,
+            )
+        return result

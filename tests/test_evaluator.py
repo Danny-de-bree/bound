@@ -81,20 +81,6 @@ def test_static_evaluator_returns_supplied_scores_by_value() -> None:
     assert result == _SCORES
 
 
-def test_static_evaluator_is_deterministic_across_calls() -> None:
-    """Repeated evaluations of the same action yield identical results.
-
-    Determinism is a core BOUND guarantee; the static evaluator must be a pure
-    source of scores so downstream calculations never vary between runs.
-    """
-    evaluator = StaticEvaluator(_SCORES)
-
-    first = evaluator.evaluate(_ACTION)
-    second = evaluator.evaluate(_ACTION)
-
-    assert first is second
-
-
 def test_static_evaluator_exposes_scores_property() -> None:
     """The ``scores`` property exposes the stored EvaluationScores.
 

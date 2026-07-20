@@ -1,14 +1,49 @@
 from __future__ import annotations
 
 from bound.calculator import calculate_components
+from bound.contract_evaluator import AssuranceAssessment, PolicyGateOutcome
+from bound.contracts import EvidencePolicyAction
 from bound.evaluator import Evaluator
 from bound.models import (
     Action,
     BoundCriteria,
     Decision,
+    DecisionAssurance,
     EvaluationResult,
     EvaluationScores,
     ScoreEvidence,
+)
+
+#: Maps an :class:`EvidencePolicyAction` (the contract's reaction to
+#: missing/claimed evidence) to the BOUND :class:`Decision` the policy emits
+#: when a candidate ACCEPT is gated down. The contract expresses *intent*
+#: (retry/replan/rollback); the policy translates it into the BOUND decision
+#: vocabulary so :attr:`EvaluationResult.final_decision` stays a single enum.
+_POLICY_ACTION_TO_DECISION: dict[EvidencePolicyAction, str] = {
+    EvidencePolicyAction.ACCEPT: "ACCEPT",
+    EvidencePolicyAction.RETRY: "RETRY",
+    EvidencePolicyAction.REPLAN: "REPLAN",
+    EvidencePolicyAction.ROLLBACK: "ROLLBACK",
+}
+
+#: Severity ordering of BOUND decisions for choosing the most conservative
+#: outcome when a candidate decision and one or more forced gate actions both
+#: apply (todo 6.2). The gate may only make a decision *more* conservative,
+#: never weaker: a candidate ``ROLLBACK`` is never downgraded to a blocker's
+#: ``RETRY``. ``ROLLBACK`` is most severe, ``ACCEPT`` the least.
+_DECISION_SEVERITY: dict[str, int] = {
+    "ACCEPT": 0,
+    "RETRY": 1,
+    "REPLAN": 2,
+    "ROLLBACK": 3,
+}
+
+#: Assurance levels that block a candidate ACCEPT (downgrading it to the
+#: contract's ``on_missing``/``on_claimed`` action). VERIFIED and MIXED permit
+#: ACCEPT; CLAIMED (agent self-report) and INSUFFICIENT (missing/invalid
+#: evidence) do not.
+_ACCEPT_BLOCKING_ASSURANCE: frozenset[DecisionAssurance] = frozenset(
+    {DecisionAssurance.CLAIMED, DecisionAssurance.INSUFFICIENT}
 )
 
 
@@ -84,6 +119,8 @@ class BoundPolicy:
         criteria: BoundCriteria,
         *,
         provenance: dict[str, list[ScoreEvidence]] | None = None,
+        assurance_assessment: AssuranceAssessment | None = None,
+        policy_gate: PolicyGateOutcome | None = None,
     ) -> EvaluationResult:
         """Apply the deterministic decision rule to *pre-computed* scores.
 
@@ -97,6 +134,32 @@ class BoundPolicy:
         rule run exactly once, in one place, regardless of where the scores
         came from.
 
+        v0.7 decision assurance: when an ``assurance_assessment`` is supplied
+        (the contract workflow passes the
+        :class:`~bound.contract_evaluator.ContractEvaluator`'s assessment), the
+        result carries the *candidate* decision (the raw score-based one, also
+        stored in :attr:`EvaluationResult.decision` for backwards
+        compatibility) and the *final* gated decision. A candidate ACCEPT whose
+        assurance is :attr:`CLAIMED <DecisionAssurance.CLAIMED>` or
+        :attr:`INSUFFICIENT <DecisionAssurance.INSUFFICIENT>` is downgraded to
+        the contract's ``on_missing``/``on_claimed`` action (mapped to a BOUND
+        decision); VERIFIED and MIXED leave the candidate unchanged.
+
+        v0.7 active-policy gate: when a ``policy_gate`` is supplied (the
+        contract workflow passes the
+        :class:`~bound.contract_evaluator.ContractEvaluator`'s gate outcome for
+        an active :class:`~bound.policy_schema.BoundPolicyConfig`), any forced
+        action from a failed blocker or breached budget is applied on top of
+        the (already assurance-gated) decision — taking the *most
+        conservative* of the candidate and the forced action, so a blocker can
+        never be compensated by a positive score. The resolved effective
+        weights and the active policy id/version/hash are forwarded onto the
+        result for the trace. When no assessment *and* no gate are supplied
+        (the Action-based path, or a policy used without provenance-aware
+        evidence) the candidate/final/assurance/trace fields stay
+        ``None``/empty and ``decision`` is the sole outcome — fully backwards
+        compatible.
+
         Args:
             scores: The already-computed :class:`EvaluationScores` to decide
                 on.
@@ -106,16 +169,76 @@ class BoundPolicy:
             provenance: Optional per-dimension evidence backing ``scores``.
                 When supplied it is forwarded onto the result verbatim so a
                 consumer can answer "why A / I / R / C?". Defaults to ``None``.
+            assurance_assessment: Optional :class:`AssuranceAssessment` from a
+                :class:`~bound.contract_evaluator.ContractEvaluator`. When
+                supplied, candidate/final decisions and the assurance level +
+                reasons are populated and a candidate ACCEPT may be gated.
+                Defaults to ``None`` (no assurance gating).
+            policy_gate: Optional :class:`PolicyGateOutcome` from an active
+                :class:`~bound.policy_schema.BoundPolicyConfig`. When supplied, a
+                failed blocker or breached budget forces the most conservative
+                decision and the effective weights + policy identity/hash are
+                recorded. Defaults to ``None`` (no active-policy gating).
 
         Returns:
             An :class:`EvaluationResult` with the scores, weights, threshold,
             individual components, final score ``S``, signed
-            ``distance_to_threshold``, the deterministic ``decision``, and the
-            supplied ``provenance``.
+            ``distance_to_threshold``, the deterministic ``decision`` (the
+            candidate decision), and the supplied ``provenance``. When an
+            assurance assessment and/or policy gate is supplied,
+            ``candidate_decision``, ``final_decision``, ``assurance``, and
+            ``assurance_reasons`` are also populated, and (for an active
+            policy) ``effective_weights`` and the active-policy id/version/hash.
         """
         components = calculate_components(scores, criteria)
         score = components.total
-        decision = self._decide(score=score, scores=scores, criteria=criteria)
+        candidate = self._decide(score=score, scores=scores, criteria=criteria)
+
+        assurance: DecisionAssurance | None = None
+        assurance_reasons: list[str] = []
+        candidate_decision: Decision | None = None
+        final_decision: Decision | None = None
+        effective_weights: dict[str, float] | None = None
+        active_policy_id: str | None = None
+        active_policy_version: str | None = None
+        active_policy_hash: str | None = None
+
+        gated = assurance_assessment is not None or policy_gate is not None
+        if gated:
+            candidate_decision = candidate
+            final_decision = candidate
+
+        if assurance_assessment is not None:
+            assurance = assurance_assessment.assurance
+            assurance_reasons = list(assurance_assessment.reasons)
+            if (
+                final_decision == "ACCEPT"
+                and assurance in _ACCEPT_BLOCKING_ASSURANCE
+                and assurance_assessment.accept_block_action is not None
+            ):
+                final_decision = _POLICY_ACTION_TO_DECISION[
+                    assurance_assessment.accept_block_action
+                ]
+                assurance_reasons = assurance_reasons + list(
+                    assurance_assessment.accept_block_reasons
+                )
+
+        if policy_gate is not None:
+            effective_weights = dict(policy_gate.effective_weights)
+            active_policy_id = policy_gate.policy_id
+            active_policy_version = policy_gate.policy_version
+            active_policy_hash = policy_gate.policy_hash
+            forced = policy_gate.forced_action
+            if forced is not None:
+                forced_decision = _POLICY_ACTION_TO_DECISION[forced]
+                # The gate may only make the decision more conservative — a
+                # blocker/budget breach can never weaken a candidate decision.
+                assert final_decision is not None  # gated is True here
+                if _DECISION_SEVERITY[forced_decision] > _DECISION_SEVERITY[
+                    final_decision
+                ]:
+                    final_decision = forced_decision
+                assurance_reasons = assurance_reasons + policy_gate.forced_reasons
 
         return EvaluationResult(
             scores=scores,
@@ -129,8 +252,16 @@ class BoundPolicy:
             cost_component=components.cost,
             score=score,
             distance_to_threshold=score - criteria.threshold,
-            decision=decision,
+            decision=candidate,
             provenance=provenance,
+            candidate_decision=candidate_decision,
+            final_decision=final_decision,
+            assurance=assurance,
+            assurance_reasons=assurance_reasons,
+            effective_weights=effective_weights,
+            active_policy_id=active_policy_id,
+            active_policy_version=active_policy_version,
+            active_policy_hash=active_policy_hash,
         )
 
 

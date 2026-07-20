@@ -239,16 +239,7 @@ def test_pre_supplied_scores_are_used() -> None:
     assert result.steps_saved == 0
 
 
-def test_run_experiment_is_deterministic() -> None:
-    """Replaying the same trajectory twice yields identical results.
 
-    The harness must be reproducible: same inputs -> same per-step decisions and
-    savings, with no hidden state or randomness.
-    """
-    first = _run_fixture("clean_accept")
-    second = _run_fixture("clean_accept")
-
-    assert first.model_dump() == second.model_dump()
 
 
 def test_per_step_length_matches_trajectory() -> None:

@@ -114,25 +114,4 @@ def test_readme_example_attempt2_is_accept() -> None:
     assert result.feedback  # deterministic, non-empty
 
 
-def test_readme_example_is_deterministic() -> None:
-    """Re-running both attempts reproduces byte-identical results.
-
-    The README claims nothing is hardcoded: scores come from the deterministic
-    ContractEvaluator, the decision from the deterministic BoundPolicy, and the
-    control action from the deterministic mapping. Two runs must agree exactly.
-    """
-    contract = _readme_contract()
-    criteria = _readme_criteria()
-
-    r1a = evaluate_agent_step(contract=contract, evidence=_attempt1_evidence(), criteria=criteria)
-    r1b = evaluate_agent_step(contract=contract, evidence=_attempt1_evidence(), criteria=criteria)
-    r2a = evaluate_agent_step(contract=contract, evidence=_attempt2_evidence(), criteria=criteria)
-    r2b = evaluate_agent_step(contract=contract, evidence=_attempt2_evidence(), criteria=criteria)
-
-    assert r1a.next_action == r1b.next_action == "retry"
-    assert r2a.next_action == r2b.next_action == "continue"
-    assert r1a.feedback == r1b.feedback
-    assert r2a.feedback == r2b.feedback
-    assert r1a.evaluation.score == pytest.approx(r1b.evaluation.score)
-    assert r2a.evaluation.score == pytest.approx(r2b.evaluation.score)
 

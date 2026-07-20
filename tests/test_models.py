@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from bound.evaluator import StaticEvaluator
+from bound.evidence import EvidenceProvenance
 from bound.models import (
     Action,
     AgentStep,
@@ -14,6 +15,7 @@ from bound.models import (
     BoundWeights,
     CodingWorkflowSignals,
     Decision,
+    DecisionAssurance,
     EvaluationResult,
     EvaluationScores,
     ScoreEvidence,
@@ -524,6 +526,111 @@ def test_evaluation_result_rejects_extra_fields() -> None:
     """Strict models forbid unexpected fields to keep results auditable."""
     with pytest.raises(ValidationError):
         _result(surprise="nope")  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# v0.7: ScoreEvidence provenance + influence honesty (item 3)
+# ---------------------------------------------------------------------------
+
+
+def test_score_evidence_provenance_fields_default_to_none() -> None:
+    """New influence-honesty fields default to None, keeping legacy scores green."""
+    evidence = ScoreEvidence(source="tests", value=1.0)
+    assert evidence.provenance is None
+    assert evidence.raw_value is None
+    assert evidence.effective_value is None
+    assert evidence.reason is None
+
+
+def test_score_evidence_models_defaulted_influence() -> None:
+    """A defaulted influence value records raw=None, effective=0.0, DEFAULTED.
+
+    Pins the item-3 honesty rule: when no evidence source exists, the model
+    records ``raw_value=None`` (nothing observed), ``effective_value=0.0`` (the
+    policy-neutral value actually used), ``provenance=DEFAULTED``, and a
+    separate ``reason``. ``value`` mirrors ``effective_value`` for legacy
+    consumers. DEFAULTED must never be presented as VERIFIED.
+    """
+    evidence = ScoreEvidence(
+        source="default",
+        value=0.0,
+        provenance=EvidenceProvenance.DEFAULTED,
+        raw_value=None,
+        effective_value=0.0,
+        reason="policy neutral value; no evidence source",
+    )
+    assert evidence.provenance is EvidenceProvenance.DEFAULTED
+    assert evidence.raw_value is None
+    assert evidence.effective_value == 0.0
+    assert evidence.reason == "policy neutral value; no evidence source"
+    # DEFAULTED is never VERIFIED.
+    assert evidence.provenance is not EvidenceProvenance.VERIFIED
+
+
+def test_score_evidence_coerces_string_provenance() -> None:
+    """Provenance coerces from a string (deserialised JSON provenance lists)."""
+    evidence = ScoreEvidence.model_validate(
+        {"source": "tests", "value": 1.0, "provenance": "verified"}
+    )
+    assert evidence.provenance is EvidenceProvenance.VERIFIED
+
+
+def test_decision_assurance_enum_values() -> None:
+    """The assurance vocabulary matches the todo.md spec (lowercased)."""
+    assert {a.value for a in DecisionAssurance} == {
+        "verified",
+        "mixed",
+        "claimed",
+        "insufficient",
+    }
+
+
+# ---------------------------------------------------------------------------
+# v0.7: EvaluationResult decision assurance fields (item 9, data-model half)
+# ---------------------------------------------------------------------------
+
+
+def test_evaluation_result_assurance_fields_default() -> None:
+    """Assurance fields default to None/empty (no assurance computed yet).
+
+    Backwards compatibility: an existing EvaluationResult that does not set the
+    new v0.7 assurance fields still validates, with ``candidate_decision`` and
+    ``final_decision`` ``None`` and ``assurance_reasons`` empty.
+    """
+    result = _result()
+    assert result.candidate_decision is None
+    assert result.final_decision is None
+    assert result.assurance is None
+    assert result.assurance_reasons == []
+
+
+def test_evaluation_result_carries_candidate_final_and_assurance() -> None:
+    """A result can carry candidate vs final decision plus assurance + reasons."""
+    result = _result(
+        candidate_decision="ACCEPT",
+        final_decision="REPLAN",
+        assurance=DecisionAssurance.INSUFFICIENT,
+        assurance_reasons=[
+            "decision-critical check 'no-secrets' had MISSING evidence",
+            "tool_call_count unmeasured",
+        ],
+    )
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "REPLAN"
+    assert result.assurance is DecisionAssurance.INSUFFICIENT
+    assert len(result.assurance_reasons) == 2
+
+
+def test_evaluation_result_rejects_invalid_assurance() -> None:
+    """An assurance outside the enum must be rejected."""
+    with pytest.raises(ValidationError):
+        _result(assurance="GUESSED")  # type: ignore[arg-type]
+
+
+def test_evaluation_result_rejects_invalid_candidate_decision() -> None:
+    """A candidate/final decision outside the Decision literal must be rejected."""
+    with pytest.raises(ValidationError):
+        _result(candidate_decision="MAYBE")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

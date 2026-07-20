@@ -17,9 +17,9 @@ from bound.models import (
     BoundCriteria,
     BoundWeights,
     EvaluationResult,
-    EvaluationScores,
 )
 from bound.policy import BoundPolicy
+from tests.conftest import _ZERO_SCORES as _make_zero_scores
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -35,7 +35,7 @@ _REQUIRED_CHECKS = [
 #: ``evaluate_step`` rebinds the policy's evaluator per call, so these scores are
 #: never used to score a step — they merely satisfy the
 #: :class:`~bound.policy.BoundPolicy` constructor.
-_ZERO_SCORES = EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
+_ZERO_SCORES = _make_zero_scores()
 
 
 def _passed(check_id: str, source: str = "pytest") -> CheckEvidence:

@@ -8,7 +8,13 @@ import pytest
 from pydantic import ValidationError
 
 from bound.contracts import AcceptanceCheck, RiskCheck, StepBudget, StepContract
-from bound.evidence import CheckEvidence, ExecutionEvidence
+from bound.evidence import (
+    CheckEvidence,
+    EvidenceMetric,
+    EvidenceProvenance,
+    EvidenceStatus,
+    ExecutionEvidence,
+)
 from bound.integration import evaluate_agent_step
 from bound.models import BoundCriteria
 from bound.report import (
@@ -17,9 +23,7 @@ from bound.report import (
     RunTrace,
     render_from_trace,
 )
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-
+from tests.conftest import REPO_ROOT
 
 # ---------------------------------------------------------------------------
 # Shared fixtures: a green contract + evidence -> a real ACCEPT RunTrace
@@ -55,7 +59,14 @@ def _green_contract() -> StepContract:
 
 
 def _green_evidence() -> ExecutionEvidence:
-    """Green evidence: both acceptance checks pass, risk clean."""
+    """Green evidence: both acceptance checks pass, risk clean.
+
+    v0.7: the checks carry independent (VERIFIED) provenance and a named
+    collector, so the report's provenance breakdown and coverage metric show a
+    genuinely verified ACCEPT rather than a CLAIMED one. The retry/tool
+    telemetry is *measured* (OBSERVED) and in budget — missing telemetry now
+    saturates conservatively, so omitting it would no longer yield an ACCEPT.
+    """
     return ExecutionEvidence(
         acceptance=[
             CheckEvidence(
@@ -63,12 +74,18 @@ def _green_evidence() -> ExecutionEvidence:
                 passed=True,
                 source="uv run pytest -q",
                 details="exit_code=0",
+                provenance=EvidenceProvenance.VERIFIED,
+                collector="bound.pytest",
+                collector_version="0.7.0",
             ),
             CheckEvidence(
                 check_id="service-tests-pass",
                 passed=True,
                 source="uv run pytest tests/test_calculator.py -q",
                 details="exit_code=0; executed=34",
+                provenance=EvidenceProvenance.VERIFIED,
+                collector="bound.pytest",
+                collector_version="0.7.0",
             ),
         ],
         risks=[
@@ -77,10 +94,19 @@ def _green_evidence() -> ExecutionEvidence:
                 passed=True,
                 source="git status --porcelain",
                 details="no unexpected paths",
+                provenance=EvidenceProvenance.VERIFIED,
+                collector="bound.git",
+                collector_version="0.7.0",
             ),
         ],
         produced_artifacts=["src/bound/report.py"],
         unexpected_artifacts=[],
+        retry_count=EvidenceMetric(
+            value=0, provenance=EvidenceProvenance.OBSERVED, source="harness.retries"
+        ),
+        tool_call_count=EvidenceMetric(
+            value=0, provenance=EvidenceProvenance.OBSERVED, source="cline.tool_events"
+        ),
     )
 
 
@@ -263,6 +289,76 @@ def test_demo_frames_built_from_trace_data() -> None:
         assert any(frame)  # not all-zero (the frame has content)
 
 
+# ---------------------------------------------------------------------------
+# Schema 2.0 — RunTrace config + action fields (items 11, 12)
+# ---------------------------------------------------------------------------
+
+
+def test_run_trace_carries_config() -> None:
+    """RunTrace.config logs the policy/config version snapshot (item 11)."""
+    from bound.lineage import build_run_config
+
+    trace = _make_trace()
+    assert trace.config is None
+    cfg = build_run_config(
+        bound_version="0.7.0",
+        policy_id="default",
+        threshold=0.6,
+        contract=trace.contract,
+    )
+    trace.config = cfg
+    assert trace.config is not None
+    assert trace.config.bound_version == "0.7.0"
+    assert trace.config.contract_hash is not None
+    restored = RunTrace.model_validate_json(trace.model_dump_json())
+    assert restored.config is not None
+    assert restored.config.bound_version == "0.7.0"
+
+
+def test_run_trace_reported_and_observed_action() -> None:
+    """RunTrace carries reported/observed action fields (item 12)."""
+    trace = _make_trace()
+    assert trace.reported_action is None
+    assert trace.observed_action is None
+    trace.reported_action = "Implemented csv.DictWriter"
+    trace.observed_action = "git diff confirmed new file"
+    restored = RunTrace.model_validate_json(trace.model_dump_json())
+    assert restored.reported_action == "Implemented csv.DictWriter"
+    assert restored.observed_action == "git diff confirmed new file"
+
+
+def test_render_from_trace_includes_policy_line() -> None:
+    """The report records the policy id@version and hash when a config is set."""
+    from bound.lineage import build_run_config
+    from bound.policy_canon import compute_policy_hash
+    from bound.policy_schema import load_policy_yaml
+
+    REPO_ROOT = Path(__file__).resolve().parent.parent
+    policy = load_policy_yaml(REPO_ROOT / "src" / "bound" / "default_policy.yaml")
+    cfg = build_run_config(bound_version="0.7.0", policy=policy)
+    trace = _make_trace()
+    trace.config = cfg
+    report = render_from_trace(trace)
+    assert "Policy: `coding-default@1.0`" in report
+    phash = compute_policy_hash(policy)
+    assert f"hash `{phash}`" in report
+
+
+def test_render_from_trace_omits_policy_without_config() -> None:
+    """No policy line is fabricated when the trace carries no config snapshot."""
+    trace = _make_trace()
+    assert trace.config is None
+    report = render_from_trace(trace)
+    assert "Policy:" not in report
+
+
+
+def test_run_trace_schema_version_is_2() -> None:
+    """New traces default to schema_version 2.0."""
+    trace = _make_trace()
+    assert trace.schema_version == "2.0"
+
+
 def test_demo_frames_built_from_stored_run_json_if_present() -> None:
     """If bound_integration/run.json exists, build_frames consumes it directly."""
     run_json = REPO_ROOT / "bound_integration" / "run.json"
@@ -275,5 +371,100 @@ def test_demo_frames_built_from_stored_run_json_if_present() -> None:
     for frame in frames:
         assert len(frame) == demo.WIDTH * demo.HEIGHT
         assert any(frame)
+
+
+# ---------------------------------------------------------------------------
+# v0.7 — provenance visibility in the markdown report (item 14)
+# ---------------------------------------------------------------------------
+
+
+def test_report_renders_evidence_provenance_and_coverage() -> None:
+    """The report surfaces per-score provenance, candidate/final, assurance and coverage."""
+    report = render_from_trace(_make_trace())
+    # Provenance subsection with per-dimension breakdown.
+    assert "### Evidence provenance" in report
+    assert "Acceptance (A): `VERIFIED`" in report
+    assert "Influence (I):" in report
+    # Decision assurance subsection with candidate vs final + assurance.
+    assert "### Decision assurance" in report
+    assert "- Candidate decision:" in report
+    assert "- Final decision:" in report
+    assert "- Decision assurance:" in report
+    # Run-summary coverage line.
+    assert "Critical evidence coverage:" in report
+    assert "independently verified" in report
+    # The thin-harness rollback note is present.
+    assert "thin harness" in report
+
+
+def test_report_shows_collector_failures_and_missing_critical() -> None:
+    """Unverifiable / invalid evidence and missing critical checks are surfaced."""
+    contract = StepContract(
+        id="PHASE-001",
+        description="Contract with a decision-critical risk check.",
+        goal="Verify collector-failure rendering.",
+        acceptance_checks=[AcceptanceCheck(id="tests-pass", description="Suite green.")],
+        risk_checks=[
+            RiskCheck(
+                id="no-critical-security-findings",
+                description="No critical security findings.",
+                severity=1.0,
+                decision_critical=True,
+            ),
+        ],
+        budget=StepBudget(max_retries=3, max_tool_calls=40),
+    )
+    evidence = ExecutionEvidence(
+        acceptance=[
+            CheckEvidence(
+                check_id="tests-pass",
+                passed=True,
+                source="uv run pytest -q",
+                provenance=EvidenceProvenance.VERIFIED,
+                collector="bound.pytest",
+            ),
+        ],
+        risks=[
+            CheckEvidence(
+                check_id="no-critical-security-findings",
+                passed=None,
+                source="bandit",
+                provenance=EvidenceProvenance.MISSING,
+                status=EvidenceStatus.INVALID,
+                details="collector crash: bandit timed out",
+            ),
+        ],
+        retry_count=EvidenceMetric(
+            value=0, provenance=EvidenceProvenance.OBSERVED, source="harness.retries"
+        ),
+        tool_call_count=EvidenceMetric(
+            value=0, provenance=EvidenceProvenance.OBSERVED, source="cline.tool_events"
+        ),
+    )
+    result = evaluate_agent_step(contract, evidence, BoundCriteria(threshold=0.75))
+    trace = RunTrace(
+        plan_id="PHASE-001",
+        step_id=contract.id,
+        run_id="b" * 32,
+        bound_version="0.7.0",
+        timestamp="2026-01-01T00:00:00+00:00",
+        contract=contract,
+        evidence=evidence,
+        evaluation=result.evaluation,
+        next_action=result.next_action,
+        feedback=result.feedback,
+    )
+    report = render_from_trace(trace)
+    # The invalid collector evidence is surfaced as a collector failure.
+    assert "Collector failures / unverifiable evidence:" in report
+    assert "no-critical-security-findings" in report
+    assert "invalid" in report
+    # The decision-critical risk check has no verified evidence -> missing list.
+    assert "Missing decision-critical evidence:" in report
+    # Coverage is below 100% because the critical risk check is unverifiable.
+    assert "0% independently verified" in report or "33% independently verified" in report
+    # The provenance table marks the invalid check's status.
+    assert "[invalid]" in report
+
 
 

@@ -1,0 +1,90 @@
+name: Release
+
+# Cut a release tag from a manually-requested version. After the quality gate
+# and build, this workflow creates and pushes the `v<version>` tag and opens a
+# GitHub Release. The tag push then fires `.github/workflows/publish.yml`, which
+# owns the actual PyPI upload -- this workflow never publishes to PyPI itself.
+#
+# Trigger: Actions tab -> "Release" -> "Run workflow" -> enter the version
+# (without the leading `v`, e.g. `0.7.0`). The input MUST equal the
+# `project.version` in pyproject.toml (and `bound.__version__`), which is
+# verified before anything is tagged.
+#
+# NOTE on chaining: a tag pushed by the default GITHUB_TOKEN does NOT trigger
+# other workflow runs (GitHub's token-loop protection). To auto-fire publish.yml
+# from this workflow, create a PAT with `contents:write` + `workflows` scopes as
+# the `RELEASE_PAT` repository secret; this workflow then checks out and pushes
+# the tag with that PAT. Without `RELEASE_PAT`, the tag is still created, but you
+# must run publish.yml manually (or it will fire once the tag is pushed by a
+# real maintainer).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 0.7.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # A PAT (RELEASE_PAT) is required so the tag push triggers publish.yml.
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked --all-extras --dev
+
+      - name: Verify version matches the requested release
+        run: |
+          PACKAGE_VERSION=$(uv run python -c \
+            "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "Package version:   $PACKAGE_VERSION"
+          echo "Requested version:  ${{ inputs.version }}"
+          test "$PACKAGE_VERSION" = "${{ inputs.version }}"
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Create and push the version tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          TAG="v${{ inputs.version }}"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/*

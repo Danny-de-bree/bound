@@ -99,6 +99,48 @@ ROLLBACK -> rollback
 
 Never add a fifth action or reproduce BOUND's scoring and decision formula.
 
+## Verified evidence & provenance (v0.7.0)
+
+BOUND v0.7.0 separates *who reports* evidence from *who verifies* it. The agent
+is a participant, not the judge.
+
+- **Define the contract upfront, including provenance requirements.** Each
+  `AcceptanceCheck` / `RiskCheck` may declare `accepted_provenance` (which trust
+  provenances it accepts), `on_missing`, `on_claimed`, and — for risk checks —
+  `decision_critical` (missing/claimed evidence then forces `INSUFFICIENT`
+  assurance and blocks a clean `ACCEPT`).
+- **Configure allowed collectors; BOUND performs objective verification.** Use
+  the BOUND collectors (`PytestCollector`, `GitCollector`, `JUnitCollector`,
+  `BudgetCollector`, `ProcessRuntimeCollector`, `CommandCollector`) to *execute*
+  verification BOUND controls. They record `evidence.collected` audit events with
+  `VERIFIED`/`OBSERVED` provenance, a collector name/version, artefact hash and a
+  timezone-aware timestamp. A collector crash or stale artefact is recorded
+  honestly (`evidence.collection_failed` / `INVALID`), never a verified pass.
+- **The agent CANNOT assign `VERIFIED` provenance.** Agent self-report is always
+  `CLAIMED`, never `VERIFIED`/`OBSERVED`. The agent must not override or suppress
+  a collector result. `MISSING` means "not collected" — never silently `0`; `None`
+  on a telemetry metric is missing, not a measured zero.
+- **Subjective criteria use a separate evaluator (`EVALUATED`).** Criteria that
+  cannot be independently re-run (e.g. UX quality) are `EVALUATED` — honest but
+  never `VERIFIED`.
+- **BOUND logs what the agent reports; the agent executes control actions.**
+  BOUND records `action.reported` (`reported_provenance=CLAIMED`); an independent
+  hook may add `observed_action` to confirm it. **The agent — not BOUND — executes
+  control actions and workspace rollback.** BOUND is a thin harness: it emits
+  `ROLLBACK` and may independently verify the resulting state; it never performs a
+  workspace rollback itself.
+- **Assurance gates the candidate decision.** BOUND computes a
+  `DecisionAssurance` (`VERIFIED`/`MIXED`/`CLAIMED`/`INSUFFICIENT`) from the
+  decision-critical checks' provenance. A candidate `ACCEPT` backed only by
+  `CLAIMED`/`MISSING` critical evidence is downgraded to the contract's
+  `on_missing`/`on_claimed` action. Inspect it:
+
+  ```bash
+  bound inspect <run_id>                  # per-check provenance + candidate vs final + assurance + coverage
+  bound inspect <run_id> --only-unverified # only unverified/claimed/missing/invalid evidence
+  bound inspect <run_id> --json           # machine-readable: provenance + assurance + coverage
+  ```
+
 ## Persist the numeric evaluation
 
 For every evaluation, read the numbers from the returned BOUND object and emit:
@@ -143,6 +185,75 @@ A/I/R/C/S/T, decision, and action with the record.
 - `ROLLBACK`: restore only a previously confirmed safe checkpoint without
   discarding unrelated or pre-existing changes, then replan. If no safe
   checkpoint exists, report that and avoid a destructive approximation.
+
+## Record decision lineage (v0.7.0)
+
+BOUND v0.7.0 can record every evaluation as a reproducible, append-only local
+lineage — `contract → evidence → scores → decision → agent outcome` — under
+`.bound/runs/<run_id>/`. It is **opt-in per run** and backwards compatible: if
+you never start a run, nothing is recorded. Disable it with
+`BOUND_LINEAGE_DISABLED=1`.
+
+For any non-trivial task you evaluate with BOUND, follow these rules:
+
+1. **Start ONE run per task.**
+   ```bash
+   bound run start "<task>" --metadata phase=PHASE-001
+   ```
+   (In Python: `with bound.start_run("<task>") as run:`.)
+
+2. **Use STABLE step/contract ids.** Carry the same id from `PLAN.md` →
+   `StepContract(id=...)` → lineage. A replan of the same step appends `-R<N>`
+   (`PHASE-001` → `PHASE-001-R1`); never invent an unrelated id or rewrite
+   history to hide a replan.
+
+3. **Evaluate only MEANINGFUL boundaries** (after implementation + verification,
+   not after every token/file/command), and record the evaluation into the run:
+   ```bash
+   bound evaluate --run <run_id> --step PHASE-001 --attempt 1 \
+       --action "..." --goal "..." \
+       --acceptance A --influence I --risk R --cost C \
+       --threshold 0.7 --retry-margin 0.1
+   ```
+   This writes `step_started` + `evaluation_recorded` and adds a `lineage`
+   block to the JSON.
+
+4. **Record the REAL follow-up action** you actually took — not what BOUND
+   "should" have produced:
+   ```bash
+   bound outcome --run <run_id> --step PHASE-001 --attempt 1 \
+       --decision REPLAN --note "switched strategy to validator + parametrized tests"
+   ```
+   `--next-action` and `--reason-code` are derived from `--decision`
+   (`ACCEPT|RETRY|REPLAN|ROLLBACK`) when omitted.
+
+5. **Explicitly CLOSE the run** when the task ends:
+   ```bash
+   bound run finish <run_id> --status completed|interrupted|failed --note "..."
+   ```
+   A missing `run_finished` marks an incomplete/crashed run (the log stays
+   readable). If you used `with bound.start_run(...)` the context manager
+   auto-finishes an interrupted run on exit.
+
+6. **REPORT the local lineage path** — `.bound/runs/<run_id>/`
+   (`run.json` + the append-only `events.jsonl`) — and show the decision tree:
+   ```bash
+   bound inspect <run_id>
+   ```
+
+The canonical flow is one run, two attempts:
+
+```text
+Attempt 1  →  evidence 1/3 (A=0.3333)  →  REPLAN  → switch strategy
+            (new step PHASE-001-R1, attempt 2)
+Attempt 2  →  evidence 3/3 (A=1.0000)  →  ACCEPT  → continue to next step
+```
+
+The event log is append-only: a replan emits a *new* `step_started` with
+`attempt+1` and a `-R<N>`-suffixed contract id; earlier attempts are never
+rewritten. Prompts, tokens, and source code are **never** stored — only the
+contract id, scores, threshold, decision, reason code, and your follow-up
+action/note. See `docs/lineage.md` for the full data model and API.
 
 ## Verify the integration
 

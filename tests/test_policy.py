@@ -3,15 +3,19 @@ from __future__ import annotations
 import pytest
 
 from bound.calculator import calculate_components
+from bound.contract_evaluator import AssuranceAssessment, PolicyGateOutcome
+from bound.contracts import EvidencePolicyAction
 from bound.evaluator import StaticEvaluator
 from bound.models import (
     Action,
     BoundCriteria,
     BoundWeights,
+    DecisionAssurance,
     EvaluationResult,
     EvaluationScores,
 )
 from bound.policy import BoundPolicy
+from tests.conftest import _scores
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -21,25 +25,6 @@ _ACTION = Action(
     description="Book the direct flight",
     goal="Travel from Paris to New York",
 )
-
-
-def _scores(
-    acceptance: float = 0.0,
-    influence: float = 0.0,
-    risk: float = 0.0,
-    cost: float = 0.0,
-) -> EvaluationScores:
-    """Build :class:`EvaluationScores` with zero defaults.
-
-    Defaults are all zero so a test only sets the dimensions it cares about,
-    keeping the decision under test easy to read.
-    """
-    return EvaluationScores(
-        acceptance=acceptance,
-        influence=influence,
-        risk=risk,
-        cost=cost,
-    )
 
 
 def _criteria(
@@ -528,3 +513,324 @@ def test_policy_with_static_evaluator_needs_no_network() -> None:
     result = BoundPolicy(StaticEvaluator(scores)).evaluate(_ACTION, criteria)
 
     assert result.decision == "ACCEPT"
+
+
+# ---------------------------------------------------------------------------
+# Decision assurance gating (v0.7)
+# ---------------------------------------------------------------------------
+
+
+def _assessed(
+    assurance: DecisionAssurance,
+    *,
+    block_action: EvidencePolicyAction | None = None,
+    reasons: list[str] | None = None,
+) -> AssuranceAssessment:
+    """Build an :class:`AssuranceAssessment` for gating tests.
+
+    When a block action is set, the block reasons mimic
+    :meth:`ContractEvaluator.assess_assurance` (the per-check reason plus the
+    "ACCEPT requires VERIFIED acceptance evidence" summary).
+    """
+    block_reasons: list[str] = []
+    if block_action is not None:
+        block_reasons = [
+            f"check gated by {block_action.value}",
+            "ACCEPT requires VERIFIED acceptance evidence; gated to the "
+            f"contract's {block_action.value} action.",
+        ]
+    return AssuranceAssessment(
+        assurance=assurance,
+        reasons=reasons or [],
+        accept_block_action=block_action,
+        accept_block_reasons=block_reasons,
+    )
+
+
+def test_no_assessment_leaves_candidate_final_none() -> None:
+    """Without an assurance assessment the new fields stay None/empty.
+
+    Intent: pin backwards compatibility — the Action-based path leaves
+    ``candidate_decision``, ``final_decision``, ``assurance`` ``None`` and
+    ``assurance_reasons`` empty. ``decision`` is the sole outcome.
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(scores, criteria)
+
+    assert result.decision == "ACCEPT"
+    assert result.candidate_decision is None
+    assert result.final_decision is None
+    assert result.assurance is None
+    assert result.assurance_reasons == []
+
+
+def test_verified_assurance_keeps_accept() -> None:
+    """A VERIFIED assessment leaves a candidate ACCEPT unchanged."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, assurance_assessment=_assessed(DecisionAssurance.VERIFIED)
+    )
+
+    assert result.decision == "ACCEPT"
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "ACCEPT"
+    assert result.assurance is DecisionAssurance.VERIFIED
+
+
+def test_mixed_assurance_keeps_accept() -> None:
+    """A MIXED assessment leaves a candidate ACCEPT unchanged.
+
+    Intent: pin that MIXED (some evaluated evidence) is acceptable and never
+    blocks an ACCEPT — it surfaces the assurance but keeps the decision.
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, assurance_assessment=_assessed(DecisionAssurance.MIXED)
+    )
+
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "ACCEPT"
+    assert result.assurance is DecisionAssurance.MIXED
+
+
+def test_claimed_assurance_blocks_accept_to_on_claimed() -> None:
+    """A CLAIMED assessment gates a candidate ACCEPT to the on_claimed action.
+
+    Intent: pin the todo example — candidate ACCEPT + CLAIMED assurance → final
+    RETRY, with a reason explaining the block (ACCEPT requires verified evidence).
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        assurance_assessment=_assessed(
+            DecisionAssurance.CLAIMED, block_action=EvidencePolicyAction.RETRY,
+        ),
+    )
+
+    assert result.decision == "ACCEPT"
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "RETRY"
+    assert result.assurance is DecisionAssurance.CLAIMED
+    assert any("ACCEPT" in r and "VERIFIED" in r for r in result.assurance_reasons)
+
+
+def test_insufficient_assurance_blocks_accept_to_on_missing() -> None:
+    """An INSUFFICIENT assessment gates a candidate ACCEPT to the on_missing action.
+
+    Intent: pin that missing/invalid critical evidence forces a downgrade —
+    candidate ACCEPT + INSUFFICIENT → final ROLLBACK (the contract's action).
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        assurance_assessment=_assessed(
+            DecisionAssurance.INSUFFICIENT, block_action=EvidencePolicyAction.ROLLBACK,
+        ),
+    )
+
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "ROLLBACK"
+    assert result.assurance is DecisionAssurance.INSUFFICIENT
+
+
+def test_assurance_does_not_block_non_accept() -> None:
+    """Assurance gating only applies to a candidate ACCEPT.
+
+    Intent: pin that a candidate RETRY/REPLAN/ROLLBACK is never changed by the
+    assurance assessment — gating is an ACCEPT-only safety check. The assurance
+    and reasons still surface for auditability, but the decision is unchanged.
+    """
+    scores = _scores(acceptance=0.3)  # S=0.3 < 0.6 -> REPLAN
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        assurance_assessment=_assessed(
+            DecisionAssurance.INSUFFICIENT, block_action=EvidencePolicyAction.ROLLBACK,
+        ),
+    )
+
+    assert result.decision == "REPLAN"
+    assert result.candidate_decision == "REPLAN"
+    assert result.final_decision == "REPLAN"
+    assert result.assurance is DecisionAssurance.INSUFFICIENT
+
+
+def test_assurance_reasons_are_carried_through() -> None:
+    """The assessment's reasons are forwarded onto the result."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+    reasons = ["critical check 'no-secrets' had MISSING evidence"]
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        assurance_assessment=_assessed(
+            DecisionAssurance.INSUFFICIENT,
+            block_action=EvidencePolicyAction.RETRY,
+            reasons=reasons,
+        ),
+    )
+
+    assert result.assurance_reasons[0] == reasons[0]
+    # The block reason is appended after the assessment reasons.
+    assert any("ACCEPT" in r for r in result.assurance_reasons)
+
+
+# ---------------------------------------------------------------------------
+# Active-policy gate gating (v0.7 — todo Phase 6 + 2.2 enforcement)
+# ---------------------------------------------------------------------------
+
+
+def _gate(
+    *,
+    blocker_action: EvidencePolicyAction | None = None,
+    budget_action: EvidencePolicyAction | None = None,
+    effective_weights: dict[str, float] | None = None,
+    policy_id: str | None = "coding-test",
+    policy_version: str | None = "1.0",
+    policy_hash: str | None = "sha256:abc",
+) -> PolicyGateOutcome:
+    """Build a :class:`PolicyGateOutcome` for ``decide`` gating tests."""
+    return PolicyGateOutcome(
+        blocker_failed=blocker_action is not None,
+        blocker_action=blocker_action,
+        blocker_reasons=["blocker failed"] if blocker_action is not None else [],
+        budget_breached=budget_action is not None,
+        budget_action=budget_action,
+        budget_reasons=["budget breached"] if budget_action is not None else [],
+        effective_weights=effective_weights or {},
+        policy_id=policy_id,
+        policy_version=policy_version,
+        policy_hash=policy_hash,
+    )
+
+
+def test_policy_gate_blocker_cannot_be_compensated() -> None:
+    """A failed blocker forces a downgrade even when the score implies ACCEPT.
+
+    Intent: pin the headline guarantee (todo 2.2 / Phase 10) — a blocker
+    failure cannot be offset by positive weighted signals, so a candidate
+    ACCEPT becomes the blocker's forced action (RETRY here).
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
+    )
+
+    assert result.decision == "ACCEPT"
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "RETRY"
+    assert any("blocker" in r for r in result.assurance_reasons)
+
+
+def test_policy_gate_budget_breach_forces_downgrade() -> None:
+    """A breached budget forces the on_hard action on a candidate ACCEPT."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, policy_gate=_gate(budget_action=EvidencePolicyAction.REPLAN),
+    )
+
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "REPLAN"
+    assert any("budget" in r for r in result.assurance_reasons)
+
+
+def test_policy_gate_never_weakens_a_conservative_candidate() -> None:
+    """The gate may only make a decision more conservative, never weaker.
+
+    Intent: pin that a candidate ROLLBACK is never downgraded to a blocker's
+    softer RETRY — the gate takes the most conservative of the two.
+    """
+    scores = _scores(risk=1.0)  # risk >= 0.8 threshold -> candidate ROLLBACK
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
+    )
+
+    assert result.candidate_decision == "ROLLBACK"
+    assert result.final_decision == "ROLLBACK"
+
+
+def test_policy_gate_records_effective_weights_and_policy_identity() -> None:
+    """``decide`` forwards effective weights + policy id/version/hash to the result."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        policy_gate=_gate(
+            effective_weights={"lint": 0.5, "a": 1.0},
+            policy_id="coding-default", policy_version="1.0",
+            policy_hash="sha256:deadbeef",
+        ),
+    )
+
+    assert result.effective_weights == {"lint": 0.5, "a": 1.0}
+    assert result.active_policy_id == "coding-default"
+    assert result.active_policy_version == "1.0"
+    assert result.active_policy_hash == "sha256:deadbeef"
+
+
+def test_policy_gate_passing_gate_keeps_candidate() -> None:
+    """A gate that imposes no forced action leaves the candidate unchanged."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria, policy_gate=_gate(),  # no blocker/budget action
+    )
+
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "ACCEPT"
+    assert result.assurance_reasons == []
+
+
+def test_no_assurance_and_no_gate_stays_backwards_compatible() -> None:
+    """Without assurance or gate the trace fields stay ``None``/empty."""
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(scores, criteria)
+
+    assert result.candidate_decision is None
+    assert result.final_decision is None
+    assert result.assurance is None
+    assert result.effective_weights is None
+    assert result.active_policy_id is None
+    assert result.active_policy_hash is None
+
+
+def test_assurance_gate_and_policy_gate_compose() -> None:
+    """The most conservative of the assurance and policy gates wins.
+
+    Intent: pin composition — a candidate ACCEPT gated by assurance to RETRY
+    is further gated by a budget to REPLAN (the more conservative outcome).
+    """
+    scores = _scores(acceptance=0.9)
+    criteria = _criteria(weight=1.0, threshold=0.6)
+
+    result = BoundPolicy().decide(
+        scores, criteria,
+        assurance_assessment=_assessed(
+            DecisionAssurance.CLAIMED, block_action=EvidencePolicyAction.RETRY,
+        ),
+        policy_gate=_gate(budget_action=EvidencePolicyAction.REPLAN),
+    )
+
+    assert result.candidate_decision == "ACCEPT"
+    assert result.final_decision == "REPLAN"

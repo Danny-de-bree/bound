@@ -1,46 +1,7 @@
-"""Framework-neutral agent control layer (BOUND v0.4 Phase 1).
-
-This is the thin integration seam a coding agent consumes. It runs BOUND's
-deterministic contract pipeline for one executed step and *translates* the
-resulting decision into a framework-neutral control instruction plus concise,
-deterministic feedback the agent can re-inject into its own context.
-
-.. code-block:: text
-
-    StepContract + ExecutionEvidence + BoundCriteria
-        -> BoundWorkflow.evaluate_step -> EvaluationResult
-        -> AgentControlResult(next_action, feedback)
-
-The mapping from BOUND's decision to an agent control action is exact and
-deterministic:
-
-    ACCEPT   -> continue
-    RETRY    -> retry
-    REPLAN   -> replan
-    ROLLBACK -> rollback
-
-This layer is deliberately *not* an agent framework. It must not, and does not:
-
-* invent scores — scores come solely from the deterministic
-  :class:`~bound.contract_evaluator.ContractEvaluator`;
-* modify a BOUND decision — the decision is the exclusive output of the
-  deterministic :class:`~bound.policy.BoundPolicy`;
-* call an LLM or require a network connection;
-* know anything about Cline, Claude Code, Codex, Cursor, or any other agent;
-* execute a rollback or a retry itself — it only returns the instruction; the
-  owning agent decides whether and how to act on it.
-
-The feedback is derived exclusively from the :class:`~bound.models.EvaluationResult`,
-the :class:`~bound.contracts.StepContract`, the
-:class:`~bound.evidence.ExecutionEvidence`, and the per-dimension
-``provenance`` (Phase 2). No LLM is involved; the same inputs always yield the
-same feedback.
-"""
-
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -48,6 +9,9 @@ from bound.bound_workflow import BoundWorkflow
 from bound.contracts import StepContract
 from bound.evidence import ExecutionEvidence
 from bound.models import BoundCriteria, EvaluationResult
+
+if TYPE_CHECKING:
+    from bound.lineage_api import RunContext
 
 logger = logging.getLogger("bound.integration")
 
@@ -230,6 +194,10 @@ def evaluate_agent_step(
     criteria: BoundCriteria,
     *,
     workflow: BoundWorkflow | None = None,
+    run: RunContext | None = None,
+    attempt: int = 1,
+    step_id: str | None = None,
+    description: str | None = None,
 ) -> AgentControlResult:
     """Evaluate an executed step and translate the BOUND decision into a control action.
 
@@ -243,6 +211,12 @@ def evaluate_agent_step(
     know about any agent framework, or execute a rollback or retry — it only
     *translates* the decision into an instruction the owning agent acts on.
 
+    When a ``run`` context is supplied it is forwarded to
+    :meth:`BoundWorkflow.evaluate_step`, which auto-records the step's lineage
+    (``step_started`` + ``evaluation_recorded`` + ``outcome_recorded``) when
+    lineage is enabled. The return type and value are unchanged when no ``run``
+    is supplied (backwards compatible).
+
     Args:
         contract: The :class:`StepContract` for the executed step.
         evidence: The :class:`ExecutionEvidence` observed after the step ran.
@@ -251,6 +225,14 @@ def evaluate_agent_step(
         workflow: Optional pre-built :class:`BoundWorkflow` (e.g. one sharing a
             specific :class:`~bound.contract_evaluator.ContractEvaluator`).
             Defaults to a fresh placeholder-free ``BoundWorkflow()``.
+        run: Optional :class:`~bound.lineage_api.RunContext`; when supplied (and
+            enabled) the step's lineage is recorded automatically by the
+            workflow. Defaults to the workflow evaluator's configured
+            ``lineage_run`` when omitted.
+        attempt: One-based attempt number recorded in lineage (default 1).
+        step_id: Optional explicit step id for lineage; otherwise derived.
+        description: Optional step description for lineage; defaults to the
+            contract's description.
 
     Returns:
         An :class:`AgentControlResult` carrying the deterministic evaluation,
@@ -258,7 +240,13 @@ def evaluate_agent_step(
     """
     wf = workflow if workflow is not None else BoundWorkflow()
     evaluation = wf.evaluate_step(
-        contract=contract, evidence=evidence, criteria=criteria
+        contract=contract,
+        evidence=evidence,
+        criteria=criteria,
+        run=run,
+        attempt=attempt,
+        step_id=step_id,
+        description=description,
     )
     next_action = _DECISION_TO_ACTION[evaluation.decision]
     feedback = render_feedback(evaluation, contract=contract, evidence=evidence)

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Protocol, runtime_checkable
+from enum import StrEnum
+from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from bound.evidence import EvidenceProvenance
+from bound.models import DecisionAssurance
 
 #: Regular expression backing :func:`is_valid_phase_id`. Matches the documented
 #: stable-ID convention ``PHASE-NNN`` with an optional nested sub-phase suffix
@@ -67,6 +71,32 @@ def is_valid_phase_id(phase_id: str) -> bool:
     return bool(_PHASE_ID_RE.match(phase_id))
 
 
+class EvidencePolicyAction(StrEnum):
+    """The policy action to take when evidence is missing or only claimed.
+
+    Provenance-aware contracts (v0.7) let each check declare how the policy
+    should react when no acceptable evidence is collected, or when the only
+    evidence available is a bare agent self-report (CLAIMED). The values mirror
+    the BOUND decision space so a contract can express, for example, that a
+    decision-critical risk check must trigger a ROLLBACK when its evidence is
+    missing rather than a soft RETRY.
+
+    Members:
+        ACCEPT: Treat the check as satisfied despite the weak/missing evidence.
+            Rare and dangerous — use only for purely advisory checks.
+        RETRY: Re-run the step/collector to obtain stronger evidence. The
+            default, conservative-but-not-fatal response.
+        REPLAN: The current plan cannot supply the evidence; produce a new plan.
+        ROLLBACK: Undo the step's effects — used for decision-critical checks
+            where missing/claimed evidence is unacceptable.
+    """
+
+    ACCEPT = "accept"
+    RETRY = "retry"
+    REPLAN = "replan"
+    ROLLBACK = "rollback"
+
+
 class AcceptanceCheck(BaseModel):
     """One expected outcome a step must satisfy.
 
@@ -75,12 +105,41 @@ class AcceptanceCheck(BaseModel):
     no executable code — only an identifier and a human-readable description —
     so a contract never smuggles arbitrary Python into the deterministic core.
 
+    v0.7 provenance awareness: a check may declare which trust provenances it
+    accepts (:attr:`accepted_provenance`) and how the policy should react when
+    evidence is missing (:attr:`on_missing`) or only claimed
+    (:attr:`on_claimed`). ``None`` for :attr:`accepted_provenance` means
+    "accept any provenance"; a non-empty list restricts the check to the listed
+    provenances (e.g. only OBSERVED/VERIFIED/ATTESTED), causing CLAIMED or
+    MISSING evidence to be treated as not-acceptable.
+
     Attributes:
         id: Stable identifier used to correlate collected evidence with this
             check (e.g. ``existing_tests_pass``).
         description: Human-readable statement of the expected outcome.
         required: Whether failing this check fails the step outright. Defaults
             to ``True``; set ``False`` for soft / advisory checks.
+        importance: How heavily this check weighs in the decision. ``"blocker"``
+            marks a hard gate that cannot be compensated by positive scores;
+            ``"high"``/``"medium"``/``"low"``/``"ignore"`` mark weighted signals
+            (see :data:`bound.policy_schema.DEFAULT_WEIGHTS`). Defaults to
+            ``"medium"``.
+        weight: Optional explicit numeric weight override (``>= 0.0``). When
+            ``None`` the effective weight is derived from :attr:`importance`.
+        minimum_assurance: Optional minimum
+            :class:`~bound.models.DecisionAssurance` this check's evidence must
+            meet for a clean ``ACCEPT``; ``None`` means no per-check assurance
+            floor.
+        accepted_provenance: Optional allow-list of
+            :class:`~bound.evidence.EvidenceProvenance` values this check will
+            accept. ``None`` (default) accepts any provenance; a non-empty list
+            rejects evidence whose provenance is not in the list (e.g. CLAIMED
+            or MISSING).
+        on_missing: Policy action when no evidence is collected for this check.
+            Defaults to :attr:`RETRY <EvidencePolicyAction.RETRY>`.
+        on_claimed: Policy action when the only available evidence is CLAIMED
+            (agent self-report). Defaults to
+            :attr:`RETRY <EvidencePolicyAction.RETRY>`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -88,6 +147,33 @@ class AcceptanceCheck(BaseModel):
     id: str
     description: str
     required: bool = True
+    importance: Literal["blocker", "high", "medium", "low", "ignore"] = "medium"
+    weight: float | None = Field(default=None, ge=0.0)
+    minimum_assurance: DecisionAssurance | None = None
+    accepted_provenance: list[EvidenceProvenance] | None = None
+    on_missing: EvidencePolicyAction = EvidencePolicyAction.RETRY
+    on_claimed: EvidencePolicyAction = EvidencePolicyAction.RETRY
+
+    @model_validator(mode="after")
+    def _accepted_provenance_non_empty_if_set(self) -> AcceptanceCheck:
+        """Reject an empty ``accepted_provenance`` list.
+
+        An empty allow-list would reject *all* evidence, which is almost
+        certainly a contract-authoring mistake. ``None`` (accept any) is the way
+        to express "no restriction"; an empty list is not a meaningful policy.
+
+        Returns:
+            The validated check (unchanged on success).
+
+        Raises:
+            ValueError: If ``accepted_provenance`` is an empty list.
+        """
+        if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
+            raise ValueError(
+                "accepted_provenance must be None (accept any) or a non-empty "
+                "list of EvidenceProvenance values."
+            )
+        return self
 
 
 class RiskCheck(BaseModel):
@@ -97,6 +183,14 @@ class RiskCheck(BaseModel):
     it did), weighted by a severity in ``[0, 1]``. Like acceptance checks they
     are declarative descriptions, never executable code.
 
+    v0.7 provenance awareness mirrors :class:`AcceptanceCheck`
+    (:attr:`accepted_provenance`, :attr:`on_missing`, :attr:`on_claimed`) and
+    adds :attr:`decision_critical`: when ``True``, a missing or only-claimed
+    risk check must influence the decision assurance as INSUFFICIENT rather than
+    being silently treated as a passed/low-risk signal. This is the contract
+    hook the assurance layer uses to gate an ACCEPT on independently verified
+    critical evidence.
+
     Attributes:
         id: Stable identifier used to correlate collected evidence with this
             check (e.g. ``no_plaintext_secrets``).
@@ -104,6 +198,27 @@ class RiskCheck(BaseModel):
             against.
         severity: How seriously a violation should weigh, in ``[0.0, 1.0]``.
             ``1.0`` is a hard safety boundary; lower values are softer signals.
+        importance: How heavily this risk check weighs in the decision.
+            ``"blocker"`` marks a hard gate that cannot be compensated by
+            positive scores; the weighted tiers map to
+            :data:`bound.policy_schema.DEFAULT_WEIGHTS`. Defaults to
+            ``"medium"``.
+        weight: Optional explicit numeric weight override (``>= 0.0``). When
+            ``None`` the effective weight is derived from :attr:`importance`.
+        minimum_assurance: Optional minimum
+            :class:`~bound.models.DecisionAssurance` this check's evidence must
+            meet; ``None`` means no per-check assurance floor.
+        accepted_provenance: Optional allow-list of
+            :class:`~bound.evidence.EvidenceProvenance` values this check will
+            accept. ``None`` (default) accepts any provenance.
+        on_missing: Policy action when no evidence is collected for this check.
+            Defaults to :attr:`RETRY <EvidencePolicyAction.RETRY>`.
+        on_claimed: Policy action when the only available evidence is CLAIMED.
+            Defaults to :attr:`RETRY <EvidencePolicyAction.RETRY>`.
+        decision_critical: When ``True``, this check's evidence is required to
+            be independently verified for a VERIFIED decision assurance; missing
+            or only-claimed evidence for a critical check forces INSUFFICIENT
+            assurance (blocking a clean ACCEPT). Defaults to ``False``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -111,6 +226,34 @@ class RiskCheck(BaseModel):
     id: str
     description: str
     severity: float = Field(ge=0.0, le=1.0)
+    importance: Literal["blocker", "high", "medium", "low", "ignore"] = "medium"
+    weight: float | None = Field(default=None, ge=0.0)
+    minimum_assurance: DecisionAssurance | None = None
+    accepted_provenance: list[EvidenceProvenance] | None = None
+    on_missing: EvidencePolicyAction = EvidencePolicyAction.RETRY
+    on_claimed: EvidencePolicyAction = EvidencePolicyAction.RETRY
+    decision_critical: bool = False
+
+    @model_validator(mode="after")
+    def _accepted_provenance_non_empty_if_set(self) -> RiskCheck:
+        """Reject an empty ``accepted_provenance`` list.
+
+        See :meth:`AcceptanceCheck._accepted_provenance_non_empty_if_set`:
+        an empty allow-list rejects all evidence and is almost certainly a
+        mistake; use ``None`` to express "accept any".
+
+        Returns:
+            The validated check (unchanged on success).
+
+        Raises:
+            ValueError: If ``accepted_provenance`` is an empty list.
+        """
+        if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
+            raise ValueError(
+                "accepted_provenance must be None (accept any) or a non-empty "
+                "list of EvidenceProvenance values."
+            )
+        return self
 
 
 class StepBudget(BaseModel):

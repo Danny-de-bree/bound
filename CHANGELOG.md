@@ -7,6 +7,262 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-18
+
+BOUND v0.7.0 adds **Verified Evidence & Decision Lineage**: the honesty model
+that makes a BOUND decision auditable end-to-end. Trust provenance now travels
+with every piece of evidence, missing telemetry is never silently coerced to
+zero, independent BOUND-controlled collectors actually execute verification,
+and a decision-assurance layer gates an ACCEPT on independently verified
+evidence — all recorded as a reproducible, append-only local lineage
+(`contract → evidence → scores → decision → agent outcome`). Everything is
+backwards compatible (old schema-1.0 traces and bare-number evidence still
+load); lineage is opt-in per run and can be disabled with a single environment
+variable.
+
+### Added
+
+- **Trust provenance** (`bound.evidence.EvidenceProvenance`): a 7-level trust
+  enum (`observed` / `verified` / `attested` / `evaluated` / `claimed` /
+  `defaulted` / `missing`) distinct from the free-form `source` string.
+  `CheckEvidence` now carries `provenance`, `collector`, `collector_version`,
+  timezone-aware `observed_at`, `artifact_hash`, `raw_artifact_ref`, and a
+  `status` (`EvidenceStatus`: `failed` / `unverified` / `missing` / `invalid`).
+  Stronger provenance is never silently fabricated from weaker provenance, and
+  agent self-report is always `CLAIMED`, never `VERIFIED`.
+- **Missing means missing, never zero** (`bound.evidence.EvidenceMetric`):
+  execution telemetry (`retry_count`, `tool_call_count`, `token_usage`,
+  `runtime_seconds`) is modelled as `EvidenceMetric | None` so a measured zero
+  is distinguishable from an unmeasured signal (`value is None` ⇒ `MISSING`).
+  Legacy schema-1.0 traces with bare-number telemetry auto-migrate on
+  construction (provenance `MISSING`, never upgraded); the public
+  `migrate_legacy_execution_evidence()` helper supports explicit pre-normalisation.
+- **Provenance-aware contracts** (`bound.contracts`): `AcceptanceCheck` and
+  `RiskCheck` gain `accepted_provenance`, `on_missing`, `on_claimed`; `RiskCheck`
+  gains `decision_critical`. A check may restrict which provenances it accepts
+  and declare how the policy reacts when evidence is missing or only claimed.
+- **Evidence status** separating a genuine failure from missing/unverifiable/
+  invalid evidence, so a failed command, a zero-test run, a stale artefact, or a
+  collector crash are never silently flipped to a pass.
+- **Independent collectors** (`bound.command_collector`) that EXECUTE
+  verification, not just parse it: `CommandCollector` (no agent command
+  injection — only pre-registered commands run by name), `PytestCollector`
+  (runs pytest; a pass requires exit 0 AND >0 tests), `JUnitCollector` (hashes +
+  freshness-checks a trusted artefact), `GitCollector` (proves a clean tree),
+  `BudgetCollector` (+`BudgetMetrics`) and `ProcessRuntimeCollector` for
+  observed telemetry, plus `default_redactor` and `sha256_hex`. All are
+  fail-safe: timeout / crash / parse-fail / zero-tests / stale never yield a
+  VERIFIED pass.
+- **Decision assurance & gating** (`AssuranceAssessment` +
+  `BoundPolicy.decide(..., assurance_assessment=...)`): a `DecisionAssurance`
+  level (`verified` / `mixed` / `claimed` / `insufficient`) is computed from the
+  restricted (provenance-restricted / decision-critical) checks. `CLAIMED` or
+  `INSUFFICIENT` assurance gates a candidate `ACCEPT`, downgrading it to the
+  contract's `on_missing` / `on_claimed` action; `VERIFIED` and `MIXED` leave it
+  unchanged. `EvaluationResult` now exposes `candidate_decision`,
+  `final_decision`, `assurance`, and `assurance_reasons`. Influence with no
+  evidence source is recorded as `DEFAULTED` (`raw_value=None`,
+  `effective_value=0.0`), never presented as `VERIFIED`.
+- **Lineage schema 2.0** (`bound.lineage`): four append-only audit events —
+  `evidence.collected` (independent collector proof), `evidence.collection_failed`
+  (honest record of a collector crash), `decision.gated` (assurance gating of a
+  candidate ACCEPT), and `action.reported` (agent CLAIMED self-report + optional
+  independent observation) — plus per-event `sequence` / `parent_event_id`
+  ordering and a `RunConfigSnapshot` on `run_started` carrying a SHA-256
+  policy/config hash, contract hash, and collector versions (item 11).
+  `build_run_config()` / `compute_policy_config_hash()` build the snapshot.
+  Schema-1.0 traces remain readable (new fields are optional with safe defaults).
+- **Privacy hardening**: raw command output is NOT stored in full by default —
+  only a sha256 hash and a short, redacted, size-capped summary are kept on
+  emitted evidence; full redacted output is retained only on opt-in
+  `store_raw=True`. A secret redactor runs over captured output before hashing,
+  summarising, or retention, so a secret can never reach a trace.
+- **CLI provenance**: `bound inspect` shows provenance, assurance, and critical
+  evidence coverage (`--only-unverified`, `--json`); the markdown report
+  (`render_from_trace`) is provenance-aware and shows candidate vs final decision
+  and assurance. Skills and integration prompts updated to keep the agent out of
+  the evidence loop (it configures collectors; BOUND performs objective
+  verification; agent self-report is always CLAIMED).
+- **Verified-evidence demo & tests**: `examples/verified_evidence_demo.py` runs
+  the canonical REPLAN → ACCEPT flow with live pytest + git collectors and
+  prints a per-number trace proof; `tests/test_v07_verified_evidence.py` pins
+  every todo §16 honesty invariant (claimed-vs-verified, observed-wins,
+  missing-not-zero, defaulted-influence, zero-tests-no-pass, stale-JUnit
+  rejection, crash → INSUFFICIENT, CLAIMED-risk blocks ACCEPT, verified+evaluated
+  → MIXED, all-verified → VERIFIED, schema-1.0 reading, config hash, default
+  redaction, determinism) plus the Definition-of-Done flow.
+
+### Changed
+
+- Version bumped to `0.7.0`. `BoundWorkflow.evaluate_step()` automatically
+  passes the `ContractEvaluator`'s assurance assessment through to the policy,
+  so the contract workflow gates a candidate ACCEPT without extra wiring.
+- Cost scoring treats unmeasured telemetry for a declared budget dimension as
+  conservatively saturated (not a silent zero), stamped `MISSING`.
+
+### Security
+
+- Collector-side redaction masks credential-looking `key=value` tokens in command
+  output before any hashing, summarising, or raw retention, and raw output is
+  not stored by default — reducing the risk of a secret leaking into a persisted
+  lineage trace.
+
+### Added — Decision Lineage (foundation)
+
+- **Append-only lineage event model** (`bound.lineage`): `Run`, `Step`,
+  `Attempt`, `Evaluation`, `Outcome` entities and five append-only event types
+  (`run_started`, `step_started`, `evaluation_recorded`, `outcome_recorded`,
+  `run_finished`) with `schema_version="1.0"`, timezone-aware UTC timestamps,
+  deterministic SHA-256-based ids, and a fixed `ReasonCode` enum (no free-text
+  reasons). `parse_lineage_event()` round-trips any event line.
+- **Local storage + privacy** (`bound.lineage_store`): `LineageStore` writes
+  `.bound/runs/<run_id>/{run.json,events.jsonl}` atomically; crashed/incomplete
+  runs stay readable; corrupt JSONL lines are skipped (lenient) or raised
+  (strict). Privacy by default: a stored-fields allowlist, `scrub_secrets`
+  redactor, configurable max event/file size, and `bound run delete <run_id>`.
+  Prompts, tokens, and source code are **never** stored (not in the schema).
+- **Python API** (`bound.lineage_api`): `bound.start_run(task) -> RunContext`
+  (context manager that auto-finishes interrupted runs), `RunContext`
+  `.start_step` / `.record_evaluation` / `.record_outcome` / `.finish_run`, and
+  module-level `bound.record_outcome()` / `bound.finish_run()`.
+  `BoundWorkflow.evaluate_step(..., run=...)` now auto-writes
+  `step_started + evaluation_recorded + outcome_recorded` when a run context is
+  supplied, and is unchanged when `run` is `None` (backwards compatible).
+  `ContractEvaluator(run=...)` sets a default run; explicit `run=` wins.
+- **CLI lineage commands**: `bound run start/finish/list/delete`,
+  `bound inspect <run_id>` (renders the Step → Attempt → Outcome decision tree
+  with scores/thresholds/reason codes/agent follow-up action and marks
+  incomplete runs), `bound outcome --run ...`, and `bound evaluate --run ...`
+  (records `step_started + evaluation_recorded` and adds a `lineage` block to
+  the JSON). `--json` everywhere; exit codes 0 / 1 (not found) / 2 (validation).
+- **Agent integration prompts updated**: all six integration prompts
+  (`codex`, `claude-code`, `cline`, `kilo-code`, `hermes-agent`, `generic`) and
+  `skills/bound/SKILL.md` now teach the agent to start one run per task, use
+  stable step/contract ids (`PHASE-NNN`, `PHASE-NNN-R1` after a replan),
+  evaluate only meaningful boundaries, record the real follow-up action,
+  explicitly close the run, and report the local lineage path +
+  `bound inspect <run_id>`.
+- **Demo & docs**: `examples/lineage_demo.py` runs the REPLAN → ACCEPT flow
+  end-to-end and prints the inspect tree; `examples/lineage_demo_events.jsonl`
+  ships a real 8-event captured log. New `docs/lineage.md` (data model, Python
+  API, CLI, what is/isn't stored) and `docs/upgrade-guide.md` (opt-in, backwards
+  compatible, disable via `BOUND_LINEAGE_DISABLED=1`).
+
+### Changed — Decision Lineage (foundation)
+
+- Existing integrations that never pass a `run`
+  context are completely unaffected — lineage only activates when a run is
+  explicitly started. To disable lineage entirely (CI, ephemeral environments),
+  set `BOUND_LINEAGE_DISABLED=1`, call `bound.configure(enabled=False)`, or
+  construct `LineageStore(enabled=False)`: the builders still construct and
+  return typed events but persist nothing.
+
+### Added — Policy Configuration system
+
+- **Canonical `bound-policy.yaml` schema** (`bound.policy_schema`): the
+  declarative policy a human reviews and *approves* before a run. Strict Pydantic
+  v2 models with `extra="forbid"` reject unknown fields; duplicate check IDs
+  (across acceptance/quality/risk lists) and duplicate collector IDs (YAML keys)
+  are rejected at load. `load_policy_yaml()` / `parse_policy_yaml()` (with
+  duplicate-key detection) and `policy_json_schema()` are the canonical loaders;
+  a documented `src/bound/default_policy.yaml` (`coding-default@1.0`) ships as
+  the default.
+- **Three policy mechanisms** (todo 2.2):
+  - **Hard gates / blockers** (`HardGate`, `importance: blocker`) carry `required`,
+    `on_failure` / `on_missing` / `on_claimed`, `minimum_assurance`, and
+    `accepted_provenance`. A failed blocker can **never** be compensated by
+    positive scores — the active-policy gate forces the most conservative
+    decision.
+  - **Weighted signals** (`WeightedSignal`, importance `high` / `medium` / `low`
+    / `ignore`) map through `DEFAULT_WEIGHTS`, with an optional numeric `weight`
+    override; the resolved `effective_weight` is stored on the model and is part
+    of the canonical form/hash.
+  - **Budgets** (`BudgetDimension`) for `attempts` / `tool_calls` / `tokens` /
+    `runtime` / `financial_cost`, each with soft/hard limits, a configurable
+    `EvidencePolicyAction` at each limit, and an `enabled` flag. Missing
+    telemetry can never silently satisfy a declared budget.
+- **Scope & safety** (`ChangeScope`, `UnexpectedArtifactsPolicy`,
+  `ApprovalsPolicy`): configurable allowed/forbidden paths, dependency-file
+  detection, unexpected-artifact handling, commands/destructive actions
+  requiring approval, and rollback-availability guardrails.
+- **Canonicalisation & SHA-256 hashing** (`bound.policy_canon`):
+  `canonicalize_policy()` produces a formatting-independent (key-sorted,
+  comment/whitespace-agnostic) form; `compute_policy_hash()` returns
+  `sha256:<hex>`; `compute_contract_hash()` is the bare-hex contract hash
+  consistent with `bound.lineage.compute_contract_hash`; `policy_changed_since()`
+  detects a material policy change between two snapshots (model or hash string).
+- **Policy lifecycle & approval rules** (todo 3.3): a policy moves
+  DRAFT → VALIDATED → APPROVED → ACTIVATED; only an activated policy controls
+  decisions. Renewed approval is required after any meaningful change (a blocker
+  removed, a weight lowered, a budget increased, path scope expanded, or a
+  provenance requirement narrowed) — each changes the canonical hash so
+  `policy_changed_since()` flags it. An agent cannot approve its own policy or
+  weaken the active policy mid-run.
+
+- **Policy-aware `bound inspect`**: `inspect` shows `Policy: <id>@<version>` and
+  the policy hash for runs governed by an active policy.
+- **New lineage events** (`bound.lineage`): `policy.proposed`, `policy.validated`,
+  `policy.approved` (records the approver + approval time), `policy.activated`,
+  `evaluation.completed` (the terminal evaluation event carrying policy
+  id/version/hash, contract hash, effective weights, collector versions,
+  raw/effective evidence, and candidate/final decision + assurance),
+  `action.observed` (an independent hook's observation, including mismatch
+  detection — the proof that upgrades a ROLLBACK from CLAIMED), and
+  `step.completed`. `RunConfigSnapshot` gains optional `policy_version` /
+  `policy_hash`; `build_run_config(policy=...)` derives them automatically.
+  `record_evaluation()` forwards the policy fields so every decision records the
+  policy hash (release blocker). Append-only: the store never rewrites events.
+- **Collectors bound to the active policy**: the contract evaluator
+  (`ContractEvaluator`) blends the contract's required checks with the policy's
+  weighted signals (effective weights stored on the `PolicyGateOutcome`), and
+  assesses hard gates + budgets into a `PolicyGateOutcome` consumed by
+  `BoundPolicy.decide(..., policy_gate=...)`, which forces an uncompensable
+  decision when a blocker fails or a budget is breached. The resolved effective
+  weights and active policy id/version/hash are forwarded onto
+  `EvaluationResult`.
+- **`EvidenceStatus.STALE`**: the canonical evidence-status vocabulary is now
+  `PASSED` / `FAILED` / `MISSING` / `INVALID` / `STALE`; the legacy `UNVERIFIED`
+  member is retained as a deprecated alias so existing collectors and schema-2.0
+  traces keep loading unchanged.
+- **Policy CLI** (`bound policy`): `validate` (parses + validates + reports
+  warnings about blockers without viable collectors, claimed-only checks, and
+  unmeasurable criteria), `explain` (a concise human-readable view of effective
+  gates/weights/budgets), and `hash` (the canonical `sha256:<hex>`), each with a
+  machine-readable `--json` payload.
+- **Documentation (Phase 11)**: README, architecture, scoring, provenance,
+  assurance, policy-YAML, collector-security, missing-versus-zero, and privacy
+  docs updated; integration prompts and `SKILL.md` refreshed; v0.6 migration
+  notes added.
+- **Golden demo** (`examples/golden_demo.py`): a reproducible, end-to-end
+  policy-configured flow — user intent → generated `bound-policy.yaml` →
+  validation → human explanation → PROPOSED → APPROVED → ACTIVATED → canonical
+  hash → attempt 1 (pytest 1/3 VERIFIED → REPLAN) → attempt 2 (pytest 3/3,
+  typecheck/lint/scope VERIFIED, 18/20 tool calls OBSERVED → ACCEPT) — proven by a
+  real `.bound/runs/` trace, a generated `INTEGRATION_REPORT.md`, and a printed
+  reproduction command. No hardcoded decisions, no fabricated evidence.
+- **Tests** (`tests/test_v07_policy_security.py`) pinning the policy-security
+  invariants: blockers cannot be compensated by positive weighted signals,
+  `extra="forbid"` rejects unknown fields, duplicate IDs are rejected, a blocker
+  without a viable collector is surfaced, the policy hash is stable across
+  formatting and changes with material content, mid-run policy changes are
+  detected, material weakenings require renewed approval, budget enforcement
+  (breach + missing telemetry), weighted-signal scoring, and the full policy
+  lifecycle — plus an end-to-end test that runs the golden demo and asserts it
+  ends in ACCEPT.
+
+### Security — policy configuration
+
+- The policy is the single source of decision authority: only an
+  APPROVED → ACTIVATED policy controls decisions, and the executing agent can
+  neither approve its own policy nor weaken the active one mid-run. Any material
+  weakening (blocker removal, weight reduction, budget increase, scope expansion,
+  provenance narrowing, collector replacement) changes the canonical policy hash,
+  so `policy_changed_since()` detects it and renewed human approval is required.
+- The schema (`extra="forbid"`) rejects unknown fields, duplicate check IDs, and
+  duplicate collector IDs at load, so a malformed or drifted policy is a clear
+  error rather than silent schema drift. Collectors run only declarative,
+  pre-registered commands — no agent command injection.
+
 ## [0.6.1] - 2026-07-17
 
 - Fixed README image rendering on PyPI.
@@ -336,7 +592,9 @@ corpus (`benchmarks/contracts/`, `benchmarks/trajectories/`) and the
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.7.0
+[0.6.1]: https://github.com/Danny-de-bree/bound/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.6.0
 [0.5.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.4.0

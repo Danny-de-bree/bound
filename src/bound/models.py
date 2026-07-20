@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from bound.evidence import EvidenceProvenance
 
 
 class Action(BaseModel):
@@ -164,13 +167,42 @@ class ScoreEvidence(BaseModel):
     and their contribution. Provenance is optional for manually supplied scores
     but deterministic evaluators should populate it.
 
+    v0.7 influence honesty: when a score dimension has *no* evidence source
+    (notably influence ``I``), the model records the absent value explicitly
+    rather than silently presenting a measured zero. In that case ``raw_value``
+    is ``None`` (nothing was observed), ``effective_value`` is the policy-neutral
+    value actually used in the calculation (e.g. ``0.0``), :attr:`provenance`
+    is :attr:`EvidenceProvenance.DEFAULTED`, and :attr:`reason` explains the
+    substitution (e.g. ``"policy neutral value; no evidence source"``). The
+    existing :attr:`value` field continues to carry the effective value used in
+    scoring so legacy consumers are unaffected; ``effective_value`` mirrors it
+    explicitly for new provenance-aware consumers. DEFAULTED provenance must
+    never be presented as VERIFIED.
+
     Attributes:
         source: Short, human-readable name of the evidence source (e.g.
-            ``"tests"``, ``"lint"``).
-        value: The raw value observed for this source.
+            ``"tests"``, ``"lint"``), or ``"default"``/``"external"`` for the
+            influence honesty/override paths.
+        value: The effective value used in the score calculation. For a
+            defaulted dimension this is the policy-neutral value (e.g. ``0.0``),
+            not a measurement.
         contribution: Optional contribution this source made to the final
             dimension score. ``None`` when not applicable.
         description: Optional free-text explanation of the source/value.
+        provenance: Optional trust provenance (:class:`EvidenceProvenance`) of
+            this evidence. ``None`` when unspecified (manually supplied scores);
+            deterministic evaluators set it so DEFAULTED is never confused with
+            VERIFIED.
+        raw_value: The genuinely-observed value, or ``None`` when no evidence
+            source existed (the defaulted case). Distinct from
+            :attr:`value`/:attr:`effective_value` which carry the policy-neutral
+            value actually used.
+        effective_value: The value actually used in the calculation. Mirrors
+            :attr:`value`; set explicitly on defaulted dimensions so a consumer
+            can read the "what we computed with" value alongside ``raw_value``.
+        reason: Optional explanation for a defaulted/substituted value (e.g.
+            ``"policy neutral value; no evidence source"``). ``None`` for
+            normally-observed evidence.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -179,9 +211,42 @@ class ScoreEvidence(BaseModel):
     value: float
     contribution: float | None = None
     description: str | None = None
+    provenance: EvidenceProvenance | None = None
+    raw_value: float | None = None
+    effective_value: float | None = None
+    reason: str | None = None
 
 
 Decision = Literal["ACCEPT", "RETRY", "REPLAN", "ROLLBACK"]
+
+
+class DecisionAssurance(StrEnum):
+    """How well a decision is supported by independently verified evidence.
+
+    v0.7 separates the *candidate* decision (what the score implies) from the
+    *final* decision (what the policy actually emits after gating on assurance).
+    This enum records the assurance level of the final decision so a trace can
+    always answer "was this ACCEPT backed by verified evidence, or did it lean
+    on the agent's self-report?". It is computed by the assurance/policy layer;
+    the data model only carries the value.
+
+    Members:
+        VERIFIED: All decision-critical evidence is independently verified
+            (observed/verified/attested). The strongest assurance.
+        MIXED: The decision is supported by a mix of verified and weaker
+            (evaluated/claimed) evidence — acceptable but not fully verified.
+        CLAIMED: The decision leans on agent self-report (CLAIMED) for a
+            non-trivial part of its critical evidence.
+        INSUFFICIENT: Required/decision-critical evidence is missing or invalid,
+            so the decision cannot be made with acceptable confidence; the
+            policy emits a conservative outcome (e.g. RETRY/REPLAN/ROLLBACK)
+            rather than a clean ACCEPT.
+    """
+
+    VERIFIED = "verified"
+    MIXED = "mixed"
+    CLAIMED = "claimed"
+    INSUFFICIENT = "insufficient"
 
 
 class EvaluationResult(BaseModel):
@@ -214,6 +279,31 @@ class EvaluationResult(BaseModel):
         retry_margin: Retry margin carried through for audit.
         provenance: Optional per-dimension evidence lists.
         weight: Deprecated alias for ``weights.acceptance``.
+        candidate_decision: The decision implied by the raw score before
+            assurance gating (v0.7). ``None`` when assurance has not been
+            computed; equal to :attr:`decision` when no gating changes the
+            outcome.
+        final_decision: The decision actually emitted by the policy after
+            assurance gating (v0.7). ``None`` when assurance has not been
+            computed; equal to :attr:`decision` when no gating changes the
+            outcome.
+        assurance: Optional :class:`DecisionAssurance` level of the final
+            decision, computed by the assurance/policy layer. ``None`` when not
+            computed.
+        assurance_reasons: Human-readable reasons explaining the assurance
+            level (e.g. which decision-critical check had missing/claimed
+            evidence). Empty when assurance has not been computed.
+        effective_weights: Resolved per-signal weights actually used in the
+            score (todo 6 / 2.2), keyed by check id. Populated only when an
+            active :class:`~bound.policy_schema.BoundPolicyConfig` governed the
+            decision; ``None`` for the contract-only path. Lets the trace
+            reconstruct the weighted-signal contribution to acceptance.
+        active_policy_id: Id of the active policy that governed the decision,
+            or ``None`` when no active policy was bound (contract-only path).
+        active_policy_version: Version of the active policy, or ``None``.
+        active_policy_hash: Canonical SHA-256 hash (``"sha256:<hex>"``) of the
+            active policy that governed the decision, or ``None``. Recorded so
+            a decision is reproducible from its policy hash.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -232,6 +322,19 @@ class EvaluationResult(BaseModel):
     retry_margin: float = Field(default=0.1, ge=0.0)
     provenance: dict[str, list[ScoreEvidence]] | None = None
     weight: float | None = Field(default=None, ge=0.0)
+    candidate_decision: Decision | None = None
+    final_decision: Decision | None = None
+    assurance: DecisionAssurance | None = None
+    assurance_reasons: list[str] = []
+    # v0.7 active-policy trace fields (todo 6 / 2.2). Populated only when an
+    # active :class:`~bound.policy_schema.BoundPolicyConfig` governed the
+    # decision; ``None``/empty keeps the result identical to the contract-only
+    # path so the trace always reconstructs *which* policy and *which*
+    # effective weights produced the score.
+    effective_weights: dict[str, float] | None = None
+    active_policy_id: str | None = None
+    active_policy_version: str | None = None
+    active_policy_hash: str | None = None
 
     @model_validator(mode="after")
     def _reconcile_weight(self) -> EvaluationResult:

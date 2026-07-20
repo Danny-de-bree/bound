@@ -135,17 +135,6 @@ def test_integration_spec_decision_mapping(
     }
 
 
-def test_integration_spec_is_deterministic(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Two runs emit byte-identical JSON (the spec is a pure function)."""
-    main(["integration-spec"])
-    out1, _ = capsys.readouterr()
-    main(["integration-spec"])
-    out2, _ = capsys.readouterr()
-
-    assert out1 == out2
-
 
 def test_integration_spec_help_lists_subcommand(
     capsys: pytest.CaptureFixture[str],

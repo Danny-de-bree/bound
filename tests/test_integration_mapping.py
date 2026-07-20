@@ -18,12 +18,9 @@ from bound.models import BoundCriteria, BoundWeights
 #: used purely to assert the public API (``bound.integration`` and
 #: ``bound.integration_spec``) agrees with it. It is never consulted at runtime
 #: to translate a decision independently of BOUND.
-EXPECTED_DECISION_TO_CONTROL: dict[str, str] = {
-    "ACCEPT": "continue",
-    "RETRY": "retry",
-    "REPLAN": "replan",
-    "ROLLBACK": "rollback",
-}
+from tests.conftest import DECISION_TO_CONTROL
+
+EXPECTED_DECISION_TO_CONTROL = DECISION_TO_CONTROL
 
 _REQUIRED = [
     AcceptanceCheck(id="a", description="check a"),

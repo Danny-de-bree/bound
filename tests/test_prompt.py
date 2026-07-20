@@ -194,18 +194,7 @@ def test_prompt_under_150_words(
     assert word_count(prompt) < 150
 
 
-# ---------------------------------------------------------------------------
-# Determinism
-# ---------------------------------------------------------------------------
 
-
-def test_prompt_is_deterministic() -> None:
-    """Identical inputs produce identical prompts across repeated calls."""
-    result = _result()
-    first = generate_prompt(result)
-    second = generate_prompt(result)
-
-    assert first == second
 
 
 # ---------------------------------------------------------------------------

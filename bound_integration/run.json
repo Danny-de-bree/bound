@@ -1,80 +1,134 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "plan_id": "PHASE-001",
   "step_id": "PHASE-001",
-  "run_id": "223a89e9c33c4f4bb6c991f9bfb7cd6f",
-  "bound_version": "0.6.0",
-  "bound_distribution_version": "0.6.0",
-  "timestamp": "2026-07-17T14:41:25.738700+00:00",
+  "run_id": "9146e8437fb544919a872473ed08391f",
+  "bound_version": "0.7.0",
+  "bound_distribution_version": "0.7.0",
+  "timestamp": "2026-07-19T20:02:20.850494+00:00",
   "contract": {
     "id": "PHASE-001",
-    "description": "Ship BOUND v0.6 reporting, a real demo trace, and README evidence links — verified by BOUND's own test suite.",
-    "goal": "BOUND v0.6 is verified by a green full `uv run pytest -q` suite and a green service-specific `uv run pytest tests/test_calculator.py -q` run that executed >=1 test, with changes scoped to the v0.6 effort.",
+    "description": "BOUND v0.7.0 verified-evidence release boundary (self-integration)",
+    "goal": "BOUND v0.7.0 is green and independently verified: the full pytest suite passes, ruff is clean, and the Definition-of-Done demo runs — all confirmed by BOUND's own collectors executing the real commands, with changes scoped to the v0.7.0 release surface.",
     "acceptance_checks": [
       {
         "id": "tests-pass",
         "description": "`uv run pytest -q` exits 0 (the full suite is green).",
-        "required": true
+        "required": true,
+        "accepted_provenance": [
+          "observed",
+          "verified",
+          "attested"
+        ],
+        "on_missing": "replan",
+        "on_claimed": "retry"
       },
       {
-        "id": "service-tests-pass",
-        "description": "`uv run pytest tests/test_calculator.py -q` exits 0 AND executed >=1 test (the calculator tests genuinely ran and passed).",
-        "required": true
+        "id": "lint-pass",
+        "description": "`uv run ruff check .` exits 0 (lint is clean).",
+        "required": true,
+        "accepted_provenance": [
+          "observed",
+          "verified",
+          "attested"
+        ],
+        "on_missing": "replan",
+        "on_claimed": "retry"
+      },
+      {
+        "id": "dod-demo-passes",
+        "description": "examples/verified_evidence_demo.py exits 0 (the DoD REPLAN -> ACCEPT flow runs end-to-end).",
+        "required": true,
+        "accepted_provenance": [
+          "observed",
+          "verified",
+          "attested"
+        ],
+        "on_missing": "replan",
+        "on_claimed": "retry"
       }
     ],
     "risk_checks": [
       {
-        "id": "no-unexpected-files",
-        "description": "No files outside the v0.6 change set were modified or added.",
-        "severity": 0.6
+        "id": "no-unsafe-changes",
+        "description": "All changes are scoped to the v0.7.0 release surface.",
+        "severity": 0.5,
+        "accepted_provenance": [
+          "verified",
+          "attested"
+        ],
+        "on_missing": "rollback",
+        "on_claimed": "retry",
+        "decision_critical": true
       }
     ],
-    "expected_artifacts": [
-      "src/bound/report.py",
-      "examples/reference_integration/",
-      "bound_integration/"
-    ],
-    "budget": {
-      "max_retries": 3,
-      "max_tool_calls": 40,
-      "max_tokens": null,
-      "max_runtime_seconds": null
-    }
+    "expected_artifacts": [],
+    "budget": null
   },
   "evidence": {
     "acceptance": [
       {
         "check_id": "tests-pass",
         "passed": true,
-        "source": "uv run pytest -q",
-        "details": "exit_code=0; executed=513"
+        "source": "/home/danny/projects/bound/.venv/bin/python3 -m pytest -q",
+        "details": "pytest exit=0; 753 passed, 0 failed, 0 errors, 0 skipped, 753 executed; stdout=sha256:1dfc885c2027ed0f0920aa2e0b5ad11af79e9881f0546961ed4650520f9965eb stderr=sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "provenance": "verified",
+        "collector": "bound.pytest",
+        "collector_version": "0.7.0",
+        "observed_at": "2026-07-19T20:02:19.681954Z",
+        "artifact_hash": "sha256:1dfc885c2027ed0f0920aa2e0b5ad11af79e9881f0546961ed4650520f9965eb",
+        "raw_artifact_ref": null,
+        "status": null
       },
       {
-        "check_id": "service-tests-pass",
+        "check_id": "lint-pass",
         "passed": true,
-        "source": "uv run pytest tests/test_calculator.py -q",
-        "details": "exit_code=0; executed=34"
+        "source": "/home/danny/projects/bound/.venv/bin/python3 -m ruff check .",
+        "details": "process exit=0; runtime=0.065s; stdout=sha256:82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+        "provenance": "verified",
+        "collector": "bound.process",
+        "collector_version": "0.7.0",
+        "observed_at": "2026-07-19T20:02:19.747234Z",
+        "artifact_hash": "sha256:82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+        "raw_artifact_ref": null,
+        "status": null
+      },
+      {
+        "check_id": "dod-demo-passes",
+        "passed": true,
+        "source": "/home/danny/projects/bound/.venv/bin/python3 /home/danny/projects/bound/examples/verified_evidence_demo.py",
+        "details": "process exit=0; runtime=1.098s; stdout=sha256:5a3f4d86dcc147a0f8b775bacb8f323aebd04635a41ab8a073a2e9f2fdef89ef",
+        "provenance": "verified",
+        "collector": "bound.process",
+        "collector_version": "0.7.0",
+        "observed_at": "2026-07-19T20:02:20.845053Z",
+        "artifact_hash": "sha256:5a3f4d86dcc147a0f8b775bacb8f323aebd04635a41ab8a073a2e9f2fdef89ef",
+        "raw_artifact_ref": null,
+        "status": null
       }
     ],
     "risks": [
       {
-        "check_id": "no-unexpected-files",
+        "check_id": "no-unsafe-changes",
         "passed": true,
         "source": "git status --porcelain",
-        "details": "no unexpected paths"
+        "details": "git status exit=0; changed=['.gitignore', 'CHANGELOG.md', 'README.md', 'docs/lineage.md', 'docs/upgrade-guide.md', 'examples/lineage_demo.py', 'examples/lineage_demo_events.jsonl', 'integrations/claude-code/INSTALL_BOUND.md', 'integrations/cline/INSTALL_BOUND.md', 'integrations/codex/INSTALL_BOUND.md', 'integrations/generic/INSTALL_BOUND.md', 'integrations/hermes-agent/INSTALL_BOUND.md', 'integrations/kilo-code/INSTALL_BOUND.md', 'pyproject.toml', 'skills/bound/SKILL.md', 'src/bound/__init__.py', 'src/bound/bound_workflow.py', 'src/bound/cli.py', 'src/bound/contract_evaluator.py', 'src/bound/contracts.py', 'src/bound/evidence.py', 'src/bound/integration.py', 'src/bound/lineage.py', 'src/bound/lineage_api.py', 'src/bound/lineage_store.py', 'src/bound/models.py', 'src/bound/policy.py', 'src/bound/report.py', 'tests/test_architecture.py', 'tests/test_cli_lineage.py', 'tests/test_collectors.py', 'tests/test_contract_evaluator.py', 'tests/test_contracts.py', 'tests/test_evidence.py', 'tests/test_lineage.py', 'tests/test_lineage_api.py', 'tests/test_lineage_e2e.py', 'tests/test_lineage_store.py', 'tests/test_models.py', 'tests/test_policy.py', 'tests/test_report.py', 'tests/test_v06_dod.py', 'uv.lock', '.github/workflows/release.yml', 'examples/verified_evidence_demo.py', 'scripts/self_integrate_bound.py', 'src/bound/command_collector.py', 'tests/test_v07_verified_evidence.py'], unexpected=[]; stdout=sha256:7a5cdbeca9cb9f798ea0ac8d103b7cf70e0f44f3ad42f26054bd237c71a75b5c stderr=sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "provenance": "verified",
+        "collector": "bound.git",
+        "collector_version": "0.7.0",
+        "observed_at": "2026-07-19T20:02:20.850030Z",
+        "artifact_hash": "sha256:7a5cdbeca9cb9f798ea0ac8d103b7cf70e0f44f3ad42f26054bd237c71a75b5c",
+        "raw_artifact_ref": null,
+        "status": null
       }
     ],
-    "produced_artifacts": [
-      "bound_integration/",
-      "examples/reference_integration/",
-      "src/bound/report.py"
-    ],
+    "produced_artifacts": [],
     "unexpected_artifacts": [],
-    "retry_count": 0,
-    "tool_call_count": 0,
+    "retry_count": null,
+    "tool_call_count": null,
     "token_usage": null,
     "runtime_seconds": null,
-    "rollback_available": null
+    "rollback_available": true
   },
   "evaluation": {
     "scores": {
@@ -82,7 +136,7 @@
       "influence": 0.0,
       "risk": 0.0,
       "cost": 0.0,
-      "reasoning": "v0.3 reference heuristic (NOT scientifically calibrated).\nAcceptance A=1.0000: passed_required / total_required. Each required AcceptanceCheck is reconciled against CheckEvidence by id; a required check with no matching evidence counts as FAILED (never silently passing). Optional checks are advisory only.\nRisk R=0.0000: min(1.0, Σ contributions) — each violated RiskCheck contributes its severity (a check with no evidence is treated conservatively as violated), plus unexpected_artifacts (indicator 1.0 when non-empty) and rollback_available is False (indicator 1.0). rollback_available None is skipped.\nCost C=0.0000: mean of available budget dimensions, each min(actual/max, 1.0) with the cap-zero rule. Unmeasured telemetry for a declared dimension is conservatively saturated to 1.0. No budget → C=0.0.\nInfluence I=0.0000: v0.3 does not derive downstream influence from contract evidence; honesty over invented sophistication.\nPer-dimension ScoreEvidence provenance is available via ContractEvaluator.provenance."
+      "reasoning": "v0.3 reference heuristic (NOT scientifically calibrated).\nAcceptance A=1.0000: passed_required / total_required. Each required AcceptanceCheck is reconciled against CheckEvidence by id; a required check with no matching evidence counts as FAILED (never silently passing). Optional checks are advisory only.\nRisk R=0.0000: min(1.0, Σ contributions) — each violated RiskCheck contributes its severity (a check with no evidence is treated conservatively as violated), plus unexpected_artifacts (indicator 1.0 when non-empty) and rollback_available is False (indicator 1.0). rollback_available None is skipped.\nCost C=0.0000: mean of available budget dimensions, each min(actual/max, 1.0) with the cap-zero rule. Unmeasured telemetry for a declared dimension is conservatively saturated to 1.0. No budget → C=0.0.\nInfluence I=0.0000: v0.3 does not derive downstream influence from contract evidence; honest DEFAULTED value when no evidence source exists (never presented as VERIFIED).\nPer-dimension ScoreEvidence provenance is available via ContractEvaluator.provenance."
     },
     "weights": {
       "acceptance": 1.0,
@@ -90,13 +144,13 @@
       "risk": 1.0,
       "cost": 1.0
     },
-    "threshold": 0.75,
+    "threshold": 0.7,
     "acceptance_component": 1.0,
     "influence_component": 0.0,
     "risk_component": 0.0,
     "cost_component": 0.0,
     "score": 1.0,
-    "distance_to_threshold": 0.25,
+    "distance_to_threshold": 0.30000000000000004,
     "decision": "ACCEPT",
     "rollback_risk_threshold": 0.8,
     "retry_margin": 0.1,
@@ -105,20 +159,42 @@
         {
           "source": "tests-pass",
           "value": 1.0,
-          "contribution": 0.5,
-          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.5000 to A."
+          "contribution": 0.3333333333333333,
+          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.3333 to A.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         },
         {
-          "source": "service-tests-pass",
+          "source": "lint-pass",
           "value": 1.0,
-          "contribution": 0.5,
-          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.5000 to A."
+          "contribution": 0.3333333333333333,
+          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.3333 to A.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
+        },
+        {
+          "source": "dod-demo-passes",
+          "value": 1.0,
+          "contribution": 0.3333333333333333,
+          "description": "✓ passed: 1 evidence record(s), all passed; contributes 0.3333 to A.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         },
         {
           "source": "summary",
           "value": 1.0,
           "contribution": 1.0,
-          "description": "✓2 of 2 required check(s) passed: tests-pass, service-tests-pass; ✗ none. A = 2/2 = 1.0000."
+          "description": "✓3 of 3 required check(s) passed: tests-pass, lint-pass, dod-demo-passes; ✗ none. A = 3/3 = 1.0000.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         }
       ],
       "influence": [
@@ -126,77 +202,104 @@
           "source": "default",
           "value": 0.0,
           "contribution": 0.0,
-          "description": "v0.3 sets influence=0.0 by default: no downstream-influence evidence is derivable from contract evidence. Honesty over invented sophistication."
+          "description": "v0.3 sets influence=0.0 by default: no downstream-influence evidence is derivable from contract evidence. Honesty over invented sophistication.",
+          "provenance": "defaulted",
+          "raw_value": null,
+          "effective_value": 0.0,
+          "reason": "policy neutral value; no evidence source"
         }
       ],
       "risk": [
         {
-          "source": "no-unexpected-files",
-          "value": 0.6,
+          "source": "no-unsafe-changes",
+          "value": 0.5,
           "contribution": 0.0,
-          "description": "✓ risk check passed (1 record(s)); severity=0.6000 contributes 0.0."
+          "description": "✓ risk check passed (1 record(s)); severity=0.5000 contributes 0.0.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         },
         {
           "source": "unexpected_artifacts",
           "value": 0.0,
           "contribution": 0.0,
-          "description": "✓ no unexpected artifacts observed; contributes 0.0."
+          "description": "✓ no unexpected artifacts observed; contributes 0.0.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         },
         {
           "source": "rollback_available",
           "value": 0.0,
           "contribution": 0.0,
-          "description": "rollback availability unmeasured (None); not scored — pure observable, unmeasured telemetry is not invented."
+          "description": "✓ rollback available (rollback_available=True); contributes 0.0.",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         },
         {
           "source": "summary",
           "value": 0.0,
           "contribution": 0.0,
-          "description": "R = min(1.0, Σ contributions) = min(1.0, 0.0000) = 0.0000 (sum of 3 indicator contribution(s), capped at 1.0)."
+          "description": "R = min(1.0, Σ contributions) = min(1.0, 0.0000) = 0.0000 (sum of 3 indicator contribution(s), capped at 1.0).",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         }
       ],
       "cost": [
         {
-          "source": "retry_cost",
+          "source": "budget",
           "value": 0.0,
           "contribution": 0.0,
-          "description": "normalized=min(0.0/3.0, 1.0)=0.0000; contributes 0.0000 to the mean of 2 available cost dimension(s)."
-        },
-        {
-          "source": "tool_cost",
-          "value": 0.0,
-          "contribution": 0.0,
-          "description": "normalized=min(0.0/40.0, 1.0)=0.0000; contributes 0.0000 to the mean of 2 available cost dimension(s)."
-        },
-        {
-          "source": "summary",
-          "value": 0.0,
-          "contribution": 0.0,
-          "description": "C = mean of 2 available normalized dimension(s) = 0.0000."
+          "description": "no cost budget was defined on the contract; C=0.0 (cost cannot be assessed without declared budgets).",
+          "provenance": null,
+          "raw_value": null,
+          "effective_value": null,
+          "reason": null
         }
       ]
     },
-    "weight": 1.0
+    "weight": 1.0,
+    "candidate_decision": "ACCEPT",
+    "final_decision": "ACCEPT",
+    "assurance": "verified",
+    "assurance_reasons": [
+      "check 'tests-pass' backed by verified-tier evidence (provenance: verified)",
+      "check 'lint-pass' backed by verified-tier evidence (provenance: verified)",
+      "check 'dod-demo-passes' backed by verified-tier evidence (provenance: verified)",
+      "check 'no-unsafe-changes' (decision-critical) backed by verified-tier evidence (provenance: verified)"
+    ]
   },
   "next_action": "continue",
-  "feedback": "Decision: ACCEPT. The step meets the acceptance threshold (S=1.0000 >= T=0.7500) and stays within the risk boundary. It is sufficiently complete. Continue to the next objective. Do not keep optimizing this step; further refinement is unnecessary and wastes effort.",
+  "feedback": "Decision: ACCEPT. The step meets the acceptance threshold (S=1.0000 >= T=0.7000) and stays within the risk boundary. It is sufficiently complete. Continue to the next objective. Do not keep optimizing this step; further refinement is unnecessary and wastes effort.",
   "raw_commands": {
-    "full_suite": {
-      "command": "uv run pytest -q",
+    "pytest": {
+      "command": "/home/danny/projects/bound/.venv/bin/python3 -m pytest -q",
       "returncode": 0,
-      "stdout": "........................................................................ [ 14%]\n........................................................................ [ 28%]\n........................................................................ [ 42%]\n........................................................................ [ 56%]\n........................................................................ [ 70%]\n........................................................................ [ 84%]\n........................................................................ [ 98%]\n.........                                                                [100%]\n513 passed in 0.77s\n",
+      "stdout": "........................................................................ [  9%]\n........................................................................ [ 19%]\n........................................................................ [ 28%]\n........................................................................ [ 38%]\n........................................................................ [ 47%]\n........................................................................ [ 57%]\n........................................................................ [ 66%]\n........................................................................ [ 76%]\n........................................................................ [ 86%]\n........................................................................ [ 95%]\n.................................                                        [100%]\n753 passed in 4.62s\n",
       "stderr": ""
     },
-    "service_suite": {
-      "command": "uv run pytest tests/test_calculator.py -q",
+    "ruff": {
+      "command": "/home/danny/projects/bound/.venv/bin/python3 -m ruff check .",
       "returncode": 0,
-      "stdout": "..................................                                       [100%]\n34 passed in 0.10s\n",
+      "stdout": "All checks passed!\n",
       "stderr": ""
     },
-    "git_status": {
+    "dod-demo": {
+      "command": "/home/danny/projects/bound/.venv/bin/python3 /home/danny/projects/bound/examples/verified_evidence_demo.py",
+      "returncode": 0,
+      "stdout": "goal: Add input validation to the registration endpoint.\n==============================================================================\nstarted run: run_adc8997ed2ed3f051d8a\npolicy config hash: b03ad6488756c445567a09e546a9e1cd4cc6505c3c08f9d5cb89a1d1be15c2f9\nattempt 1: agent says 'all tests pass'\n  pytest collector   -> 1/3 passed        VERIFIED\n    tests-a: passed=True provenance=verified collector=bound.pytest version=0.7.0\n    tests-b: passed=False provenance=verified collector=bound.pytest version=0.7.0\n    tests-c: passed=False provenance=verified collector=bound.pytest version=0.7.0\n  git collector      -> safe changes   VERIFIED\n  candidate decision -> REPLAN\n  decision assurance -> VERIFIED\n  final decision     -> REPLAN\nagent changes strategy.\nattempt 2:\n  pytest collector   -> 3/3 passed        VERIFIED\n    tests-a: passed=True provenance=verified collector=bound.pytest version=0.7.0\n    tests-b: passed=True provenance=verified collector=bound.pytest version=0.7.0\n    tests-c: passed=True provenance=verified collector=bound.pytest version=0.7.0\n  git collector      -> safe changes   VERIFIED\n  candidate decision -> ACCEPT\n  decision assurance -> VERIFIED\n  final decision     -> ACCEPT\n==============================================================================\ntrace proof (append-only events.jsonl):\n  policy config hash: b03ad6488756c445567a09e546a9e1cd4cc6505c3c08f9d5cb89a1d1be15c2f9\n  collector versions: {'bound.pytest': '0.7.0', 'bound.git': '0.7.0'}\n  tests-a: collector=bound.pytest version=0.7.0 provenance=verified passed=True\n  tests-b: collector=bound.pytest version=0.7.0 provenance=verified passed=False\n  tests-c: collector=bound.pytest version=0.7.0 provenance=verified passed=False\n  no-unsafe-changes: collector=bound.git version=0.7.0 provenance=verified passed=True\n  tests-a: collector=bound.pytest version=0.7.0 provenance=verified passed=True\n  tests-b: collector=bound.pytest version=0.7.0 provenance=verified passed=True\n  tests-c: collector=bound.pytest version=0.7.0 provenance=verified passed=True\n  no-unsafe-changes: collector=bound.git version=0.7.0 provenance=verified passed=True\n  decision.gated: candidate=REPLAN final=REPLAN assurance=verified depended_on_claimed=False\n  decision.gated: candidate=ACCEPT final=ACCEPT assurance=verified depended_on_claimed=False\nthe final decision did NOT depend on CLAIMED evidence: True\n",
+      "stderr": "warning: templates not found in /home/danny/.git-template\n"
+    },
+    "git-status": {
       "command": "git status --porcelain",
       "returncode": 0,
-      "stdout": " M CHANGELOG.md\n M README.md\n M architecture/README.md\n M docs/concepts.md\n M docs/integrations.md\n M docs/status-and-roadmap.md\n M examples/agent_control_loop.py\n M integrations/claude-code/INSTALL_BOUND.md\n M integrations/cline/INSTALL_BOUND.md\n M integrations/generic/INSTALL_BOUND.md\n M integrations/hermes-agent/INSTALL_BOUND.md\n M integrations/kilo-code/INSTALL_BOUND.md\n M pyproject.toml\n M src/bound/__init__.py\n M src/bound/contracts.py\n M src/bound/integration.py\n M tests/test_architecture.py\n M uv.lock\n?? assets/bound-demo.gif\n?? bound_integration/\n?? examples/reference_integration/\n?? scripts/\n?? src/bound/collectors.py\n?? src/bound/report.py\n?? tests/test_collectors.py\n?? tests/test_integration_mapping.py\n?? tests/test_report.py\n?? tests/test_v06_dod.py\n",
+      "stdout": "MM .gitignore\nMM CHANGELOG.md\nM  README.md\nA  docs/lineage.md\nA  docs/upgrade-guide.md\nA  examples/lineage_demo.py\nA  examples/lineage_demo_events.jsonl\nMM integrations/claude-code/INSTALL_BOUND.md\nMM integrations/cline/INSTALL_BOUND.md\nAM integrations/codex/INSTALL_BOUND.md\nMM integrations/generic/INSTALL_BOUND.md\nMM integrations/hermes-agent/INSTALL_BOUND.md\nMM integrations/kilo-code/INSTALL_BOUND.md\nM  pyproject.toml\nMM skills/bound/SKILL.md\nMM src/bound/__init__.py\nMM src/bound/bound_workflow.py\nMM src/bound/cli.py\nMM src/bound/contract_evaluator.py\n M src/bound/contracts.py\n M src/bound/evidence.py\nMM src/bound/integration.py\nAM src/bound/lineage.py\nAM src/bound/lineage_api.py\nAM src/bound/lineage_store.py\n M src/bound/models.py\n M src/bound/policy.py\n M src/bound/report.py\nM  tests/test_architecture.py\nAM tests/test_cli_lineage.py\n M tests/test_collectors.py\n M tests/test_contract_evaluator.py\n M tests/test_contracts.py\n M tests/test_evidence.py\nAM tests/test_lineage.py\nAM tests/test_lineage_api.py\nAM tests/test_lineage_e2e.py\nAM tests/test_lineage_store.py\n M tests/test_models.py\n M tests/test_policy.py\n M tests/test_report.py\nM  tests/test_v06_dod.py\nM  uv.lock\n?? .github/workflows/release.yml\n?? examples/verified_evidence_demo.py\n?? scripts/self_integrate_bound.py\n?? src/bound/command_collector.py\n?? tests/test_v07_verified_evidence.py\n",
       "stderr": ""
     }
   },
@@ -206,22 +309,35 @@
       "attempt": 1,
       "decision": "ACCEPT",
       "next_action": "continue",
-      "note": "first evaluation; no replan or retry"
+      "note": "BOUND self-integration of the v0.7.0 release boundary"
     }
   ],
   "retries": [],
   "replans": [],
-  "trajectory": [
-    "PLAN.md (BOUND v0.6 — reporting + demo step)",
-    "PHASE-001 (StepContract.id, carried verbatim from the plan)",
-    "uv run pytest -q + uv run pytest tests/test_calculator.py -q (real verification)",
-    "ExecutionEvidence (acceptance + risk, observed — not assumed)",
-    "BOUND evaluate_agent_step (deterministic)",
-    "ACCEPT -> continue",
-    "INTEGRATION_REPORT.md + run.json (post-run audit record)"
-  ],
+  "trajectory": [],
   "token_usage": null,
   "runtime_seconds": null,
   "tool_call_count": null,
-  "model_metadata": null
+  "model_metadata": null,
+  "config": {
+    "bound_version": "0.7.0",
+    "trace_schema_version": "2.0",
+    "policy_id": null,
+    "policy_config_version": null,
+    "policy_config_hash": "b03ad6488756c445567a09e546a9e1cd4cc6505c3c08f9d5cb89a1d1be15c2f9",
+    "weights": null,
+    "threshold": 0.7,
+    "retry_margin": 0.1,
+    "rollback_risk_threshold": null,
+    "contract_hash": "e4a5a6e31d52261e7408e65070d985d2b686f98b1d64f85449d38bd3c9648af8",
+    "collector_versions": {
+      "bound.pytest": "0.7.0",
+      "bound.git": "0.7.0",
+      "bound.process": "0.7.0"
+    },
+    "evaluator_model": null,
+    "evaluator_prompt_version": null
+  },
+  "reported_action": "Ran BOUND self-integration: independent collectors executed pytest, ruff, the DoD demo, and git status.",
+  "observed_action": null
 }

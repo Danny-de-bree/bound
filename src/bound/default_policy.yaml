@@ -1,0 +1,134 @@
+# BOUND default policy configuration (coding-default @ 1.0).
+#
+# This is the documented default ``bound-policy.yaml`` shipped with BOUND. It
+# exercises every section of the policy schema (todo 2.1/2.2/2.3): a tests-pass
+# blocker (hard gate), a lint weighted signal, a tool-call budget, a src/ change
+# scope, dependency-file detection, and rollback/approval guardrails.
+#
+# BOUND's core never executes code declared here — collectors run declarative
+# commands only, and the agent can never weaken this policy mid-run. The
+# canonical hash of this file (see bound.policy_canon.compute_policy_hash) is
+# recorded on every decision so a run is reproducible from its policy hash.
+
+schema_version: "1.0"
+
+policy:
+  id: coding-default
+  version: "1.0"
+
+# Collectors a run is allowed to use. Built-in collectors are referenced by
+# type alone; a generic ``command`` collector must supply its argv.
+collectors:
+  pytest:
+    type: pytest
+  typecheck:
+    type: command
+    command: ["python", "-m", "mypy", "src"]
+    timeout_seconds: 120
+    success_exit_codes: [0]
+  lint:
+    type: command
+    command: ["python", "-m", "ruff", "check", "."]
+    timeout_seconds: 60
+
+# --- Hard gates (blockers): can never be compensated by positive scores. ---
+acceptance_checks:
+  - id: tests-pass
+    description: "All tests pass (pytest, independently re-run by BOUND)."
+    importance: blocker
+    required: true
+    on_failure: retry
+    on_missing: retry
+    on_claimed: replan
+    minimum_assurance: verified
+    accepted_provenance: [verified, observed]
+    collector: pytest
+  - id: typecheck-pass
+    description: "Static type checking passes (no type errors)."
+    importance: blocker
+    required: true
+    on_failure: retry
+    on_missing: retry
+    on_claimed: replan
+    accepted_provenance: [verified, observed]
+    collector: typecheck
+
+# --- Weighted signals (quality): soft contributions, never override a blocker.
+quality_checks:
+  - id: lint-clean
+    description: "Lint is clean (ruff reports no issues)."
+    importance: medium
+    collector: lint
+  - id: coverage
+    description: "Test coverage does not regress."
+    importance: low
+    accepted_provenance: [verified, observed]
+
+# --- Risk hard gates (blockers): violations are unacceptable. ---
+risk_checks:
+  - id: no-secrets
+    description: "No plaintext secrets are introduced in the diff."
+    importance: blocker
+    required: true
+    on_failure: rollback
+    on_missing: replan
+    on_claimed: rollback
+    accepted_provenance: [verified, observed]
+  - id: scope-respected
+    description: "Only allowed paths were modified."
+    importance: blocker
+    required: true
+    on_failure: replan
+    on_missing: replan
+
+# --- Budgets: soft/hard limits with a configurable action at each limit. ---
+budgets:
+  attempts:
+    soft_limit: 2
+    hard_limit: 3
+    on_soft: retry
+    on_hard: replan
+  tool_calls:
+    soft_limit: 15
+    hard_limit: 20
+    on_soft: retry
+    on_hard: replan
+  tokens:
+    hard_limit: 200000
+    on_hard: replan
+  runtime:
+    soft_limit: 300
+    hard_limit: 600
+    on_soft: retry
+    on_hard: replan
+  financial_cost:
+    enabled: false  # disabled by default; enable when cost telemetry exists
+
+# --- Scope and safety. ---
+change_scope:
+  allowed_paths:
+    - "src/**"
+    - "tests/**"
+  forbidden_paths:
+    - ".git/**"
+    - "**/.env"
+  dependency_file_patterns:
+    - "pyproject.toml"
+    - "uv.lock"
+    - "requirements*.txt"
+  unexpected_artifacts:
+    enabled: true
+    on_unexpected: replan
+    allowed_patterns:
+      - "*.md"
+
+# --- Approvals and rollback.  ---
+approvals:
+  commands_requiring_approval:
+    - "rm"
+    - "git push --force"
+  destructive_actions:
+    - "rm -rf"
+    - "git push --force"
+  require_rollback_availability: false
+  on_missing_rollback: replan

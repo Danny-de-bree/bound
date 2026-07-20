@@ -7,11 +7,13 @@ from bound.contracts import (
     AcceptanceCheck,
     BoundPlan,
     ContractGenerator,
+    EvidencePolicyAction,
     RiskCheck,
     StaticContractGenerator,
     StepBudget,
     StepContract,
 )
+from bound.evidence import EvidenceProvenance
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -301,3 +303,181 @@ def test_static_contract_generator_exposes_plan_property() -> None:
     generator = StaticContractGenerator(plan)
 
     assert generator.plan is plan
+
+
+# ---------------------------------------------------------------------------
+# v0.7 provenance-aware contracts (item 4)
+# ---------------------------------------------------------------------------
+
+
+def test_acceptance_check_provenance_fields_default() -> None:
+    """Provenance fields default to "accept any" + RETRY, keeping legacy green.
+
+    An old-style acceptance check (id/description only) must still validate, with
+    ``accepted_provenance=None`` (accept any) and ``on_missing``/``on_claimed``
+    defaulting to RETRY — the conservative-but-not-fatal response.
+    """
+    check = AcceptanceCheck(id="tests-pass", description="All tests pass")
+    assert check.accepted_provenance is None
+    assert check.on_missing is EvidencePolicyAction.RETRY
+    assert check.on_claimed is EvidencePolicyAction.RETRY
+
+
+def test_acceptance_check_accepts_provenance_allowlist() -> None:
+    """A check may restrict itself to a set of accepted provenances."""
+    check = AcceptanceCheck(
+        id="tests-pass",
+        description="All tests pass",
+        accepted_provenance=[
+            EvidenceProvenance.OBSERVED,
+            EvidenceProvenance.VERIFIED,
+            EvidenceProvenance.ATTESTED,
+        ],
+        on_missing=EvidencePolicyAction.REPLAN,
+        on_claimed=EvidencePolicyAction.ROLLBACK,
+    )
+    assert check.accepted_provenance == [
+        EvidenceProvenance.OBSERVED,
+        EvidenceProvenance.VERIFIED,
+        EvidenceProvenance.ATTESTED,
+    ]
+    assert check.on_missing is EvidencePolicyAction.REPLAN
+    assert check.on_claimed is EvidencePolicyAction.ROLLBACK
+
+
+def test_acceptance_check_rejects_empty_accepted_provenance() -> None:
+    """An empty allow-list rejects all evidence — almost certainly a mistake."""
+    with pytest.raises(ValidationError):
+        AcceptanceCheck(
+            id="x", description="y", accepted_provenance=[]
+        )
+
+
+def test_acceptance_check_coerces_string_provenance_and_action() -> None:
+    """Provenance/actions coerce from strings (deserialised JSON contracts)."""
+    check = AcceptanceCheck.model_validate(
+        {
+            "id": "tests-pass",
+            "description": "All tests pass",
+            "accepted_provenance": ["observed", "verified"],
+            "on_missing": "rollback",
+            "on_claimed": "retry",
+        }
+    )
+    assert check.accepted_provenance == [
+        EvidenceProvenance.OBSERVED,
+        EvidenceProvenance.VERIFIED,
+    ]
+    assert check.on_missing is EvidencePolicyAction.ROLLBACK
+    assert check.on_claimed is EvidencePolicyAction.RETRY
+
+
+def test_risk_check_decision_critical_defaults_false() -> None:
+    """Risk checks are not decision-critical by default."""
+    risk = RiskCheck(id="no-secrets", description="No secrets", severity=0.5)
+    assert risk.decision_critical is False
+    assert risk.accepted_provenance is None
+    assert risk.on_missing is EvidencePolicyAction.RETRY
+    assert risk.on_claimed is EvidencePolicyAction.RETRY
+
+
+def test_acceptance_check_importance_weight_minimum_assurance_defaults() -> None:
+    """New v0.7 fields default sensibly on AcceptanceCheck (backwards-compat).
+
+    ``importance`` defaults to ``"medium"``, ``weight`` and ``minimum_assurance``
+    default to ``None`` so legacy contracts keep validating unchanged.
+    """
+    check = AcceptanceCheck(id="tests-pass", description="All tests pass")
+    assert check.importance == "medium"
+    assert check.weight is None
+    assert check.minimum_assurance is None
+
+
+def test_acceptance_check_importance_can_be_blocker_and_validated() -> None:
+    """``importance`` accepts the documented tiers and rejects others."""
+    for tier in ("blocker", "high", "medium", "low", "ignore"):
+        AcceptanceCheck(id="x", description="y", importance=tier)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        AcceptanceCheck(id="x", description="y", importance="urgent")  # type: ignore[arg-type]
+
+
+def test_acceptance_check_weight_must_be_non_negative() -> None:
+    """An explicit ``weight`` must be ``>= 0.0``."""
+    with pytest.raises(ValidationError):
+        AcceptanceCheck(id="x", description="y", weight=-1.0)
+    ok = AcceptanceCheck(id="x", description="y", weight=2.5)
+    assert ok.weight == 2.5
+
+
+def test_acceptance_check_minimum_assurance_coerces_from_string() -> None:
+    """``minimum_assurance`` coerces from the string value of DecisionAssurance."""
+    from bound.models import DecisionAssurance
+
+    check = AcceptanceCheck.model_validate(
+        {"id": "x", "description": "y", "minimum_assurance": "verified"}
+    )
+    assert check.minimum_assurance is DecisionAssurance.VERIFIED
+
+
+def test_risk_check_carries_new_importance_weight_assurance_fields() -> None:
+    """RiskCheck accepts the same new fields as AcceptanceCheck."""
+    from bound.models import DecisionAssurance
+
+    risk = RiskCheck(
+        id="no-secrets",
+        description="No secrets",
+        severity=0.5,
+        importance="blocker",
+        weight=0.0,
+        minimum_assurance=DecisionAssurance.VERIFIED,
+    )
+    assert risk.importance == "blocker"
+    assert risk.weight == 0.0
+    assert risk.minimum_assurance is DecisionAssurance.VERIFIED
+
+
+def test_risk_check_decision_critical_can_be_set() -> None:
+    """A decision-critical risk check gates ACCEPT on verified evidence."""
+    risk = RiskCheck(
+        id="no-critical-security-findings",
+        description="No critical security findings",
+        severity=1.0,
+        decision_critical=True,
+        accepted_provenance=[EvidenceProvenance.VERIFIED, EvidenceProvenance.ATTESTED],
+        on_missing=EvidencePolicyAction.ROLLBACK,
+        on_claimed=EvidencePolicyAction.ROLLBACK,
+    )
+    assert risk.decision_critical is True
+    assert risk.accepted_provenance == [
+        EvidenceProvenance.VERIFIED,
+        EvidenceProvenance.ATTESTED,
+    ]
+    assert risk.on_missing is EvidencePolicyAction.ROLLBACK
+
+
+def test_risk_check_rejects_empty_accepted_provenance() -> None:
+    """An empty allow-list rejects all evidence — almost certainly a mistake."""
+    with pytest.raises(ValidationError):
+        RiskCheck(id="x", description="y", severity=0.5, accepted_provenance=[])
+
+
+def test_evidence_policy_action_enum_values() -> None:
+    """The action vocabulary mirrors the BOUND decision space (lowercased)."""
+    assert {a.value for a in EvidencePolicyAction} == {
+        "accept",
+        "retry",
+        "replan",
+        "rollback",
+    }
+
+
+def test_legacy_plan_with_new_provenance_fields_still_validates() -> None:
+    """A plan whose checks omit the new v0.7 fields still validates (backwards-compat).
+
+    Old contracts (no ``accepted_provenance``/``on_missing``/``on_claimed``/
+    ``decision_critical``) must load unchanged; the new fields default sensibly
+    rather than becoming required.
+    """
+    plan = _make_plan()
+    assert plan.steps[0].acceptance_checks[0].accepted_provenance is None
+    assert plan.steps[0].risk_checks[0].decision_critical is False

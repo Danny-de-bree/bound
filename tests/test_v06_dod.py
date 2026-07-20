@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
 
 import bound
 from bound.collectors import (
@@ -16,18 +15,12 @@ from bound.integration import _DECISION_TO_ACTION, evaluate_agent_step
 from bound.integration_spec import integration_spec
 from bound.models import BoundCriteria
 from bound.report import RunTrace, render_from_trace
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
+from tests.conftest import DECISION_TO_CONTROL, REPO_ROOT
 
 #: The canonical BOUND decision -> control-action mapping. Lives ONLY in these
 #: tests, used to assert the public API agrees with it; it is never consulted at
 #: runtime to translate a decision independently of BOUND.
-_CANONICAL_DECISION_TO_CONTROL: dict[str, str] = {
-    "ACCEPT": "continue",
-    "RETRY": "retry",
-    "REPLAN": "replan",
-    "ROLLBACK": "rollback",
-}
+_CANONICAL_DECISION_TO_CONTROL = DECISION_TO_CONTROL
 
 
 # ---------------------------------------------------------------------------
@@ -259,12 +252,11 @@ def test_demo_generation_uses_stored_trace_data() -> None:
 
 
 # ---------------------------------------------------------------------------
-# DoD: the 0.4.0/0.5.0 version mismatch is resolved (bumped to 0.6.1)
+# DoD: the 0.4.0/0.5.0 version mismatch is resolved (kept current at release)
 # ---------------------------------------------------------------------------
 
 
 def test_version_bumped_and_consistent() -> None:
-    """``__init__.py`` and ``pyproject.toml`` agree on 0.6.1 (mismatch fixed)."""
+    """``__init__.py`` and ``pyproject.toml`` agree on the current release."""
     pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.6.1"' in pyproject
-    assert bound.__version__ == "0.6.1"
+    assert f'version = "{bound.__version__}"' in pyproject

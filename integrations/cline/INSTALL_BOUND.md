@@ -39,6 +39,63 @@ workspace, and use only mechanisms confirmed there.
 > retry once, too far off to keep the same strategy, or unsafe enough to roll
 > back.
 
+## Verified evidence & provenance (v0.7.0) — take the agent out of the evidence loop
+
+BOUND v0.7.0 separates *who reports* evidence from *who verifies* it. The agent
+is a participant, not the judge. Follow these rules for every step:
+
+**1. Define the contract upfront, including provenance requirements.**
+Each `AcceptanceCheck` / `RiskCheck` may declare:
+- `accepted_provenance`: the trust provenances it accepts
+  (`observed`/`verified`/`attested`/`evaluated`/`claimed`/`defaulted`/`missing`).
+  `None` accepts any; a non-empty list rejects weaker evidence.
+- `on_missing`: policy action when no evidence is collected (`retry`/`replan`/`rollback`/`accept`).
+- `on_claimed`: action when the only evidence is the agent self-report.
+- `decision_critical` (risk checks): when `True`, missing/claimed evidence forces
+  `INSUFFICIENT` assurance and blocks a clean `ACCEPT`.
+
+**2. Configure allowed collectors; BOUND performs objective verification.**
+BOUND ships independent collectors (`PytestCollector`, `GitCollector`,
+`JUnitCollector`, `BudgetCollector`, `ProcessRuntimeCollector`,
+`CommandCollector`) that *execute* verification commands BOUND controls — never
+commands the agent injects. The agent configures which collectors are allowed;
+BOUND runs them and records `evidence.collected` audit events with
+`VERIFIED`/`OBSERVED` provenance, a collector name, version, artefact hash and
+a timezone-aware timestamp. A collector crash, stale artefact or zero-test run
+is recorded honestly (`evidence.collection_failed` / `INVALID`), never a
+verified pass.
+
+**3. The agent CANNOT assign `VERIFIED` provenance.**
+Agent self-report is **always `CLAIMED`**, never `VERIFIED`/`OBSERVED`. The
+agent must not override, edit or suppress a collector result. `MISSING` means
+"not collected" — never silently `0`. `None` on a telemetry metric is missing,
+not a measured zero.
+
+**4. Subjective criteria use a separate evaluator (`EVALUATED`).**
+Criteria that cannot be independently re-run (e.g. UX quality) are scored by
+the deterministic evaluator with `EVALUATED` provenance — honest but not
+independently verified. They never become `VERIFIED`.
+
+**5. BOUND logs what the agent reports; the agent executes control actions.**
+BOUND records the agent self-reported action via `action.reported`
+(`reported_provenance=CLAIMED`); an independent hook may add an
+`observed_action` to confirm it. **The agent — not BOUND — executes control
+actions and workspace rollback.** BOUND is a thin harness: it emits `ROLLBACK`
+(and may independently verify the resulting state afterwards); it never
+performs a workspace rollback itself.
+
+**6. Assurance gates the candidate decision.**
+BOUND computes a `DecisionAssurance` level (`VERIFIED`/`MIXED`/`CLAIMED`/
+`INSUFFICIENT`) from the decision-critical checks provenance. A candidate
+`ACCEPT` backed only by `CLAIMED`/`MISSING` critical evidence is downgraded to
+the contract `on_missing`/`on_claimed` action. Inspect it with:
+
+```bash
+bound inspect <run_id>                  # per-check provenance + candidate vs final + assurance + coverage
+bound inspect <run_id> --only-unverified # only unverified/claimed/missing/invalid evidence
+bound inspect <run_id> --json           # machine-readable: provenance + assurance + coverage
+```
+
 ## Step 0 — Install and inspect (do this before anything else)
 
 1. Install the latest stable `bound-policy` into this project's environment:
@@ -77,8 +134,8 @@ workspace, and use only mechanisms confirmed there.
    - `BoundPlan` — `BoundPlan(goal, steps=[...])`.
    - `StaticContractGenerator` — `StaticContractGenerator(plan)`. Returns the same plan every call. Use it for tests and deterministic paths.
    - `ExecutionEvidence` — `ExecutionEvidence(acceptance=[...], risks=[...], produced_artifacts=[...], unexpected_artifacts=[...], retry_count=0, tool_call_count=0, token_usage=None, runtime_seconds=None, rollback_available=None)`.
-   - `CheckEvidence` — `CheckEvidence(check_id, passed, detail="")`. `check_id` must match an acceptance/risk check id on the contract.
-   - `EvidenceCollector` — a Protocol (`collect(*, contract, execution) -> ExecutionEvidence`). You may implement your own collector; the core never introspects your `execution` handle.
+   - `CheckEvidence` — `CheckEvidence(check_id, passed, source="", details=None, provenance=MISSING, collector=None, collector_version=None, observed_at=None, artifact_hash=None, raw_artifact_ref=None, status=None)`. `check_id` must match an acceptance/risk check id on the contract. v0.7: `provenance` is the trust provenance (agent self-report is always `CLAIMED`, never `VERIFIED`); `collector`/`collector_version`/`observed_at`/`artifact_hash` come from a BOUND-controlled collector; `status` distinguishes `failed`/`unverified`/`missing`/`invalid`.
+   - `EvidenceCollector` — a Protocol (`collect(*, contract, execution) -> ExecutionEvidence`). You may implement your own collector; the core never introspects your `execution` handle. v0.7 ships ready collectors (`PytestCollector`, `GitCollector`, `JUnitCollector`, `BudgetCollector`, `ProcessRuntimeCollector`, `CommandCollector`) that grant `VERIFIED`/`OBSERVED` provenance — prefer them over hand-rolled self-report; the agent may configure allowed collectors but never inject arbitrary commands or override a collector result.
    - `BoundCriteria` — `BoundCriteria(threshold, retry_margin=0.1, rollback_risk_threshold=0.8, weights=BoundWeights())`. `weights` defaults to all-`1.0`.
    - `EvaluationResult` — carries `.scores`, `.decision`, `.score`, `.threshold`, `.weights`, components, and `.provenance`.
    - `Decision` — `Literal["ACCEPT", "RETRY", "REPLAN", "ROLLBACK"]`.
@@ -297,21 +354,28 @@ Only after this report is produced may you begin implementation.
    that does not exist.
 
    ```python
-   from bound import CheckEvidence, ExecutionEvidence
+   from bound import CheckEvidence, EvidenceProvenance, ExecutionEvidence
+   # Agent-collected evidence is CLAIMED — the agent can never grant VERIFIED.
+   # For VERIFIED evidence use the BOUND collectors (bound.PytestCollector,
+   # bound.GitCollector, ...), which run verification BOUND controls.
 
    def collect_evidence(contract, *, subprocess_results) -> ExecutionEvidence:
        # Read real observations: test exit code, lint exit code, git status, etc.
        ...
        return ExecutionEvidence(
            acceptance=[
-               CheckEvidence(check_id="tests-pass", passed=tests_ok),
-               CheckEvidence(check_id="lint-clean", passed=lint_ok),
+               CheckEvidence(check_id="tests-pass", passed=tests_ok,
+                             provenance=EvidenceProvenance.CLAIMED),
+               CheckEvidence(check_id="lint-clean", passed=lint_ok,
+                             provenance=EvidenceProvenance.CLAIMED),
                CheckEvidence(check_id="rejects-invalid",
-                             passed=invalid_rejected, detail=detail),
+                             passed=invalid_rejected, detail=detail,
+                             provenance=EvidenceProvenance.CLAIMED),
            ],
            risks=[
                CheckEvidence(check_id="no-tests-removed",
-                             passed=no_tests_removed),
+                             passed=no_tests_removed,
+                             provenance=EvidenceProvenance.CLAIMED),
            ],
            produced_artifacts=produced,
            unexpected_artifacts=unexpected,
@@ -428,6 +492,112 @@ real command is not available in CI). The test must:
 
 Do not assert a hardcoded "ACCEPT" unless the evidence genuinely satisfies the
 contract. The test must reflect real evidence, not a wish.
+
+## Step 8 — Record decision lineage (BOUND v0.7.0)
+
+BOUND v0.7.0 can record every evaluation as a reproducible, append-only local
+lineage — `contract → evidence → scores → decision → agent outcome` — under
+`.bound/runs/<run_id>/`. Lineage is **opt-in per run** and backwards compatible:
+if you never start a run nothing is recorded. Record it for any non-trivial task
+so the decision history is auditable and reproducible.
+
+Follow these rules for every task you evaluate with BOUND:
+
+1. **Start ONE run per task.** Begin the task with:
+
+   ```bash
+   bound run start "<task>" --metadata phase=PHASE-001
+   ```
+
+   This prints a `run_id` (e.g. `run_ae5ed2f7e7cd4b2bb820`) and writes the
+   `run_started` event. (In Python, use `with bound.start_run("<task>") as run:`.)
+
+2. **Use STABLE step / contract ids.** Carry the same id from `PLAN.md` →
+   `StepContract(id=...)` → lineage. A replan of the same step appends `-R<N>`
+   (`PHASE-001` → `PHASE-001-R1`); never invent an unrelated id, and never
+   rewrite history to hide a replan.
+
+3. **Evaluate only MEANINGFUL boundaries** (after implementation + verification,
+   not after every token/file/command). Record the evaluation into the run:
+
+   ```bash
+   bound evaluate --run <run_id> --step PHASE-001 --attempt 1 \
+       --action "..." --goal "..." \
+       --acceptance <A> --influence <I> --risk <R> --cost <C> \
+       --threshold 0.7 --retry-margin 0.1
+   ```
+
+   This writes `step_started` + `evaluation_recorded` and adds a `lineage`
+   block to the JSON output. `--step` is the stable contract id; `--attempt`
+   is the one-based attempt number.
+
+4. **Record the REAL follow-up action** you actually took (not what BOUND
+   "should" have produced). Even if the decision was REPLAN, if you chose to
+   retry instead, record `retry`; if you rolled back, record `rollback`:
+
+   ```bash
+   bound outcome --run <run_id> --step PHASE-001 --attempt 1 \
+       --decision REPLAN --note "switched strategy to validator + parametrized tests"
+   ```
+
+   `--decision` is `ACCEPT|RETRY|REPLAN|ROLLBACK`; `--next-action` and
+   `--reason-code` are derived from the decision when omitted. Use `--note` for
+   a short, honest description of what you did next.
+
+5. **Explicitly CLOSE the run** when the task ends — completed, interrupted, or
+   failed — so no run is left silently "started":
+
+   ```bash
+   bound run finish <run_id> --status completed|interrupted|failed --note "..."
+   ```
+
+6. **REPORT the local lineage path** in your final summary: point to
+   `.bound/runs/<run_id>/` (`run.json` + the append-only `events.jsonl`) and show
+   the decision tree with:
+
+   ```bash
+   bound inspect <run_id>
+   ```
+
+### REPLAN → ACCEPT example
+
+The canonical v0.7.0 flow is a single run with two attempts:
+
+```text
+Attempt 1  →  evidence 1/3 (A=0.3333)  →  REPLAN  → switch strategy
+            (new step PHASE-001-R1, attempt 2)
+Attempt 2  →  evidence 3/3 (A=1.0000)  →  ACCEPT  → continue to next step
+```
+
+`bound inspect <run_id>` renders this as:
+
+```text
+Run run_feb444156b42b838db38
+Task: Add input validation to the registration endpoint
+Status: completed
+
+Step 1 · Implement input validation · replanned
+└── Attempt 1 · REPLAN · 1/3 checks
+    └── Outcome: switched strategy to validator + parametrized tests
+        Action: replan (REPLANNED)
+        Score S=0.3333 (A=0.33 I=0.00 R=0.00 C=0.00) T=0.7000
+
+Step 2 · Implement input validation (replan) · completed
+└── Attempt 2 · ACCEPT · 3/3 checks
+    └── Outcome: continued to next step
+        Action: continue (CONTINUED)
+        Score S=1.0000 (A=1.00 I=0.00 R=0.00 C=0.00) T=0.7000
+```
+
+The event log is append-only: a replan emits a *new* `step_started` with
+`attempt+1` (and a `-R<N>`-suffixed contract id); the earlier attempt's history
+is never rewritten. A missing `run_finished` marks an incomplete/crashed run
+(the log stays readable). Prompts, tokens, and source code are **never** stored
+— only contract id, scores, threshold, decision, reason code, and your follow-up
+action/note.
+
+To disable lineage entirely (CI, ephemeral environments), set
+`BOUND_LINEAGE_DISABLED=1` or call `bound.configure(enabled=False)`.
 
 ## Done
 

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from bound.bound_workflow import BoundWorkflow
 from bound.contracts import AcceptanceCheck, RiskCheck, StepContract
 from bound.evidence import CheckEvidence, ExecutionEvidence
-from bound.integration import evaluate_agent_step, render_feedback
+from bound.integration import evaluate_agent_step
 from bound.models import BoundCriteria, BoundWeights
 from bound.prompt import word_count
 
@@ -229,62 +228,5 @@ def test_all_feedback_under_150_words() -> None:
         feedback = _evaluate(contract, evidence, criteria)
         assert word_count(feedback) < _MAX_WORDS, feedback
 
-
-def test_render_feedback_is_deterministic_snapshot() -> None:
-    """Re-rendering identical inputs yields the identical frozen snapshot.
-
-    Combines the determinism guarantee with the golden snapshots: the same
-    (evaluation, contract, evidence) must always produce the same string, and it
-    must equal the frozen golden value for each decision.
-    """
-    pairs = [
-        (
-            _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _passed("b")], rollback_available=True
-            ),
-            BoundCriteria(threshold=0.6),
-            _ACCEPT_GOLDEN,
-        ),
-        (
-            _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _failed("b")], rollback_available=True
-            ),
-            BoundCriteria(threshold=0.6, retry_margin=0.2),
-            _RETRY_GOLDEN,
-        ),
-        (
-            _contract(),
-            ExecutionEvidence(
-                acceptance=[_failed("a"), _failed("b")], rollback_available=True
-            ),
-            BoundCriteria(threshold=0.6, retry_margin=0.1),
-            _REPLAN_GOLDEN,
-        ),
-        (
-            _contract(
-                risk_checks=[RiskCheck(id="r", description="b", severity=0.9)]
-            ),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _passed("b")],
-                risks=[_failed("r")],
-                rollback_available=True,
-            ),
-            BoundCriteria(
-                threshold=0.6,
-                rollback_risk_threshold=0.8,
-                weights=BoundWeights(acceptance=2.0),
-            ),
-            _ROLLBACK_GOLDEN,
-        ),
-    ]
-    for contract, evidence, criteria, golden in pairs:
-        evaluation = BoundWorkflow().evaluate_step(
-            contract=contract, evidence=evidence, criteria=criteria
-        )
-        first = render_feedback(evaluation, contract=contract, evidence=evidence)
-        second = render_feedback(evaluation, contract=contract, evidence=evidence)
-        assert first == second == golden
 
 

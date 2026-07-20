@@ -3,30 +3,12 @@ from __future__ import annotations
 import pytest
 
 from bound.calculator import ScoreComponents, calculate_bound_score, calculate_components
-from bound.models import BoundCriteria, BoundWeights, EvaluationScores
+from bound.models import BoundCriteria, BoundWeights
+from tests.conftest import _scores
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _scores(
-    acceptance: float = 0.0,
-    influence: float = 0.0,
-    risk: float = 0.0,
-    cost: float = 0.0,
-) -> EvaluationScores:
-    """Build an :class:`EvaluationScores` with zero defaults.
-
-    Defaults are all zero so a test only has to set the dimensions it cares
-    about, keeping the formula under test easy to read.
-    """
-    return EvaluationScores(
-        acceptance=acceptance,
-        influence=influence,
-        risk=risk,
-        cost=cost,
-    )
 
 
 def _criteria(

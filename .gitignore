@@ -26,3 +26,9 @@ dist/
 # Agent coding
 todo.md
 
+# BOUND v0.7.0 local lineage (decision runs are local-only artifacts)
+# Traces live OUTSIDE git: .bound/ holds run metadata, append-only event logs,
+# and any retained raw verification output. Never commit .bound/ — it may
+# contain redacted-but-sensitive local execution data (item 13 privacy).
+.bound/
+
