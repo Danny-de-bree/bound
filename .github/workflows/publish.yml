@@ -1,72 +1,57 @@
-name: Publish to PyPI
+# ──────────────────────────────────────────────────────────────────────
+# Recovery publish workflow — alleen voor herpublicatie
+# ──────────────────────────────────────────────────────────────────────
+# Deze workflow bouwt NOOIT opnieuw. Hij downloadt alleen de artifacts
+# van een bestaande GitHub Release en publiceert ze naar PyPI.
+#
+# Gebruik dit ALLEEN als release.yml de PyPI-publicatie heeft gemist
+# (bv. door een netwerkfout of environment-approval die bleef hangen).
+#
+# Voor normale releases: gebruik release.yml, dat publiceert zelf naar
+# GitHub EN PyPI in één build-once pipeline.
+# ──────────────────────────────────────────────────────────────────────
+
+name: Publish to PyPI (recovery)
 
 on:
-  push:
-    tags:
-      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, without the leading v (e.g. 0.7.0)"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  test-and-build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Sync dependencies
-        run: uv sync --locked --all-extras --dev
-
-      - name: Verify tag matches package version
-        run: |
-          PACKAGE_VERSION=$(uv run python -c \
-            "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-
-          echo "Package version: $PACKAGE_VERSION"
-          echo "Tag version:     $TAG_VERSION"
-
-          test "$PACKAGE_VERSION" = "$TAG_VERSION"
-
-      - name: Ruff
-        run: uv run ruff check .
-
-      - name: Tests
-        run: uv run pytest -q
-
-      - name: Build distributions
-        run: uv build
-
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
-
   publish:
-    needs: test-and-build
+    name: Publish to PyPI
     runs-on: ubuntu-latest
-
-    environment:
-      name: pypi
-      url: https://pypi.org/p/bound-policy
-
+    environment: pypi
     permissions:
       id-token: write
+      contents: read
 
     steps:
-      - name: Download distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Download release assets from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ inputs.version }}"
+          mkdir -p release/python
+          echo "Downloading assets from release $TAG ..."
+          gh release download "$TAG" \
+            --pattern "*.whl" \
+            --pattern "*.tar.gz" \
+            --dir release/python/
+          echo "Downloaded:"
+          ls -la release/python/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release/python/

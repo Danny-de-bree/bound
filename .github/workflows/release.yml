@@ -1,22 +1,30 @@
-name: Release
+# ──────────────────────────────────────────────────────────────────────
+# Build-once release workflow
+# ──────────────────────────────────────────────────────────────────────
+# Dit is het ENIGE entrypoint voor productie-releases. De workflow:
+#
+#   1. quality-and-build  — verifieer, test, bouw ALLE artifacts (wheel,
+#      sdist, Skills ZIP, checksums) en upload 1 immutable bundle.
+#   2. publish-github     — download de bundle, push de tag, maak GitHub
+#      Release met alle assets.
+#   3. publish-pypi       — download de bundle, publiceer naar PyPI.
+#
+# Er wordt NOOIT opnieuw gebouwd. Hetzelfde artifact gaat naar GitHub
+# EN PyPI. Herpublicatie (recovery) gebeurt via publish.yml, dat ook
+# nooit opnieuw bouwt.
+#
+# Trigger: Actions tab → "Release" → "Run workflow" → voer de versie in
+# (zonder voorloop-v, bv. "0.7.0"). De input MOET gelijk zijn aan
+# project.version in pyproject.toml én bound.__version__, wat wordt
+# gecontroleerd voordat er iets wordt gebouwd of getagd.
+#
+# Gebruik RELEASE_PAT (secret) met contents:write + workflows scopes
+# om de tag push te laten doorstromen naar publish.yml. Zonder PAT
+# wordt de tag nog steeds aangemaakt, maar moet publish.yml handmatig
+# worden gestart.
+# ──────────────────────────────────────────────────────────────────────
 
-# Cut a release tag from a manually-requested version. After the quality gate
-# and build, this workflow creates and pushes the `v<version>` tag and opens a
-# GitHub Release. The tag push then fires `.github/workflows/publish.yml`, which
-# owns the actual PyPI upload -- this workflow never publishes to PyPI itself.
-#
-# Trigger: Actions tab -> "Release" -> "Run workflow" -> enter the version
-# (without the leading `v`, e.g. `0.7.0`). The input MUST equal the
-# `project.version` in pyproject.toml (and `bound.__version__`), which is
-# verified before anything is tagged.
-#
-# NOTE on chaining: a tag pushed by the default GITHUB_TOKEN does NOT trigger
-# other workflow runs (GitHub's token-loop protection). To auto-fire publish.yml
-# from this workflow, create a PAT with `contents:write` + `workflows` scopes as
-# the `RELEASE_PAT` repository secret; this workflow then checks out and pushes
-# the tag with that PAT. Without `RELEASE_PAT`, the tag is still created, but you
-# must run publish.yml manually (or it will fire once the tag is pushed by a
-# real maintainer).
+name: Release
 
 on:
   workflow_dispatch:
@@ -26,18 +34,27 @@ on:
         required: true
         type: string
 
+# ── Concurrency: voorkom dubbele builds voor dezelfde versie ────────
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+# ── Minimale root-permissions; per-job worden rechten verhoogd ──────
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+# ═════════════════════════════════════════════════════════════════
+  #  quality-and-build  — 1x bouwen, 1x uploaden
+  # ═════════════════════════════════════════════════════════════════
+  quality-and-build:
+    name: Quality gate & build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          # A PAT (RELEASE_PAT) is required so the tag push triggers publish.yml.
           token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
@@ -49,30 +66,95 @@ jobs:
       - name: Sync dependencies
         run: uv sync --locked --all-extras --dev
 
-      - name: Verify version matches the requested release
+      # ── Integriteitscontroles ──────────────────────────────────
+      - name: Verify version matches pyproject.toml
         run: |
           PACKAGE_VERSION=$(uv run python -c \
             "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          echo "Package version:   $PACKAGE_VERSION"
-          echo "Requested version:  ${{ inputs.version }}"
+          echo "pyproject.toml version:  $PACKAGE_VERSION"
+          echo "Requested version:       ${{ inputs.version }}"
           test "$PACKAGE_VERSION" = "${{ inputs.version }}"
+          echo "✅ pyproject.toml version OK"
 
-      - name: Ruff
+      - name: Verify version matches bound.__version__
+        run: |
+          CODE_VERSION=$(uv run python -c "import bound; print(bound.__version__)")
+          echo "bound.__version__:  $CODE_VERSION"
+          echo "Requested version:   ${{ inputs.version }}"
+          test "$CODE_VERSION" = "${{ inputs.version }}"
+          echo "✅ bound.__version__ OK"
+
+      - name: Check tag does not exist yet
+        run: |
+          TAG="v${{ inputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "❌ Tag $TAG already exists!"
+            exit 1
+          fi
+          echo "✅ Tag $TAG does not exist yet"
+
+      # ── Kwaliteitsgate ─────────────────────────────────────────
+      - name: Ruff lint
         run: uv run ruff check .
 
-      - name: Tests
+      - name: Run tests
         run: uv run pytest -q
 
-      - name: Build distributions
-        run: uv build
+      # ── Bouwen ─────────────────────────────────────────────────
+      - name: Build wheel and sdist
+        run: uv build --out-dir release/python
 
-      - name: Upload distributions
+      - name: Build Skills ZIP
+        run: |
+          mkdir -p release/skills
+          cd skills
+          zip -r ../release/skills/BOUND-agent-skill.zip bound \
+            -x "*/__pycache__/*" "*.pyc" ".DS_Store"
+          cd ..
+
+      - name: Verify Skills ZIP contains bound/SKILL.md
+        run: |
+          unzip -l release/skills/BOUND-agent-skill.zip | grep -q "bound/SKILL.md"
+          echo "✅ Skills ZIP contains bound/SKILL.md"
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum python/* skills/* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+
+      # ── Upload 1 immutable artifact ────────────────────────────
+      - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
-          path: dist/
+          name: release-bundle-${{ inputs.version }}
+          path: release/
+          retention-days: 90
+  # ═════════════════════════════════════════════════════════════════
+  #  publish-github  — tag + GitHub Release (downloadt bundle)
+  # ═════════════════════════════════════════════════════════════════
+  publish-github:
+    name: Publish to GitHub Release
+    needs: [quality-and-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
-      - name: Create and push the version tag
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-bundle-${{ inputs.version }}
+          path: release/
+
+      - name: Create and push version tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -87,4 +169,29 @@ jobs:
           name: v${{ inputs.version }}
           generate_release_notes: true
           files: |
-            dist/*
+            release/python/*
+            release/skills/*
+            release/SHA256SUMS.txt
+
+  # ═════════════════════════════════════════════════════════════════
+  #  publish-pypi  — PyPI publicatie (downloadt bundle, geen rebuild)
+  # ═════════════════════════════════════════════════════════════════
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [quality-and-build]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-bundle-${{ inputs.version }}
+          path: release/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release/python/
