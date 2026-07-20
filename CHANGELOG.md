@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-20
+
+### Fixed
+
+- `--threshold` is now documented as required (was `default 0.5`) in CLI docs.
+- README restructured to agent-first quick start (141 lines, was 414).
+- Python/CLI reference moved to `docs/python-usage.md`.
+
+### Added
+
+- `docs/python-usage.md` — self-contained Python & CLI reference (290 lines).
+- Build-once release workflow: `release.yml` builds wheel, sdist, Skills ZIP, and
+  checksums in one job; `publish.yml` is recovery-only.
+
 ## [0.7.0] - 2026-07-18
 
 BOUND v0.7.0 adds **Verified Evidence & Decision Lineage**: the honesty model
