@@ -1,0 +1,292 @@
+"""Watch engine for ``bound watch`` (v0.8.0).
+
+Consumes JSONL watch events over stdin, dispatches them against a policy's
+meaningful boundaries, runs approved collectors, emits structured control
+decisions, and appends everything to lineage.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import sys
+from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime, timezone
+from typing import Any
+
+from bound.events_watch import (
+    WATCH_EVENT_SCHEMA_VERSION,
+    WatchControlActionObservedEvent,
+    WatchControlActionReportedEvent,
+    WatchEvent,
+    WatchStepCompletedEvent,
+    WatchTaskFinishedEvent,
+    WatchTaskStartedEvent,
+    WatchVerificationRequestedEvent,
+    parse_watch_event,
+)
+from bound.lineage import ReasonCode, generate_evaluation_id
+from bound.lineage_store import LineageStore, get_default_store
+from bound.policy_schema import BoundPolicyConfig, load_policy_yaml
+from bound.services import (
+    BoundaryEvaluateRequest,
+    BoundaryEvaluateResponse,
+    BoundaryService,
+    EvaluationInputError,
+    RunService,
+    RunStartRequest,
+    RunFinishRequest,
+)
+
+logger = logging.getLogger(__name__)
+
+#: Minimum interval (seconds) between duplicate ``step_completed`` events
+#: for the same ``task_id`` + ``step_id``.
+_DEBOUNCE_WINDOW_S: float = 2.0
+
+#: Maximum number of concurrent tasks tracked at once.
+_MAX_TASKS: int = 64
+
+
+class _TaskState(BaseModel):
+    """Per-task state tracked by the watcher."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str
+    run_id: str | None = None
+    goal: str | None = None
+    plan: str | None = None
+    current_step_id: str | None = None
+    current_evaluation_id: str | None = None
+    last_step_event_at: float = 0.0
+    seen_sequences: set[int] = Field(default_factory=set)
+    finished: bool = False
+
+
+class WatchConfig(BaseModel):
+    """Configuration for a watcher session.
+
+    Attributes:
+        policy_path: Path to the ``bound-policy.yaml`` file.
+        once: When ``True``, exit after the first ``task_finished``.
+        json_output: When ``True``, emit JSON decisions to stdout.
+        store: Optional explicit :class:`LineageStore`.
+    """
+
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    policy_path: str
+    once: bool = False
+    json_output: bool = False
+    store: LineageStore | None = None
+
+
+class WatchError(Exception):
+    """Base class for watch-engine errors."""
+
+
+class WatchPolicyLoadError(WatchError):
+    """The policy file could not be loaded."""
+
+class WatchEngine:
+    """Event-driven watch engine.
+
+    Consumes BOUND watch events from stdin and triggers boundary
+    evaluation.  Create an instance and call :meth:`run`.
+    """
+
+    def __init__(self, config: WatchConfig, stdin: Any = None, stdout: Any = None) -> None:
+        self._config = config
+        self._policy: BoundPolicyConfig | None = None
+        self._store: LineageStore | None = None
+        self._tasks: dict[str, _TaskState] = {}
+        self._stdin = stdin or sys.stdin
+        self._stdout = stdout or sys.stdout
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def run(self) -> int:
+        """Run the watch loop.  Returns ``0`` on clean completion."""
+        try:
+            self._load_policy()
+        except WatchPolicyLoadError as exc:
+            self._emit_error(f"watch: policy error: {exc}")
+            return 1
+
+        try:
+            self._store = self._config.store or get_default_store()
+        except Exception as exc:
+            self._emit_error(f"watch: store error: {exc}")
+            return 1
+
+        try:
+            self._read_loop()
+        except KeyboardInterrupt:
+            self._flush_incomplete_tasks()
+            return 0
+        except WatchTransportError as exc:
+            self._emit_error(f"watch: transport error: {exc}")
+            return 1
+        except Exception:
+            logger.exception("watch: unexpected error in event loop")
+            self._flush_incomplete_tasks()
+            return 1
+        return 0
+
+    # ------------------------------------------------------------------
+    # Policy loading
+    # ------------------------------------------------------------------
+
+    def _load_policy(self) -> None:
+        """Load and validate the policy configuration."""
+        try:
+            self._policy = load_policy_yaml(self._config.policy_path)
+        except Exception as exc:
+            raise WatchPolicyLoadError(str(exc)) from exc
+
+    # ------------------------------------------------------------------
+    # Read loop
+    # ------------------------------------------------------------------
+
+    def _read_loop(self) -> None:
+        """Read JSONL lines from stdin and dispatch each event."""
+        for line in self._stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = parse_watch_event(line)
+            except Exception as exc:
+                self._emit_error(f"watch: invalid event: {exc}")
+                if self._config.once:
+                    raise WatchTransportError(str(exc)) from exc
+                continue
+
+            if event.schema_version != WATCH_EVENT_SCHEMA_VERSION:
+                self._emit_error(
+                    f"watch: unsupported schema_version={event.schema_version!r}"
+                )
+                continue
+
+            try:
+                self._dispatch(event)
+            except Exception:
+                logger.exception("watch: dispatch error for event=%s", event.event)
+                if self._config.once:
+                    raise
+
+            if self._config.once and event.event == "task_finished":
+                break
+
+    # ------------------------------------------------------------------
+    # Event dispatch
+    # ------------------------------------------------------------------
+
+    def _dispatch(self, event: WatchEvent) -> None:
+        """Route an event to the appropriate handler."""
+        task_id = event.task_id
+
+        # Deduplicate by sequence number
+        if event.sequence is not None:
+            state = self._tasks.get(task_id)
+            if state is not None and event.sequence in state.seen_sequences:
+                logger.debug("watch: duplicate seq=%s task=%s",
+                             event.sequence, task_id)
+                return
+
+        if isinstance(event, WatchTaskStartedEvent):
+            self._handle_task_started(event)
+        elif isinstance(event, WatchStepCompletedEvent):
+            self._handle_step_completed(event)
+        elif isinstance(event, WatchVerificationRequestedEvent):
+            self._handle_verification_requested(event)
+        elif isinstance(event, WatchControlActionReportedEvent):
+            self._handle_control_action_reported(event)
+        elif isinstance(event, WatchControlActionObservedEvent):
+            self._handle_control_action_observed(event)
+        elif isinstance(event, WatchTaskFinishedEvent):
+            self._handle_task_finished(event)
+
+        if event.sequence is not None:
+            state = self._tasks.get(task_id)
+            if state is not None:
+                state.seen_sequences.add(event.sequence)
+
+    # ------------------------------------------------------------------
+    # Handlers
+    # ------------------------------------------------------------------
+
+    def _handle_task_started(self, event: WatchTaskStartedEvent) -> None:
+        """Create or re-open a BOUND run for a task."""
+        task_id = event.task_id
+        if len(self._tasks) >= _MAX_TASKS and task_id not in self._tasks:
+            self._emit_error(f"watch: too many concurrent tasks")
+            return
+        existing = self._tasks.get(task_id)
+        if existing is not None and existing.run_id is not None:
+            logger.info("watch: re-opening run=%s task=%s", existing.run_id, task_id)
+            existing.goal = event.goal
+            existing.plan = event.plan
+            return
+        try:
+            from bound.lineage import generate_run_id
+            run_id = event.run_id or generate_run_id(task=event.goal[:80])
+            response = RunService.start(RunStartRequest(
+                task=event.goal[:200],
+                metadata={"watch_task_id": task_id, "plan": event.plan,
+                          "context": event.context},
+                store=self._store,
+            ))
+        except Exception as exc:
+            self._emit_error(f"watch: failed to start run: {exc}")
+            return
+        state = _TaskState(task_id=task_id, run_id=response.run_id,
+                           goal=event.goal, plan=event.plan)
+        self._tasks[task_id] = state
+        logger.info("watch: started run=%s task=%s", response.run_id, task_id)
+
+def _handle_step_completed(self, event: WatchStepCompletedEvent) -> None:
+        """Handle a step_completed event — evaluate at meaningful boundaries."""
+        raise NotImplementedError("_handle_step_completed — deferred to Sprint 2 implementation")
+
+    def _handle_verification_requested(self, event: WatchVerificationRequestedEvent) -> None:
+        """Handle a verification_requested event — run collectors."""
+        raise NotImplementedError("_handle_verification_requested — deferred to Sprint 2 implementation")
+
+    def _handle_control_action_reported(self, event: WatchControlActionReportedEvent) -> None:
+        """Handle a control_action_reported event — log the agent self-report."""
+        raise NotImplementedError("_handle_control_action_reported — deferred to Sprint 2 implementation")
+
+    def _handle_control_action_observed(self, event: WatchControlActionObservedEvent) -> None:
+        """Handle a control_action_observed event — independent verification."""
+        raise NotImplementedError("_handle_control_action_observed — deferred to Sprint 2 implementation")
+
+    def _handle_task_finished(self, event: WatchTaskFinishedEvent) -> None:
+        """Handle a task_finished event — close the run."""
+        raise NotImplementedError("_handle_task_finished — deferred to Sprint 2 implementation")
+
+    def _emit_error(self, msg: str) -> None:
+        """Write an error message to stderr via logging."""
+        logger.error(msg)
+
+    def _flush_incomplete_tasks(self) -> None:
+        """Close any incomplete tasks when the watcher shuts down."""
+        logger.info("watch: flushing %d incomplete tasks", len(self._tasks))
+        for task_id, state in self._tasks.items():
+            if not state.finished and state.run_id:
+                try:
+                    RunService.finish(RunFinishRequest(
+                        run_id=state.run_id,
+                        status="interrupted",
+                        note="watch interrupted",
+                        store=self._store,
+                    ))
+                except Exception as exc:
+                    logger.warning("watch: failed to flush task=%s: %s", task_id, exc)
+
+
+class WatchTransportError(WatchError):
+    """A watch event could not be parsed or validated."""

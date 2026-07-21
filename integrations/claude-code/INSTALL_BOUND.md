@@ -1,5 +1,11 @@
 # Integration prompt for Claude Code — Install BOUND
 
+> **Type: Instruction-only.** This integration provides a prompt that Claude Code
+> reads and follows. It is **not enforced** — there are no programmatic hooks
+> into Claude Code's event system, hooks, slash commands, or lifecycle events.
+> BOUND evaluates decisions; Claude Code is responsible for acting on them.
+> The agent follows these instructions, not a programmatic enforcement layer.
+
 > This document is **not documentation for a human.** It is a prompt designed
 > to be pasted directly into Claude Code. Paste everything below the line
 > into a Claude Code session and let it run.
@@ -172,6 +178,10 @@ bound inspect <run_id> --json           # machine-readable: provenance + assuran
    If the subcommand exists, use it as the authoritative "when to call BOUND"
    / "when not to" / "required flow" reference. If it does not exist yet, fall
    back to the rules in "Step 2" below.
+
+## Generate a policy (bound init)
+
+Run `bound init` to auto-detect your project's test framework, linter, type checker, and generate a reviewable `bound-policy.yaml`. Review it before proceeding.
 
 ## Step 1 — Inspect this project and its workflow
 
@@ -551,6 +561,13 @@ action/note.
 
 To disable lineage entirely (CI, ephemeral environments), set
 `BOUND_LINEAGE_DISABLED=1` or call `bound.configure(enabled=False)`.
+
+## v0.8.0 integration surfaces
+
+- `bound watch` — event-driven evaluation (JSONL events on stdin)
+- `bound mcp` — local MCP server for agent tool calls
+- `bound ui` — local dashboard at http://127.0.0.1:8765
+- `bound checkpoint` / `bound rollback --execute` — safe rollback with explicit opt-in
 
 ## Done
 

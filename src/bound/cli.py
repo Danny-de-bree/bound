@@ -12,7 +12,6 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from bound.evaluator import StaticEvaluator
 from bound.evidence import EvidenceProvenance, EvidenceStatus
 from bound.lineage import (
     ActionReportedEvent,
@@ -40,7 +39,6 @@ from bound.models import (
     EvaluationResult,
     EvaluationScores,
 )
-from bound.policy import BoundPolicy
 from bound.policy_canon import compute_policy_hash
 from bound.policy_schema import (
     BoundPolicyConfig,
@@ -48,8 +46,49 @@ from bound.policy_schema import (
     WeightedSignal,
     load_policy_yaml,
 )
-from bound.prompt import generate_prompt
-from bound.workflow import CodingWorkflowEvaluator
+from bound.init_project import detect_tooling, generate_policy, ProjectDetections
+from bound.services import (
+    PolicyService,
+    PolicyValidateRequest,
+    PolicyValidateResponse,
+    PolicyExplainRequest,
+    PolicyExplainResponse,
+    PolicyHashRequest,
+    PolicyHashResponse,
+    PolicyLoadError,
+    PolicyValidationError,
+    RunService,
+    RunStartRequest,
+    RunStartResponse,
+    RunFinishRequest,
+    RunFinishResponse,
+    RunListRequest,
+    RunListResponse,
+    RunDeleteRequest,
+    RunDeleteResponse,
+    RunInspectRequest,
+    RunInspectResponse,
+    RunNotFoundError,
+    EvaluationService,
+    EvaluateRequest,
+    EvaluateResponse,
+    EvaluateWorkflowRequest,
+    EvaluateWorkflowResponse,
+    OutcomeService,
+    OutcomeRecordRequest,
+    OutcomeRecordResponse,
+    EvaluationInputError,
+    CheckpointService,
+    CheckpointCreateRequest,
+    CheckpointCreateResponse,
+    CheckpointInspectRequest,
+    CheckpointInspectResponse,
+    CheckpointListRequest,
+    CheckpointListResponse,
+    CheckpointRollbackRequest,
+    CheckpointRollbackResponse,
+    CheckpointError,
+)
 
 logger = logging.getLogger("bound.cli")
 
@@ -415,6 +454,42 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     inspect.set_defaults(func=_run_inspect)
 
+    # --- local dashboard: ui -------------------------------------------------
+    ui = subparsers.add_parser(
+        "ui",
+        help="Start the local BOUND dashboard (read-only, no account needed).",
+        description=(
+            "Start the local BOUND lineage dashboard — a read-only HTTP server "
+            "that shows all local runs with task, status, latest decision, "
+            "assurance, and time. Opens one run as a plan -> step -> attempt -> "
+            "decision tree with candidate vs final decision, evidence provenance "
+            "badges (VERIFIED, CLAIMED, MISSING, ...), and highlights the exact "
+            "evidence or gate that caused a RETRY / REPLAN / ROLLBACK. "
+            "No hosted backend or account needed."
+        ),
+    )
+    ui.add_argument(
+        "run_id",
+        nargs="?",
+        default=None,
+        metavar="RUN_ID",
+        help="Optional run id to open directly on the detail page.",
+    )
+    ui.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="TCP port (default 8765).",
+    )
+    ui.add_argument(
+        "--open",
+        action="store_true",
+        default=False,
+        dest="open_browser",
+        help="Open the dashboard URL in the default browser after startup.",
+    )
+    ui.set_defaults(func=_run_ui)
+
     # --- lineage: outcome ----------------------------------------------------
     outcome = subparsers.add_parser(
         "outcome",
@@ -510,6 +585,141 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_policy_file_arg(p_hash)
     p_hash.set_defaults(func=_run_policy_hash)
+
+    # --- watch mode (Sprint 2) -------------------------------------------------
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Event-driven watch mode: consume JSONL events and evaluate boundaries.",
+        description=(
+            "Event-driven watch mode that consumes BOUND watch events (JSONL) "
+            "from stdin, evaluates each step against the policy's meaningful "
+            "boundaries, runs approved collectors, emits structured control "
+            "decisions, and appends everything to lineage.  Use --once to "
+            "process a single task and exit, or --json for machine-readable output."
+        ),
+    )
+    watch_parser.add_argument(
+        "--policy",
+        required=True,
+        help="Path to the bound-policy.yaml file.",
+    )
+    watch_parser.add_argument(
+        "--once",
+        action="store_true",
+        default=False,
+        help="Exit after processing the first task_finished event.",
+    )
+    watch_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        dest="json_output",
+        help="Emit JSON decision events to stdout instead of log lines.",
+    )
+    watch_parser.set_defaults(func=_run_watch)
+
+# --- checkpoint -----------------------------------------------------------
+    cp_parser = subparsers.add_parser(
+        "checkpoint",
+        help="Manage BOWN checkpoints (create/inspect/list).",
+        description="Manage BOUND checkpoints for safe state preservation and rollback.",
+    )
+    cp_sub = cp_parser.add_subparsers(
+        dest="checkpoint_command", metavar="<checkpoint command>", required=True
+    )
+
+    cp_create = cp_sub.add_parser(
+        "create",
+        help="Create a checkpoint for a run step.",
+        description="Capture the current repository state into a BOUND checkpoint.",
+    )
+    cp_create.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
+    cp_create.add_argument("--step", required=True, metavar="STEP_ID", help="Step id for this checkpoint.")
+    cp_create.add_argument("--message", default=None, help="Optional checkpoint message.")
+    cp_create.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
+    cp_create.set_defaults(func=_run_checkpoint_create)
+
+    cp_inspect = cp_sub.add_parser(
+        "inspect",
+        help="Inspect a checkpoint's details.",
+        description="Show detailed information about a checkpoint.",
+    )
+    cp_inspect.add_argument("checkpoint_id", help="The checkpoint id to inspect.")
+    cp_inspect.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
+    cp_inspect.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
+    cp_inspect.set_defaults(func=_run_checkpoint_inspect)
+
+    cp_list = cp_sub.add_parser(
+        "list",
+        help="List checkpoints for a run.",
+        description="List all checkpoints for a given run.",
+    )
+    cp_list.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
+    cp_list.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
+    cp_list.set_defaults(func=_run_checkpoint_list)
+
+    # --- rollback -------------------------------------------------------------
+    rollback_parser = subparsers.add_parser(
+        "rollback",
+        help="Roll back to a checkpoint (requires --execute).",
+        description="Roll back the working tree to a previously created checkpoint. "
+        "Requires explicit --execute opt-in to prevent accidental mutations. "
+        "Use --dry-run for a preview of what would change.",
+    )
+    rollback_parser.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
+    rollback_parser.add_argument("--checkpoint", required=True, metavar="CHECKPOINT_ID", help="Checkpoint to roll back to.")
+    rollback_parser.add_argument("--dry-run", action="store_true", default=False, help="Preview changes without executing.")
+    rollback_parser.add_argument("--execute", action="store_true", default=False, help="Perform the rollback (opt-in required).")
+    rollback_parser.set_defaults(func=_run_rollback)
+
+    # --- init (Sprint 3) -------------------------------------------------------
+    mcp_parser = subparsers.add_parser(
+        "mcp",
+        help="Start the stdio MCP (Model Context Protocol) server.",
+        description=(
+            "Start the stdio-based JSON-RPC MCP server. Reads one JSON-RPC "
+            "request per line from stdin, dispatches to the shared BOUND "
+            "service layer, and writes one JSON-RPC response per line to stdout. "
+            "Use --once to process a single request and exit."
+        ),
+    )
+    mcp_parser.add_argument(
+        "--once",
+        action="store_true",
+        default=False,
+        help="Process a single request and exit.",
+    )
+    mcp_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        dest="json_log",
+        help="Emit structured JSON log lines to stderr.",
+    )
+    mcp_parser.set_defaults(func=_run_mcp)
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Generate a bound-policy.yaml for an existing project.",
+        description=(
+            "Detect project tooling (test framework, linter, type checker, "
+            "coverage, build system, Git) and generate a minimal but reviewable "
+            "bound-policy.yaml. No tool is executed; no network call is made. "
+            "Use --stdout to preview the policy without writing to disk."
+        ),
+    )
+    init_parser.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    init_parser.add_argument(
+        "--stdout",
+        action="store_true",
+        default=False,
+        help="Print the generated policy to stdout instead of writing to disk.",
+    )
+    init_parser.set_defaults(func=_run_init)
 
     return parser
 
@@ -619,45 +829,52 @@ _NEXT_ACTION_REASON = {
 
 def _run_run_start(args: argparse.Namespace) -> int:
     """Execute ``bound run start``."""
-    store = _store()
     metadata = dict(args.metadata) if args.metadata else {}
-    event = store.start_run(args.task, metadata=metadata)
+    response = RunService.start(RunStartRequest(
+        task=args.task,
+        metadata=metadata,
+        store=_store(),
+    ))
     if args.json:
         print(json.dumps({
-            "run_id": event.run_id,
-            "task": event.task,
-            "started_at": event.timestamp.isoformat(),
-            "status": RunStatus.STARTED.value,
-            "schema_version": event.schema_version,
+            "run_id": response.run_id,
+            "task": response.task,
+            "started_at": response.started_at,
+            "status": response.status,
+            "schema_version": response.schema_version,
         }, indent=2))
     else:
-        print(event.run_id)
+        print(response.run_id)
     return 0
 
 
 def _run_run_finish(args: argparse.Namespace) -> int:
     """Execute ``bound run finish``."""
-    store = _store()
     try:
-        event = store.finish_run(args.run_id, status=args.status, note=args.note)
-    except RunNotFound as exc:
+        response = RunService.finish(RunFinishRequest(
+            run_id=args.run_id,
+            status=args.status,
+            note=args.note,
+            store=_store(),
+        ))
+    except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
     if args.json:
         print(json.dumps({
-            "run_id": args.run_id,
-            "status": args.status,
-            "finished_at": event.timestamp.isoformat(),
+            "run_id": response.run_id,
+            "status": response.status,
+            "finished_at": response.finished_at,
         }, indent=2))
     else:
-        print(f"finished run {args.run_id} ({args.status})")
+        print(f"finished run {response.run_id} ({response.status})")
     return 0
 
 
 def _run_run_list(args: argparse.Namespace) -> int:
     """Execute ``bound run list``."""
-    store = _store()
-    summaries = store.list_runs()
+    response = RunService.list_runs(RunListRequest(store=_store()))
+    summaries = response.runs
     if args.json:
         print(json.dumps([s.model_dump(mode="json") for s in summaries], indent=2, default=str))
         return 0
@@ -676,16 +893,18 @@ def _run_run_list(args: argparse.Namespace) -> int:
 
 def _run_run_delete(args: argparse.Namespace) -> int:
     """Execute ``bound run delete``."""
-    store = _store()
     try:
-        store.delete_run(args.run_id)
-    except RunNotFound as exc:
+        response = RunService.delete(RunDeleteRequest(
+            run_id=args.run_id,
+            store=_store(),
+        ))
+    except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
     if args.json:
-        print(json.dumps({"run_id": args.run_id, "deleted": True}, indent=2))
+        print(json.dumps({"run_id": response.run_id, "deleted": True}, indent=2))
     else:
-        print(f"deleted run {args.run_id}")
+        print(f"deleted run {response.run_id}")
     return 0
 
 
@@ -1269,12 +1488,16 @@ def _run_inspect(args: argparse.Namespace) -> int:
     unverified`` filters to unverified / claimed / missing / invalid evidence.
     ``--html PATH`` writes a self-contained local HTML timeline (Phase 9.3).
     """
-    store = _store()
     try:
-        log = store.read_run(args.run_id)
-    except RunNotFound as exc:
+        response = RunService.inspect(RunInspectRequest(
+            run_id=args.run_id,
+            only_unverified=args.only_unverified,
+            store=_store(),
+        ))
+    except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
+    log = response.log
     if args.html is not None:
         html = _render_inspect_html(log)
         Path(args.html).write_text(html, encoding="utf-8")
@@ -1288,42 +1511,52 @@ def _run_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_ui(args: argparse.Namespace) -> int:
+    """Execute ``bound ui`` — start the local dashboard.
+
+    Starts a read-only HTTP server on localhost that shows all local runs
+    and their decision lineage trees. When ``run_id`` is supplied the
+    dashboard opens to that run's detail page.
+    """
+    from bound.ui import serve
+
+    serve(port=args.port, open_browser=args.open_browser, run_id=args.run_id)
+    return 0
+
+
 def _run_outcome(args: argparse.Namespace) -> int:
     """Execute ``bound outcome --run ...``."""
-    store = _store()
-    try:
-        store.read_run(args.run)
-    except RunNotFound as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_NOT_FOUND
     step_id = generate_step_id(run_id=args.run, contract_id=args.step, attempt=args.attempt)
     evaluation_id = args.evaluation_id or generate_evaluation_id(
         run_id=args.run, step_id=step_id, attempt=args.attempt
     )
-    next_action = args.next_action or _DECISION_NEXT_ACTION[args.decision]
-    reason_code = args.reason_code or _NEXT_ACTION_REASON[next_action]
-    store.record_outcome(
-        args.run,
-        step_id=step_id,
-        evaluation_id=evaluation_id,
-        decision=args.decision,
-        next_action=next_action,
-        reason_code=reason_code,
-        note=args.note,
-    )
+    try:
+        response = OutcomeService.record(OutcomeRecordRequest(
+            run_id=args.run,
+            step_id=step_id,
+            evaluation_id=evaluation_id,
+            decision=args.decision,
+            next_action=args.next_action,
+            reason_code=args.reason_code,
+            note=args.note,
+            store=_store(),
+        ))
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
     if args.json:
         print(json.dumps({
-            "run_id": args.run,
-            "step_id": step_id,
-            "evaluation_id": evaluation_id,
-            "decision": args.decision,
-            "next_action": next_action,
-            "reason_code": str(reason_code),
+            "run_id": response.run_id,
+            "step_id": response.step_id,
+            "evaluation_id": response.evaluation_id,
+            "decision": response.decision,
+            "next_action": response.next_action,
+            "reason_code": response.reason_code,
         }, indent=2))
     else:
         print(
-            f"recorded outcome for {args.run} / {step_id}: "
-            f"{args.decision} -> {next_action}"
+            f"recorded outcome for {response.run_id} / {response.step_id}: "
+            f"{response.decision} -> {response.next_action}"
         )
     return 0
 
@@ -1499,29 +1732,33 @@ def _run_policy_validate(args: argparse.Namespace) -> int:
     not match the schema, :data:`EXIT_POLICY_USAGE` (2) when the file cannot be
     read (usage error).
     """
-    policy, error = _load_policy_file(args.file)
-    if error is not None:
-        # A missing/unreadable file is a usage error; a schema failure invalid.
-        print(error, file=sys.stderr)
-        if error.startswith("error: policy file not found"):
+    response = PolicyService.validate(PolicyValidateRequest(path=args.file))
+    if not response.valid:
+        error = response.errors[0] if response.errors else "unknown error"
+        if response.error_kind == "usage":
+            print(f"error: {error}", file=sys.stderr)
             return EXIT_POLICY_USAGE
+        print(f"error: invalid policy: {error}", file=sys.stderr)
         return EXIT_POLICY_INVALID
 
-    warnings = _policy_warnings(policy)
     if args.json:
         payload: dict[str, object] = {
             "valid": True,
-            "policy": _policy_identity_json(policy),
-            "warnings": warnings,
+            "policy": {
+                "id": response.policy.id,
+                "version": response.policy.version,
+                "hash": response.policy.hash,
+            } if response.policy else None,
+            "warnings": response.warnings,
         }
         print(json.dumps(payload, indent=2))
     else:
-        print(f"policy {policy.policy.id}@{policy.policy.version}: valid")
-        print(f"policy hash: {compute_policy_hash(policy)}")
-        if warnings:
+        print(f"policy {response.policy.id}@{response.policy.version}: valid")
+        print(f"policy hash: {response.policy.hash}")
+        if response.warnings:
             print("")
             print("warnings:")
-            for w in warnings:
+            for w in response.warnings:
                 print(f"  - {w}")
         else:
             print("no warnings")
@@ -1540,106 +1777,34 @@ def _run_policy_explain(args: argparse.Namespace) -> int:
     Exit codes: ``0`` ok, :data:`EXIT_POLICY_INVALID` (1) when the file does not
     match the schema, :data:`EXIT_POLICY_USAGE` (2) when the file cannot be read.
     """
-    policy, error = _load_policy_file(args.file)
-    if error is not None:
-        print(error, file=sys.stderr)
-        if error.startswith("error: policy file not found"):
-            return EXIT_POLICY_USAGE
+    try:
+        response = PolicyService.explain(PolicyExplainRequest(path=args.file))
+    except PolicyLoadError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_POLICY_USAGE
+    except PolicyValidationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return EXIT_POLICY_INVALID
 
     if args.json:
         payload = {
-            "policy": _policy_identity_json(policy),
-            "collectors": {
-                name: c.model_dump(mode="json")
-                for name, c in policy.collectors.items()
-            },
-            "acceptance_checks": [
-                g.model_dump(mode="json") for g in policy.acceptance_checks
-            ],
-            "quality_checks": [s.model_dump(mode="json") for s in policy.quality_checks],
-            "risk_checks": [g.model_dump(mode="json") for g in policy.risk_checks],
-            "budgets": {n: d.model_dump(mode="json") for n, d in policy.budgets.items()},
-            "change_scope": policy.change_scope.model_dump(mode="json"),
-            "approvals": policy.approvals.model_dump(mode="json"),
+            "policy": {
+                "id": response.policy.id,
+                "version": response.policy.version,
+                "hash": response.policy.hash,
+            } if response.policy else None,
+            "collectors": response.collectors,
+            "acceptance_checks": response.acceptance_checks,
+            "quality_checks": response.quality_checks,
+            "risk_checks": response.risk_checks,
+            "budgets": response.budgets,
+            "change_scope": response.change_scope,
+            "approvals": response.approvals,
         }
         print(json.dumps(payload, indent=2))
         return 0
 
-    out: list[str] = []
-    out.append(f"Policy: {policy.policy.id}@{policy.policy.version}")
-    out.append(f"Hash: {compute_policy_hash(policy)}")
-    out.append("")
-
-    if policy.collectors:
-        out.append("Collectors:")
-        for name, col in policy.collectors.items():
-            line = f"- {name} (type={col.type})"
-            if col.command:
-                line += f" command={' '.join(col.command)!r}"
-            out.append(line)
-        out.append("")
-
-    out.append("Acceptance gates (blockers — cannot be compensated by score):")
-    if policy.acceptance_checks:
-        for gate in policy.acceptance_checks:
-            out.append(_gate_summary_line(gate))
-    else:
-        out.append("  (none)")
-    out.append("")
-
-    out.append("Risk gates (blockers — cannot be compensated by score):")
-    if policy.risk_checks:
-        for gate in policy.risk_checks:
-            out.append(_gate_summary_line(gate))
-    else:
-        out.append("  (none)")
-    out.append("")
-
-    out.append("Quality signals (weighted — soft contributions):")
-    if policy.quality_checks:
-        for sig in policy.quality_checks:
-            out.append(_signal_summary_line(sig))
-    else:
-        out.append("  (none)")
-    out.append("")
-
-    out.append("Budgets:")
-    if policy.budgets:
-        for name, dim in policy.budgets.items():
-            out.append(_budget_summary_line(name, dim))
-    else:
-        out.append("  (none)")
-    out.append("")
-
-    scope = policy.change_scope
-    out.append("Change scope:")
-    if scope.allowed_paths:
-        out.append(f"  allowed: {', '.join(scope.allowed_paths)}")
-    else:
-        out.append("  allowed: (any)")
-    if scope.forbidden_paths:
-        out.append(f"  forbidden: {', '.join(scope.forbidden_paths)}")
-    if scope.dependency_file_patterns:
-        out.append(
-            f"  dependency files: {', '.join(scope.dependency_file_patterns)}"
-        )
-    out.append("")
-
-    appr = policy.approvals
-    out.append("Approvals:")
-    if appr.commands_requiring_approval:
-        out.append(
-            f"  requiring approval: {', '.join(appr.commands_requiring_approval)}"
-        )
-    if appr.destructive_actions:
-        out.append(f"  destructive: {', '.join(appr.destructive_actions)}")
-    out.append(
-        f"  require_rollback_availability={appr.require_rollback_availability} "
-        f"on_missing_rollback={appr.on_missing_rollback}"
-    )
-
-    print("\n".join(out))
+    print(response.human_readable)
     return 0
 
 
@@ -1652,22 +1817,27 @@ def _run_policy_hash(args: argparse.Namespace) -> int:
     Exit codes: ``0`` ok, :data:`EXIT_POLICY_INVALID` (1) when the file does not
     match the schema, :data:`EXIT_POLICY_USAGE` (2) when the file cannot be read.
     """
-    policy, error = _load_policy_file(args.file)
-    if error is not None:
-        print(error, file=sys.stderr)
-        if error.startswith("error: policy file not found"):
-            return EXIT_POLICY_USAGE
+    try:
+        response = PolicyService.hash(PolicyHashRequest(path=args.file))
+    except PolicyLoadError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_POLICY_USAGE
+    except PolicyValidationError as exc:
+        print(f"error: invalid policy: {exc}", file=sys.stderr)
         return EXIT_POLICY_INVALID
 
-    ph = compute_policy_hash(policy)
     if args.json:
         payload = {
-            "hash": ph,
-            "policy": _policy_identity_json(policy),
+            "hash": response.hash,
+            "policy": {
+                "id": response.policy.id,
+                "version": response.policy.version,
+                "hash": response.policy.hash,
+            } if response.policy else None,
         }
         print(json.dumps(payload, indent=2))
     else:
-        print(ph)
+        print(response.hash)
     return 0
 
 
@@ -1742,21 +1912,35 @@ def _run_evaluate(args: argparse.Namespace) -> int:
         print(f"error: invalid BOUND inputs: {exc}", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
 
-    policy = BoundPolicy(StaticEvaluator(scores))
-    result = policy.evaluate(action, criteria)
+    try:
+        response = EvaluationService.evaluate(EvaluateRequest(
+            action=action,
+            scores=scores,
+            criteria=criteria,
+            run_id=getattr(args, "run", None),
+            step=getattr(args, "step", None),
+            attempt=getattr(args, "attempt", 1),
+            description=getattr(args, "description", None),
+            store=_store(),
+        ))
+    except EvaluationInputError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_VALIDATION_ERROR
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
 
-    logger.debug("BOUND evaluation complete: decision=%s score=%s", result.decision, result.score)
+    logger.debug(
+        "BOUND evaluation complete: decision=%s score=%s",
+        response.result.decision,
+        response.result.score,
+    )
 
-    payload = _result_to_payload(result)
-
-    if getattr(args, "run", None):
-        lineage = _record_evaluation_for_run(args, result)
-        if isinstance(lineage, int):
-            return lineage
-        payload["lineage"] = lineage
-
-    print(json.dumps(payload, indent=2))
-    print(generate_prompt(result), file=sys.stderr)
+    output = dict(response.payload)
+    if response.lineage is not None:
+        output["lineage"] = response.lineage
+    print(json.dumps(output, indent=2))
+    print(response.prompt, file=sys.stderr)
     return 0
 
 
@@ -1810,31 +1994,38 @@ def _run_evaluate_workflow(args: argparse.Namespace) -> int:
     try:
         action = Action(description=args.action, goal=args.goal, context=args.context)
         signals = _build_workflow_signals(args)
-        evaluator = CodingWorkflowEvaluator(signals, influence=args.influence)
         criteria = _build_criteria(args)
     except ValidationError as exc:
         print(f"error: invalid BOUND inputs: {exc}", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
 
-    policy = BoundPolicy(evaluator)
     try:
-        result = policy.evaluate(action, criteria)
-    except ValueError as exc:
-        # CodingWorkflowEvaluator raises ValueError when no acceptance evidence
-        # is available at all (none of the completion signals were supplied).
+        response = EvaluationService.evaluate_workflow(EvaluateWorkflowRequest(
+            action=action,
+            signals=signals,
+            criteria=criteria,
+            influence=args.influence if args.influence is not None else 0.0,
+            run_id=getattr(args, "run", None),
+            step=getattr(args, "step", None),
+            attempt=getattr(args, "attempt", 1),
+            description=getattr(args, "description", None),
+            store=_store(),
+        ))
+    except EvaluationInputError as exc:
         print(f"error: could not evaluate workflow: {exc}", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
 
     logger.debug(
         "BOUND workflow evaluation complete: decision=%s score=%s",
-        result.decision,
-        result.score,
+        response.result.decision,
+        response.result.score,
     )
 
-    payload = _result_to_payload(result)
-    payload["signals"] = signals.model_dump()
-    print(json.dumps(payload, indent=2))
-    print(generate_prompt(result), file=sys.stderr)
+    print(json.dumps(response.payload, indent=2))
+    print(response.prompt, file=sys.stderr)
     return 0
 
 
@@ -1856,6 +2047,312 @@ def _run_integration_spec(args: argparse.Namespace) -> int:  # noqa: ARG001
 
     print(json.dumps(integration_spec(), indent=2))
     return 0
+
+
+def _run_watch(args: argparse.Namespace) -> int:
+    """Execute the ``bound watch`` subcommand.
+
+    Creates a :class:`WatchEngine` with the given policy path and options,
+    reads JSONL watch events from stdin, and dispatches them to the engine.
+
+    Args:
+        args: The parsed namespace with ``policy``, ``once``, ``json_output``.
+
+    Returns:
+        ``0`` on success, ``1`` on error.
+    """
+    from bound.watch import WatchConfig, WatchEngine, WatchPolicyLoadError, WatchTransportError
+
+    config = WatchConfig(
+        policy_path=args.policy,
+        once=getattr(args, "once", False),
+        json_output=getattr(args, "json_output", False),
+    )
+    engine = WatchEngine(config, stdin=sys.stdin, stdout=sys.stdout)
+    try:
+        return engine.run()
+    except WatchPolicyLoadError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except WatchTransportError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
+# ---------------------------------------------------------------------------
+# checkpoint CLI commands
+# ---------------------------------------------------------------------------
+
+
+def _run_checkpoint_create(args: argparse.Namespace) -> int:
+    """Execute ``bound checkpoint create --run --step``."""
+    try:
+        response = CheckpointService.create(CheckpointCreateRequest(
+            run_id=args.run,
+            step_id=args.step,
+            message=getattr(args, "message", None),
+        ))
+    except CheckpointError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+
+    if args.json:
+        print(json.dumps({
+            "checkpoint_id": response.checkpoint_id,
+            "run_id": response.run_id,
+            "step_id": response.step_id,
+            "path": response.path,
+            "changed_files_count": response.changed_files_count,
+            "untracked_files_count": response.untracked_files_count,
+        }, indent=2))
+    else:
+        print(f"checkpoint {response.checkpoint_id} created for run {response.run_id}")
+        print(f"  path: {response.path}")
+        print(f"  changed files: {response.changed_files_count}")
+        print(f"  untracked files: {response.untracked_files_count}")
+    return 0
+
+
+def _run_checkpoint_inspect(args: argparse.Namespace) -> int:
+    """Execute ``bound checkpoint inspect <checkpoint_id>``."""
+    try:
+        response = CheckpointService.inspect(CheckpointInspectRequest(
+            run_id=args.run,
+            checkpoint_id=args.checkpoint_id,
+        ))
+    except CheckpointError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+
+    if args.json:
+        print(json.dumps(response.model_dump(mode="json"), indent=2, default=str))
+    else:
+        print(f"Checkpoint: {response.checkpoint_id}")
+        print(f"  Run:        {response.run_id}")
+        print(f"  Step:       {response.step_id}")
+        print(f"  HEAD:       {response.head_commit or '-'}")
+        print(f"  Branch:     {response.branch or '-'}")
+        print(f"  Timestamp:  {response.timestamp or '-'}")
+        print(f"  Scope:      {', '.join(response.scope) if response.scope else '(all)'}")
+        print(f"  Changed:    {len(response.changed_files)} file(s)")
+        print(f"  Untracked:  {len(response.untracked_files)} file(s)")
+        print(f"  Hashes:     {response.artifact_hashes_count} file(s)")
+    return 0
+
+
+def _run_checkpoint_list(args: argparse.Namespace) -> int:
+    """Execute ``bound checkpoint list --run``."""
+    try:
+        response = CheckpointService.list_checkpoints(CheckpointListRequest(
+            run_id=args.run,
+        ))
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+
+    if args.json:
+        print(json.dumps({
+            "run_id": response.run_id,
+            "checkpoint_ids": response.checkpoint_ids,
+        }, indent=2))
+    else:
+        if not response.checkpoint_ids:
+            print(f"(no checkpoints found for run {response.run_id})")
+            return 0
+        print(f"Checkpoints for run {response.run_id}:")
+        for cp_id in response.checkpoint_ids:
+            print(f"  {cp_id}")
+    return 0
+def _run_rollback(args: argparse.Namespace) -> int:
+    """Execute ``bound rollback --run --checkpoint``."""
+    try:
+        request = CheckpointRollbackRequest(
+            run_id=args.run,
+            checkpoint_id=args.checkpoint,
+        )
+
+        if args.dry_run:
+            from bound.checkpoint import (
+                load_checkpoint,
+                compute_rollback_preview,
+            )
+            try:
+                cp = load_checkpoint(args.run, args.checkpoint)
+            except (FileNotFoundError, RuntimeError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            preview = compute_rollback_preview(cp)
+            print(f"Rollback preview for {args.checkpoint} (run {args.run}):")
+            print(f"  HEAD match:  {preview['head_match']}")
+            print(f"  Changed:     {len(preview['changed'])} file(s)")
+            print(f"  Added:       {len(preview['added'])} file(s)")
+            print(f"  Unchanged:   {len(preview['unchanged'])} file(s)")
+            if preview["changed"]:
+                print(f"  Files to change:")
+                for f in preview["changed"]:
+                    print(f"    - {f}")
+            if preview["added"]:
+                print(f"  Files to restore:")
+                for f in preview["added"]:
+                    print(f"    - {f}")
+            if not preview["head_match"]:
+                print("  WARNING: HEAD has diverged since checkpoint was created.")
+            print()
+            print("Use --execute to perform the rollback.")
+            return 0
+
+        if not args.execute:
+            print("error: rollback requires --execute to proceed (use --dry-run for preview)", file=sys.stderr)
+            return 2
+
+        # Execute rollback
+        response = CheckpointService.rollback(request)
+        if not response.is_valid:
+            print(f"error: rollback failed for {response.checkpoint_id}", file=sys.stderr)
+            for issue in response.issues:
+                print(f"  - {issue}", file=sys.stderr)
+            return 1
+
+        print(f"Rollback to {response.checkpoint_id} completed successfully.")
+        if response.preview:
+            preview = response.preview
+            print(f"  Changed:  {len(preview.get('changed', []))} file(s)")
+            print(f"  Added:    {len(preview.get('added', []))} file(s)")
+        if response.issues:
+            for issue in response.issues:
+                print(f"  info: {issue}")
+        return 0
+
+    except CheckpointError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except RunNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+
+
+# ---------------------------------------------------------------------------
+# Init command
+# ---------------------------------------------------------------------------
+
+
+def _run_init(args: argparse.Namespace) -> int:
+    """Execute the ``bound init`` subcommand.
+
+    Detects tooling in *project_dir*, generates a minimal ``bound-policy.yaml``,
+    validates it through :class:`PolicyService`, and either writes it to disk
+    or prints it to stdout.
+
+    Args:
+        args: Parsed namespace with ``project_dir`` and ``stdout``.
+
+    Returns:
+        ``0`` on success, ``1`` on validation failure.
+    """
+    project_dir = Path(args.project_dir).resolve()
+
+    if not project_dir.is_dir():
+        print(f"error: directory not found: {project_dir}", file=sys.stderr)
+        return 1
+
+    # --- Detect tooling ---
+    print(f"Detecting tooling in {project_dir} ...", file=sys.stderr)
+    detections = detect_tooling(project_dir)
+
+    # Print a concise summary to stderr
+    _print_detection_summary(detections)
+
+    # --- Generate policy ---
+    print("", file=sys.stderr)
+    print("Generating bound-policy.yaml ...", file=sys.stderr)
+    yaml_content = generate_policy(detections)
+
+    # --- Validate via PolicyService ---
+    import tempfile
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+    ) as tmp:
+        tmp.write(yaml_content)
+        tmp_path = tmp.name
+
+    try:
+        response = PolicyService.validate(PolicyValidateRequest(path=tmp_path))
+        if not response.valid:
+            print("error: generated policy failed validation:", file=sys.stderr)
+            for err in response.errors:
+                print(f"  {err}", file=sys.stderr)
+            return 1
+        if response.warnings:
+            print("Validation warnings:", file=sys.stderr)
+            for w in response.warnings:
+                print(f"  {w}", file=sys.stderr)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+    # --- Output ---
+    if args.stdout:
+        print(yaml_content)
+    else:
+        policy_path = project_dir / "bound-policy.yaml"
+        if policy_path.exists():
+            print(f"error: {policy_path} already exists; refusing to overwrite.", file=sys.stderr)
+            return 1
+        policy_path.write_text(yaml_content, encoding="utf-8")
+        print(f"Wrote {policy_path}", file=sys.stderr)
+
+    # --- Next actions ---
+    print("", file=sys.stderr)
+    print("Next steps:", file=sys.stderr)
+    print("  1. Review the generated bound-policy.yaml", file=sys.stderr)
+    print("  2. Adjust uncertain detections (marked with # UNCERTAIN / # NOT FOUND)", file=sys.stderr)
+    print("  3. Run: bound policy validate bound-policy.yaml", file=sys.stderr)
+    print("  4. Start a run: bound run start --task <description>", file=sys.stderr)
+    print("", file=sys.stderr)
+    return 0
+
+
+def _print_detection_summary(detections: ProjectDetections) -> None:
+    """Print a human-readable summary of the detections to stderr.
+
+    Args:
+        detections: The tooling detections.
+    """
+    print("  Test framework:", detections.test_framework.name, file=sys.stderr)
+    print("  Linter:       ", detections.linter.name, file=sys.stderr)
+    print("  Type checker: ", detections.type_checker.name, file=sys.stderr)
+    print("  Coverage:     ", detections.coverage.name, file=sys.stderr)
+    print("  Build system: ", detections.build_system.name, file=sys.stderr)
+    ci = f"{detections.ci_provider.name} ({detections.ci_provider.confidence.value})" if detections.ci_provider else "none"
+    print(f"  CI provider:  {ci}", file=sys.stderr)
+    if detections.git_branch:
+        print(f"  Git branch:   {detections.git_branch}", file=sys.stderr)
+    if detections.git_remote:
+        print(f"  Git remote:   {detections.git_remote[:80]}", file=sys.stderr)
+
+
+def _run_mcp(args: argparse.Namespace) -> int:
+    """Run the stdio MCP server.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Exit code from the MCP server.
+    """
+    # Keep the MCP import optional per architecture rules
+    try:
+        from bound.mcp_server import run_mcp_server
+    except ImportError:
+        print("error: mcp_server module not available", file=sys.stderr)
+        return 1
+
+    return run_mcp_server(once=args.once, json_log=args.json_log)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

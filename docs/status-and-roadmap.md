@@ -2,7 +2,7 @@
 
 ## Current status
 
-BOUND v0.4 is an experimental deterministic control harness. The score formula,
+BOUND v0.8 is an experimental deterministic control harness. The score formula,
 the default workflow heuristics, and the threshold defaults are **hypotheses**.
 They have not yet been broadly validated across production agent workloads.
 
@@ -31,6 +31,25 @@ already improves agent outcomes.
 - Detailed documentation moved into `docs/`.
 - **No LLM-as-judge introduced.** The deterministic, network-free core is
   unchanged.
+
+### What Sprints 1–3 added (v0.5–v0.8)
+
+- **v0.5** — cleanup: retired outdated examples/experiments, refreshed README and
+  architecture docs. No public API change.
+- **v0.6** — plan-to-report lineage (`PLAN.md → StepContract →
+  ExecutionEvidence → BOUND decision → INTEGRATION_REPORT.md`), pure
+  side-effect-free evidence collectors, a standardised `RunTrace`/report renderer,
+  and a reference integration running BOUND's own verification commands.
+- **v0.7** — Verified Evidence & Decision Lineage: trust provenance,
+  missing-means-missing telemetry, independent executing collectors,
+  provenance-aware contracts, append-only local lineage
+  (`.bound/runs/`), and the declarative `bound-policy.yaml` configuration
+  (hard gates, weighted signals, budgets, scope, approvals) with
+  `bound run` / `inspect` / `outcome` / `policy` CLI.
+- **v0.8** — operator UX on a shared service layer: `bound init` (policy
+  scaffolding), `bound ui` (local dashboard), `bound watch` (event-driven mode),
+  `bound mcp` (stdio MCP server), `bound checkpoint` / `rollback` (safe state
+  preservation), native collectors, and agent integrations. *(this release)*
 
 ## Competitive positioning
 
@@ -65,13 +84,23 @@ LLM judge is never a required dependency of the core.
   examples.
 - **v0.4** — agent integration: framework-neutral control layer,
   `evaluate_agent_step`, `bound integration-spec`, integration prompts, a real
-  agent-loop example, integration-first docs. *(this release)*
+  agent-loop example, integration-first docs.
+- **v0.5** — cleanup and doc refresh; retired outdated examples and experiments.
+- **v0.6** — plan-to-report lineage, deterministic pure collectors, standardised
+  run trace + report renderer, reference integration.
+- **v0.7** — Verified Evidence & Decision Lineage: trust provenance,
+  independent executing collectors, append-only local lineage, the
+  `bound-policy.yaml` configuration system, and the `run` / `inspect` /
+  `outcome` / `policy` CLI.
+- **v0.8** — shared service layer + operator UX: `bound init`, `bound ui`,
+  `bound watch`, `bound mcp`, `bound checkpoint` / `rollback`, native collectors,
+  agent integrations. *(this release)*
 - **Later** — production data collection and threshold calibration; a real,
   documented Cline dogfooding run; hierarchical BOUND; adaptive/learned
   thresholds; an optional, out-of-core semantic evaluator; mission-level
   policies.
 
-> v0.4 is the integration release. It proves an agent can install BOUND,
-> evaluate meaningful execution boundaries, and change its control flow based on
-> deterministic evidence. It does **not** claim BOUND already improves agent
-> outcomes — that requires real workload calibration, which is later work.
+> v0.8 completes Sprints 1–3. The deterministic, network-free core is unchanged;
+> the new commands wrap a shared service layer rather than introducing an LLM
+> judge. BOUND does **not** yet claim to improve agent outcomes — that requires
+> real workload calibration, which is later work.

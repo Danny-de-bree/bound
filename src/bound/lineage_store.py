@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -167,7 +167,7 @@ class RunSummary(BaseModel):
     run_id: str
     task: str
     schema_version: str = LINEAGE_SCHEMA_VERSION
-    started_at: datetime
+    started_at: datetime | None = None
     finished_at: datetime | None = None
     status: RunStatus
     step_count: int
@@ -1053,7 +1053,7 @@ class LineageStore:
                     path=str(meta_path.parent.resolve()),
                 )
             )
-        summaries.sort(key=lambda s: s.started_at or datetime.fromtimestamp(0), reverse=True)
+        summaries.sort(key=lambda s: s.started_at or datetime.fromtimestamp(0, tz=timezone.utc), reverse=True)
         return summaries
 
     def _safe_replay(self, run_id: str) -> RunLog | None:
@@ -1099,7 +1099,7 @@ class LineageStore:
         if self.max_runs is not None:
             remaining = [s for s in self.list_runs() if s.run_id not in set(pruned)]
             remaining.sort(
-                key=lambda s: s.started_at or datetime.fromtimestamp(0), reverse=True
+                key=lambda s: s.started_at or datetime.fromtimestamp(0, tz=timezone.utc), reverse=True
             )
             for s in remaining[self.max_runs :]:
                 try:

@@ -34,3 +34,81 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      - name: Build Skills ZIP (deterministic)
+        run: uv run python scripts/build_skill_zip.py --out-dir dist/skills
+
+      - name: Verify Skills layout (CI smoke test)
+        run: |
+          # Check required files exist in skills/bound/
+          test -f skills/bound/SKILL.md
+          test -f skills/bound/agents/openai.yaml
+          test -f skills/bound/references/integration-report.md
+          echo "✅ All required skill files present"
+
+          # Check no __pycache__ leaked in
+          ! find skills/bound -name "__pycache__" -type d | grep -q .
+          echo "✅ No __pycache__ in skills"
+
+      - name: Verify ZIP determinism (2 builds, same hash)
+        run: |
+          uv run python scripts/build_skill_zip.py --out-dir /tmp/zip1
+          uv run python scripts/build_skill_zip.py --out-dir /tmp/zip2
+          sha256sum /tmp/zip1/BOUND-agent-skill.zip /tmp/zip2/BOUND-agent-skill.zip
+          cmp /tmp/zip1/BOUND-agent-skill.zip /tmp/zip2/BOUND-agent-skill.zip
+          echo "✅ Two consecutive builds produce identical ZIPs"
+
+  # ──────────────────────────────────────────────────────────────────────
+  #  skills-install — smoke test skills.sh in a clean environment
+  # ──────────────────────────────────────────────────────────────────────
+  skills-install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create clean test directory
+        run: |
+          TESTDIR=$(mktemp -d)
+          echo "TESTDIR=$TESTDIR" >> "$GITHUB_ENV"
+          echo "Working in $TESTDIR"
+
+      - name: Install skill via skills.sh (non-interactive, Codex)
+        run: |
+          cd "$TESTDIR"
+          npx --yes skills add Danny-de-bree/bound --skill bound --agent codex -y 2>&1
+          echo "✅ skills add completed"
+
+      - name: Verify installed skill files
+        run: |
+          cd "$TESTDIR"
+          echo "--- Installed files ---"
+          find .agents -type f | sort
+
+          test -f .agents/skills/bound/SKILL.md
+          test -f .agents/skills/bound/agents/openai.yaml
+          test -f .agents/skills/bound/references/integration-report.md
+          echo "✅ All required skill files present in installed layout"
+
+      - name: Verify skills-lock.json
+        run: |
+          cd "$TESTDIR"
+          test -f skills-lock.json
+          LOCK_VERSION=$(python3 -c "import json; print(json.load(open('skills-lock.json'))['version'])")
+          test "$LOCK_VERSION" = "1"
+          SKILL_NAME=$(python3 -c "import json; print(list(json.load(open('skills-lock.json'))['skills'].keys())[0])")
+          test "$SKILL_NAME" = "bound"
+          echo "✅ skills-lock.json is valid (version=$LOCK_VERSION, skill=$SKILL_NAME)"
+
+      - name: Verify SKILL.md references bound-policy package
+        run: |
+          cd "$TESTDIR"
+          grep -q "pip install bound-policy" .agents/skills/bound/SKILL.md
+          echo "✅ SKILL.md instructs pip install bound-policy"
+
+      - name: Verify installed SKILL.md has valid frontmatter
+        run: |
+          cd "$TESTDIR"
+          HEADER=$(head -1 .agents/skills/bound/SKILL.md)
+          test "$HEADER" = "---"
+          echo "✅ SKILL.md has valid frontmatter (starts with ---)"
+
+      # Cleanup is automatic with mktemp + ephemeral runner

@@ -1,5 +1,11 @@
 # Integration prompt for Hermes Agent — Install BOUND
 
+> **Type: Instruction-only.** This integration provides a prompt that Hermes Agent
+> reads and follows. It is **not enforced** — there are no programmatic hooks
+> into Hermes Agent's event system, workflow steps, or lifecycle events.
+> BOUND evaluates decisions; Hermes Agent is responsible for acting on them.
+> The agent follows these instructions, not a programmatic enforcement layer.
+
 > This document is **not documentation for a human.** It is a prompt designed
 > to be pasted directly into Hermes Agent. Paste everything below the line
 > into a Hermes Agent session and let it run.
@@ -172,6 +178,10 @@ bound inspect <run_id> --json           # machine-readable: provenance + assuran
    If the subcommand exists, use it as the authoritative "when to call BOUND"
    / "when not to" / "required flow" reference. If it does not exist yet, fall
    back to the rules in "Step 2" below.
+
+## Generate a policy (bound init)
+
+Run `bound init` to auto-detect your project's test framework, linter, type checker, and generate a reviewable `bound-policy.yaml`. Review it before proceeding.
 
 ## Step 1 — Inspect this project and its workflow
 
@@ -598,6 +608,13 @@ action/note.
 
 To disable lineage entirely (CI, ephemeral environments), set
 `BOUND_LINEAGE_DISABLED=1` or call `bound.configure(enabled=False)`.
+
+## v0.8.0 integration surfaces
+
+- `bound watch` — event-driven evaluation (JSONL events on stdin)
+- `bound mcp` — local MCP server for agent tool calls
+- `bound ui` — local dashboard at http://127.0.0.1:8765
+- `bound checkpoint` / `bound rollback --execute` — safe rollback with explicit opt-in
 
 ## Done
 

@@ -85,6 +85,12 @@ jobs:
           test "$CODE_VERSION" = "${{ inputs.version }}"
           echo "✅ bound.__version__ OK"
 
+      - name: Verify changelog has entry for this version
+        run: |
+          grep -q "^## \[${{ inputs.version }}\]" CHANGELOG.md || \
+            { echo "❌ CHANGELOG.md has no entry for [${{ inputs.version }}]"; exit 1; }
+          echo "✅ CHANGELOG.md has entry for ${{ inputs.version }}"
+
       - name: Check tag does not exist yet
         run: |
           TAG="v${{ inputs.version }}"
@@ -105,18 +111,44 @@ jobs:
       - name: Build wheel and sdist
         run: uv build --out-dir release/python
 
-      - name: Build Skills ZIP
-        run: |
-          mkdir -p release/skills
-          cd skills
-          zip -r ../release/skills/BOUND-agent-skill.zip bound \
-            -x "*/__pycache__/*" "*.pyc" ".DS_Store"
-          cd ..
+      - name: Build Skills ZIP (deterministic)
+        run: uv run python scripts/build_skill_zip.py --out-dir release/skills
 
-      - name: Verify Skills ZIP contains bound/SKILL.md
+      - name: Twine check on wheel & sdist
         run: |
-          unzip -l release/skills/BOUND-agent-skill.zip | grep -q "bound/SKILL.md"
-          echo "✅ Skills ZIP contains bound/SKILL.md"
+          uv pip install twine
+          uv run twine check release/python/*
+
+      - name: Wheel smoke test (install in clean venv)
+        run: |
+          WHEEL=$(ls release/python/bound_policy-*.whl | head -1)
+          echo "Testing wheel: $WHEEL"
+          python -m venv /tmp/.bound-wheel-test
+          /tmp/.bound-wheel-test/bin/pip install "$WHEEL"
+          echo "--- import bound ---"
+          /tmp/.bound-wheel-test/bin/python -c "import bound; print(bound.__version__)"
+          echo "--- bound --help ---"
+          /tmp/.bound-wheel-test/bin/bound --help
+          echo "--- bound integration-spec ---"
+          /tmp/.bound-wheel-test/bin/bound integration-spec 2>&1 | head -20
+          echo "--- Done ---"
+          rm -rf /tmp/.bound-wheel-test
+
+      - name: Verify Skills ZIP structure
+        run: |
+          uv run python -c "
+import zipfile
+with zipfile.ZipFile('release/skills/BOUND-agent-skill.zip') as zf:
+    names = zf.namelist()
+    assert 'bound/SKILL.md' in names, 'Missing bound/SKILL.md'
+    assert 'bound/agents/openai.yaml' in names, 'Missing agents/openai.yaml'
+    assert 'bound/references/integration-report.md' in names, 'Missing references/integration-report.md'
+    for n in names:
+        assert '__pycache__' not in n, f'Contains pycache: {n}'
+        assert not n.endswith('.pyc'), f'Contains .pyc: {n}'
+        assert not n.endswith('.DS_Store'), f'Contains .DS_Store: {n}'
+    print(f'✅ ZIP structure valid ({len(names)} files)')
+"
 
       - name: Generate checksums
         run: |

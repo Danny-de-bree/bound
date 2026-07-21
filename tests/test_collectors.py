@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import textwrap
 from datetime import UTC, datetime, timedelta
@@ -9,11 +10,17 @@ import pytest
 from pydantic import ValidationError
 
 from bound.collectors import (
+    CoverageEvidence,
     GitInspection,
+    MypyEvidence,
     PytestSummary,
+    RuffEvidence,
     ServiceTestEvidence,
+    parse_coverage_output,
     parse_git_status_porcelain,
+    parse_mypy_output,
     parse_pytest_summary,
+    parse_ruff_output,
 )
 from bound.command_collector import (
     BudgetCollector,
@@ -843,3 +850,369 @@ class TestProcessRuntimeCollector:
         )
         assert evidence.check_id == "build-ok"
 
+# ---------------------------------------------------------------------------
+# Sprint 2 — RuffEvidence
+# ---------------------------------------------------------------------------
+
+
+class TestParseRuffOutput:
+    """``parse_ruff_output`` builds RuffEvidence from ruff JSON output."""
+
+    def test_empty_output_is_pass(self) -> None:
+        """An empty string (no violations) yields PASSED, zero counts."""
+        ev = parse_ruff_output("")
+        assert ev.total_violations == 0
+        assert ev.file_count == 0
+        assert ev.error_count == 0
+        assert ev.warning_count == 0
+        assert ev.fixable_count == 0
+        assert ev.passed is True
+        assert ev.status is EvidenceStatus.PASSED
+        assert ev.provenance is EvidenceProvenance.VERIFIED
+
+    def test_single_violation(self) -> None:
+        """A single error violation is counted correctly."""
+        raw = json.dumps([
+            {
+                "code": "F401",
+                "filename": "src/mod.py",
+                "severity": "error",
+                "fix": None,
+                "message": "`os` imported but unused",
+            }
+        ])
+        ev = parse_ruff_output(raw, tool_version="0.15.0")
+        assert ev.total_violations == 1
+        assert ev.file_count == 1
+        assert ev.error_count == 1
+        assert ev.warning_count == 0
+        assert ev.fixable_count == 0
+        assert ev.passed is False
+        assert ev.status is EvidenceStatus.FAILED
+        assert ev.tool_version == "0.15.0"
+        assert ev.provenance is EvidenceProvenance.VERIFIED
+
+    def test_mixed_severity(self) -> None:
+        """Error and warning violations are counted separately."""
+        raw = json.dumps([
+            {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
+            {"code": "W001", "filename": "b.py", "severity": "warning", "fix": None},
+            {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
+        ])
+        ev = parse_ruff_output(raw, tool_version="0.15.0")
+        assert ev.total_violations == 3
+        assert ev.file_count == 2
+        assert ev.error_count == 2
+        assert ev.warning_count == 1
+        assert ev.passed is False
+
+    def test_fixable_count(self) -> None:
+        """Violations with a ``fix`` key are counted as fixable."""
+        raw = json.dumps([
+            {
+                "code": "F401",
+                "filename": "a.py",
+                "severity": "error",
+                "fix": {"applicability": "safe", "edits": []},
+            },
+            {
+                "code": "W001",
+                "filename": "b.py",
+                "severity": "warning",
+                "fix": None,
+            },
+        ])
+        ev = parse_ruff_output(raw)
+        assert ev.fixable_count == 1
+        assert ev.total_violations == 2
+
+    def test_timestamp_timezone_validation(self) -> None:
+        """A naive (non-timezone-aware) timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            parse_ruff_output("[]", timestamp=datetime(2025, 1, 1))
+
+    def test_invalid_json_raises_value_error(self) -> None:
+        """Non-JSON input raises ValueError, not a silent default."""
+        with pytest.raises(ValueError, match="Cannot parse"):
+            parse_ruff_output("not json at all")
+
+    def test_non_list_json_raises_value_error(self) -> None:
+        """A JSON object (not an array) raises ValueError."""
+        with pytest.raises(ValueError, match="Expected a JSON array"):
+            parse_ruff_output('{"oops": true}')
+
+    def test_extra_fields_forbidden(self) -> None:
+        """RuffEvidence rejects unexpected fields."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            RuffEvidence(total_violations=0, oops="surprise")  # type: ignore[call-arg]
+
+    def test_passed_property_matches_status(self) -> None:
+        """The ``passed`` property reflects ``status is PASSED``."""
+        ev = RuffEvidence(status=EvidenceStatus.PASSED)
+        assert ev.passed is True
+        ev = RuffEvidence(status=EvidenceStatus.FAILED)
+        assert ev.passed is False
+        ev = RuffEvidence(status=EvidenceStatus.MISSING)
+        assert ev.passed is False
+# ---------------------------------------------------------------------------
+# Sprint 2 — MypyEvidence
+# ---------------------------------------------------------------------------
+
+
+class TestParseMypyOutput:
+    """``parse_mypy_output`` builds MypyEvidence from mypy text output."""
+
+    def test_empty_output_is_pass(self) -> None:
+        """Empty output (no errors) yields PASSED, zero counts."""
+        ev = parse_mypy_output("Success: no issues found in 1 source file\n")
+        assert ev.total_errors == 0
+        assert ev.file_count == 0
+        assert ev.error_codes == {}
+        assert ev.passed is True
+        assert ev.status is EvidenceStatus.PASSED
+        assert ev.provenance is EvidenceProvenance.VERIFIED
+
+    def test_single_error(self) -> None:
+        """A single mypy error line is parsed into the correct error code."""
+        raw = (
+            "src/mod.py:1: error: Incompatible types in assignment "
+            '(expression has type "str", variable has type "int")  [assignment]\n'
+        )
+        ev = parse_mypy_output(raw, tool_version="mypy 2.3.0")
+        assert ev.total_errors == 1
+        assert ev.file_count == 1
+        assert ev.error_codes == {"assignment": 1}
+        assert ev.passed is False
+        assert ev.status is EvidenceStatus.FAILED
+        assert ev.tool_version == "mypy 2.3.0"
+        assert ev.provenance is EvidenceProvenance.VERIFIED
+
+    def test_multiple_errors_same_file(self) -> None:
+        """Multiple errors in the same file are counted."""
+        raw = (
+            "src/mod.py:1: error: Incompatible types in assignment  [assignment]\n"
+            "src/mod.py:2: error: Argument 1 has incompatible type  [arg-type]\n"
+        )
+        ev = parse_mypy_output(raw)
+        assert ev.total_errors == 2
+        assert ev.file_count == 1
+        assert ev.error_codes == {"assignment": 1, "arg-type": 1}
+
+    def test_multiple_files(self) -> None:
+        """Errors spread across multiple files are counted."""
+        raw = (
+            "src/a.py:1: error: X  [assignment]\n"
+            "src/b.py:5: error: Y  [arg-type]\n"
+            "src/a.py:3: error: Z  [assignment]\n"
+        )
+        ev = parse_mypy_output(raw)
+        assert ev.total_errors == 3
+        assert ev.file_count == 2
+        assert ev.error_codes == {"assignment": 2, "arg-type": 1}
+
+    def test_non_error_lines_ignored(self) -> None:
+        """Summary lines and notes are not counted as errors."""
+        raw = (
+            "src/mod.py:1: error: Bad type  [assignment]\n"
+            "Found 1 error in 1 file (checked 1 source file)\n"
+        )
+        ev = parse_mypy_output(raw)
+        assert ev.total_errors == 1
+        assert ev.error_codes == {"assignment": 1}
+
+    def test_timestamp_timezone_validation(self) -> None:
+        """A naive timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            parse_mypy_output("", timestamp=datetime(2025, 1, 1))
+
+    def test_extra_fields_forbidden(self) -> None:
+        """MypyEvidence rejects unexpected fields."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            MypyEvidence(total_errors=0, oops=True)  # type: ignore[call-arg]
+
+    def test_passed_property(self) -> None:
+        """The ``passed`` property reflects ``status is PASSED``."""
+        ev = MypyEvidence(status=EvidenceStatus.PASSED)
+        assert ev.passed is True
+        ev = MypyEvidence(status=EvidenceStatus.FAILED)
+        assert ev.passed is False
+# ---------------------------------------------------------------------------
+# Sprint 2 — CoverageEvidence
+# ---------------------------------------------------------------------------
+
+
+class TestParseCoverageOutput:
+    """``parse_coverage_output`` builds CoverageEvidence from coverage JSON."""
+
+    #: A minimal coverage.json fixture with three files.
+    _FIXTURE_JSON = json.dumps({
+        "meta": {
+            "format": 3,
+            "version": "7.15.2",
+            "timestamp": "2026-07-21T12:27:31",
+            "branch_coverage": True,
+            "show_contexts": False,
+        },
+        "files": {
+            "src/bound/__init__.py": {
+                "summary": {
+                    "covered_lines": 16,
+                    "num_statements": 16,
+                    "percent_covered": 100.0,
+                    "missing_lines": 0,
+                    "excluded_lines": 0,
+                    "covered_branches": 0,
+                    "num_branches": 0,
+                }
+            },
+            "src/bound/models.py": {
+                "summary": {
+                    "covered_lines": 40,
+                    "num_statements": 50,
+                    "percent_covered": 80.0,
+                    "missing_lines": 10,
+                    "excluded_lines": 0,
+                    "covered_branches": 5,
+                    "num_branches": 10,
+                }
+            },
+            "src/bound/collectors.py": {
+                "summary": {
+                    "covered_lines": 30,
+                    "num_statements": 60,
+                    "percent_covered": 50.0,
+                    "missing_lines": 30,
+                    "excluded_lines": 0,
+                    "covered_branches": 3,
+                    "num_branches": 6,
+                }
+            },
+        },
+    })
+
+    def test_parses_full_report(self) -> None:
+        """A full coverage JSON report is parsed correctly."""
+        ev = parse_coverage_output(
+            self._FIXTURE_JSON,
+            tool_version="coverage 7.15.2",
+            timestamp=datetime(2026, 7, 21, 12, 30, tzinfo=UTC),
+        )
+        # Total: 16+50+60 = 126 statements, 16+40+30 = 86 covered
+        # line_pct = 86/126 * 100 = 68.25
+        assert ev.line_coverage_pct == pytest.approx(68.25, rel=0.01)
+        # Branch: 5+3 = 8 covered out of 10+6 = 16 = 50.0%
+        assert ev.branch_coverage_pct == pytest.approx(50.0, rel=0.01)
+        assert ev.file_count == 3
+        assert ev.tool_version == "coverage 7.15.2"
+        assert ev.passed is False  # 68.25% < 80%
+        assert ev.status is EvidenceStatus.FAILED
+        assert ev.provenance is EvidenceProvenance.VERIFIED
+
+    def test_files_dict_contains_summary(self) -> None:
+        """The ``files`` dict contains per-file summary fields."""
+        ev = parse_coverage_output(self._FIXTURE_JSON)
+        assert "src/bound/__init__.py" in ev.files
+        file_info = ev.files["src/bound/__init__.py"]
+        assert file_info["covered_lines"] == 16
+        assert file_info["num_statements"] == 16
+        assert file_info["percent_covered"] == 100.0
+        assert file_info["missing_lines"] == 0
+
+    def test_branch_coverage_none_when_no_branches(self) -> None:
+        """When no branch data exists, branch_coverage_pct is None."""
+        no_branch_json = json.dumps({
+            "meta": {"branch_coverage": False},
+            "files": {
+                "a.py": {
+                    "summary": {
+                        "covered_lines": 5,
+                        "num_statements": 10,
+                        "percent_covered": 50.0,
+                        "missing_lines": 5,
+                        "excluded_lines": 0,
+                    }
+                },
+            },
+        })
+        ev = parse_coverage_output(no_branch_json)
+        assert ev.branch_coverage_pct is None
+        assert ev.line_coverage_pct == 50.0
+        assert ev.file_count == 1
+        assert ev.passed is False
+
+    def test_no_statements_is_full_coverage(self) -> None:
+        """Zero statements across all files is treated as 100 % coverage."""
+        empty_json = json.dumps({
+            "meta": {},
+            "files": {
+                "empty.py": {
+                    "summary": {
+                        "covered_lines": 0,
+                        "num_statements": 0,
+                        "percent_covered": 100.0,
+                        "missing_lines": 0,
+                        "excluded_lines": 0,
+                    }
+                },
+            },
+        })
+        ev = parse_coverage_output(empty_json)
+        assert ev.line_coverage_pct == 100.0
+        assert ev.passed is True
+        assert ev.status is EvidenceStatus.PASSED
+
+    def test_empty_json_is_pass(self) -> None:
+        """Empty input yields PASSED with zero coverage."""
+        ev = parse_coverage_output("")
+        assert ev.line_coverage_pct == 0.0
+        assert ev.passed is True
+        assert ev.status is EvidenceStatus.PASSED
+
+    def test_invalid_json_raises_value_error(self) -> None:
+        """Non-JSON input raises ValueError."""
+        with pytest.raises(ValueError, match="Cannot parse"):
+            parse_coverage_output("{{{")
+
+    def test_timestamp_timezone_validation(self) -> None:
+        """A naive timestamp raises ValueError."""
+        with pytest.raises(ValueError, match="timezone-aware"):
+            parse_coverage_output("{}", timestamp=datetime(2025, 1, 1))
+
+    def test_extra_fields_forbidden(self) -> None:
+        """CoverageEvidence rejects unexpected fields."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            CoverageEvidence(line_coverage_pct=80.0, oops=True)  # type: ignore[call-arg]
+
+    def test_passed_property(self) -> None:
+        """The ``passed`` property reflects ``status is PASSED``."""
+        ev = CoverageEvidence(status=EvidenceStatus.PASSED)
+        assert ev.passed is True
+        ev = CoverageEvidence(status=EvidenceStatus.FAILED)
+        assert ev.passed is False
+
+    def test_high_coverage_passes(self) -> None:
+        """Coverage above 80 % yields PASSED status."""
+        high_json = json.dumps({
+            "meta": {},
+            "files": {
+                "a.py": {
+                    "summary": {
+                        "covered_lines": 90,
+                        "num_statements": 100,
+                        "percent_covered": 90.0,
+                        "missing_lines": 10,
+                        "excluded_lines": 0,
+                    }
+                },
+            },
+        })
+        ev = parse_coverage_output(high_json)
+        assert ev.line_coverage_pct == 90.0
+        assert ev.passed is True
+        assert ev.status is EvidenceStatus.PASSED

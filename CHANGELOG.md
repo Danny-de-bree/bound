@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-21
+
+BOUND v0.8 completes Sprints 1–3 by wrapping the deterministic core in a shared
+service layer and adding an operator-facing UX. The network-free, no-LLM-judge
+core is unchanged; the new commands are thin surfaces over one service layer.
+
+### Added
+
+- **Shared service layer** — the evaluation, lineage, policy, and collector logic
+  is exposed through one service so the CLI, the dashboard, watch mode, and the MCP
+  server share a single source of truth.
+- **`bound init`** — detect project tooling (test framework, linter, type checker,
+  build system, Git) and generate a reviewable `bound-policy.yaml`; no tool is
+  executed and no network call is made.
+- **`bound ui`** — local, read-only lineage dashboard (default port `8765`);
+  renders a run as a plan → step → attempt → decision tree with evidence
+  provenance badges. No hosted backend or account needed.
+- **`bound watch`** — event-driven watch mode that consumes BOUND watch events
+  (JSONL) from stdin, evaluates each step against a policy, runs approved
+  collectors, and appends to lineage.
+- **`bound mcp`** — stdio JSON-RPC MCP (Model Context Protocol) server dispatching
+  to the shared service layer.
+- **`bound checkpoint` / `bound rollback`** — safe state preservation and
+  rollback; `checkpoint create` / `inspect` / `list`, and `rollback` with an
+  explicit `--execute` opt-in and `--dry-run` preview.
+- **Native collectors** and **agent integrations** for the new surfaces.
+
+### Changed
+
+- Version bumped to `0.8.0`.
+
 ## [0.7.1] - 2026-07-20
 
 ### Fixed
@@ -606,7 +637,9 @@ corpus (`benchmarks/contracts/`, `benchmarks/trajectories/`) and the
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.8.0
+[0.7.1]: https://github.com/Danny-de-bree/bound/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.7.0
 [0.6.1]: https://github.com/Danny-de-bree/bound/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.6.0

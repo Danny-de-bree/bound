@@ -657,8 +657,8 @@ def test_policy_explain_renders_gates_weights_and_budgets(
     out, _ = capsys.readouterr()
     assert rc == 0
     assert "Policy: coding-default@1.0" in out
-    assert "Acceptance gates" in out
-    assert "Risk gates" in out
+    assert "Acceptance checks" in out
+    assert "Risk checks" in out
     assert "Quality signals" in out
     assert "Budgets:" in out
     # A blocker carries its on_* actions and the collector it binds.

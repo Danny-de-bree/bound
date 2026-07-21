@@ -9,6 +9,29 @@ Use BOUND after meaningful execution steps to decide whether the agent should
 continue, retry, replan, or roll back. BOUND evaluates completed work; it does
 not decide what code to write.
 
+## Agent integration types
+
+All BOUND agent integrations are **instruction-only** — they are prompts that
+the agent reads and follows. There are **no enforced integrations** (no
+programmatic hooks into the agent's event system, MCP servers, rules, or
+lifecycle events). Every integration relies on the agent to voluntarily
+follow the instructions and act on BOUND's decisions.
+
+| Agent | File | Type | Mechanism |
+|-------|------|------|-----------|
+| Cline | `integrations/cline/INSTALL_BOUND.md` | Instruction-only | Prompt-based; agent follows instructions |
+| Codex | `integrations/codex/INSTALL_BOUND.md` | Instruction-only | Prompt-based; agent follows instructions |
+| Claude Code | `integrations/claude-code/INSTALL_BOUND.md` | Instruction-only | Prompt-based; agent follows instructions |
+| Hermes Agent | `integrations/hermes-agent/INSTALL_BOUND.md` | Instruction-only | Prompt-based; agent follows instructions |
+| Kilo Code | `integrations/kilo-code/INSTALL_BOUND.md` | Instruction-only | Prompt-based; agent follows instructions |
+| Generic | `integrations/generic/INSTALL_BOUND.md` | Instruction-only | Prompt-based; any agent follows instructions |
+
+**Key distinction:** Instruction-only integrations describe the BOUND control
+loop and instruct the agent to manually call BOUND's CLI or Python API at
+each boundary. The agent is *responsible* for acting on the decision — BOUND
+does not enforce the action.  Enforced integrations (future) would hook into
+the agent's event system to intercept decisions before they reach the agent.
+
 ## Inspect before integrating
 
 1. Install the latest stable package into the project's environment:
@@ -111,7 +134,8 @@ is a participant, not the judge.
   assurance and blocks a clean `ACCEPT`).
 - **Configure allowed collectors; BOUND performs objective verification.** Use
   the BOUND collectors (`PytestCollector`, `GitCollector`, `JUnitCollector`,
-  `BudgetCollector`, `ProcessRuntimeCollector`, `CommandCollector`) to *execute*
+  `BudgetCollector`, `ProcessRuntimeCollector`, `CommandCollector`, plus native
+  `RuffEvidence`, `MypyEvidence`, `CoverageEvidence`) to *execute*
   verification BOUND controls. They record `evidence.collected` audit events with
   `VERIFIED`/`OBSERVED` provenance, a collector name/version, artefact hash and a
   timezone-aware timestamp. A collector crash or stale artefact is recorded
@@ -125,10 +149,11 @@ is a participant, not the judge.
   never `VERIFIED`.
 - **BOUND logs what the agent reports; the agent executes control actions.**
   BOUND records `action.reported` (`reported_provenance=CLAIMED`); an independent
-  hook may add `observed_action` to confirm it. **The agent — not BOUND — executes
-  control actions and workspace rollback.** BOUND is a thin harness: it emits
-  `ROLLBACK` and may independently verify the resulting state; it never performs a
-  workspace rollback itself.
+  hook may add `observed_action` to confirm it. **The agent executes control
+  actions.** BOUND is a thin harness: it emits `ROLLBACK` and may independently
+  verify the resulting state. It can roll back the workspace with explicit
+  `bound rollback --execute` against a previously confirmed checkpoint, but never
+  without explicit opt-in.
 - **Assurance gates the candidate decision.** BOUND computes a
   `DecisionAssurance` (`VERIFIED`/`MIXED`/`CLAIMED`/`INSUFFICIENT`) from the
   decision-critical checks' provenance. A candidate `ACCEPT` backed only by

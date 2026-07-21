@@ -31,6 +31,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "coverage>=7.15.2",
     "pydantic>=2.0",
     "pyyaml>=6.0",
 ]
@@ -54,9 +55,11 @@ packages = ["src/bound"]
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.0",
     "pre-commit>=4.6.0",
     "pytest>=8.0",
     "ruff>=0.6",
+    "twine>=6.0",
 ]
 
 [tool.ruff]

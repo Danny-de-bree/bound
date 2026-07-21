@@ -15,7 +15,7 @@ uv add bound-policy
 - **PyPI package:** `bound-policy`
 - **Python import:** `import bound`
 - **CLI executable:** `bound`
-- Requires Python 3.11+.
+- Requires Python 3.12+.
 
 ## CLI Reference
 
@@ -152,6 +152,68 @@ bound integration-spec
 ```
 
 **Exit codes:** `0` success, `1` run not found / policy invalid, `2` validation error.
+
+### `bound init`
+
+Detect project tooling (test framework, linter, type checker, build system, Git)
+and generate a reviewable `bound-policy.yaml`. No tool is executed and no network
+call is made; `--stdout` previews the policy without writing to disk.
+
+```bash
+bound init --project-dir .
+bound init --stdout
+```
+
+### `bound ui`
+
+Start the local, read-only BOUND lineage dashboard (default port `8765`). No hosted
+backend or account needed; a run opens as a plan → step → attempt → decision tree
+with evidence provenance badges (VERIFIED, CLAIMED, MISSING, …).
+
+```bash
+bound ui
+bound ui <run_id> --open --port 8765
+```
+
+### `bound watch`
+
+Event-driven watch mode: consume BOUND watch events (JSONL) from stdin, evaluate
+each step against a policy, run approved collectors, and append to lineage. `--once`
+processes a single task and exits; `--json` emits machine-readable decisions.
+
+```bash
+bound watch --policy bound-policy.yaml --json
+```
+
+### `bound mcp`
+
+Start the stdio JSON-RPC MCP (Model Context Protocol) server. Reads one request per
+line from stdin, dispatches to the shared BOUND service layer, and writes one
+response per line to stdout. `--once` handles a single request.
+
+```bash
+bound mcp
+```
+
+### `bound checkpoint`
+
+Manage BOUND checkpoints for safe state preservation: `create`, `inspect`, `list`.
+
+```bash
+bound checkpoint create --run <run_id> --step PHASE-001 --message "before refactor"
+bound checkpoint list --run <run_id>
+bound checkpoint inspect --run <run_id> <checkpoint_id>
+```
+
+### `bound rollback`
+
+Roll the working tree back to a previously created checkpoint. Requires explicit
+`--execute` opt-in to prevent accidental mutations; `--dry-run` previews the changes.
+
+```bash
+bound rollback --run <run_id> --checkpoint <id> --dry-run
+bound rollback --run <run_id> --checkpoint <id> --execute
+```
 
 ## Writing a Policy (YAML)
 
