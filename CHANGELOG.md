@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0] - 2026-07-21
 
-BOUND v0.8 completes Sprints 1–3 by wrapping the deterministic core in a shared
+BOUND v0.8 wrapping the deterministic core in a shared
 service layer and adding an operator-facing UX. The network-free, no-LLM-judge
 core is unchanged; the new commands are thin surfaces over one service layer.
 
