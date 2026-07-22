@@ -39,13 +39,12 @@ from bound.collectors import (
     MypyEvidence,
     RuffEvidence,
 )
-from bound.evidence import EvidenceProvenance, EvidenceStatus
 from bound.events_watch import (
     WatchStepCompletedEvent,
     WatchTaskStartedEvent,
 )
+from bound.evidence import EvidenceProvenance, EvidenceStatus
 from bound.watch import WatchConfig, WatchEngine
-
 
 # =========================================================================
 # Fixtures

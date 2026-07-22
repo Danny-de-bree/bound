@@ -30,8 +30,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from bound.contracts import AcceptanceCheck, RiskCheck, StepBudget, StepContract
-from bound.contracts import EvidencePolicyAction
+from bound.contracts import (
+    AcceptanceCheck,
+    EvidencePolicyAction,
+    RiskCheck,
+    StepBudget,
+    StepContract,
+)
 from bound.evidence import (
     CheckEvidence,
     EvidenceMetric,
@@ -47,7 +52,6 @@ from bound.services import (
     PolicyService,
     PolicyValidateRequest,
 )
-
 
 # =========================================================================
 # Constants
@@ -253,7 +257,10 @@ class TestExit2AgentIntegration:
                 acceptance_checks=[
                     AcceptanceCheck(
                         id="tests-pass", description="All tests pass",
-                        accepted_provenance=[EvidenceProvenance.VERIFIED, EvidenceProvenance.OBSERVED],
+                        accepted_provenance=[
+                            EvidenceProvenance.VERIFIED,
+                            EvidenceProvenance.OBSERVED,
+                        ],
                         on_missing=EvidencePolicyAction.REPLAN,
                         on_claimed=EvidencePolicyAction.RETRY,
                     ),
@@ -262,7 +269,10 @@ class TestExit2AgentIntegration:
                     RiskCheck(
                         id="lint-warnings", description="No lint warnings",
                         severity=0.5,
-                        accepted_provenance=[EvidenceProvenance.VERIFIED, EvidenceProvenance.OBSERVED],
+                        accepted_provenance=[
+                            EvidenceProvenance.VERIFIED,
+                            EvidenceProvenance.OBSERVED,
+                        ],
                         on_missing=EvidencePolicyAction.ACCEPT,
                         on_claimed=EvidencePolicyAction.RETRY, decision_critical=False,
                     ),
@@ -275,8 +285,10 @@ class TestExit2AgentIntegration:
                                   source="pytest run", provenance=EvidenceProvenance.VERIFIED),
                 ],
                 risks=[
-                    CheckEvidence(check_id="lint-warnings", passed=True, status=EvidenceStatus.PASSED,
-                                  source="ruff check", provenance=EvidenceProvenance.VERIFIED),
+                    CheckEvidence(
+                        check_id="lint-warnings", passed=True, status=EvidenceStatus.PASSED,
+                        source="ruff check", provenance=EvidenceProvenance.VERIFIED,
+                    ),
                 ],
                 retry_count=EvidenceMetric(value=0, provenance=EvidenceProvenance.OBSERVED),
                 tool_call_count=EvidenceMetric(value=0, provenance=EvidenceProvenance.OBSERVED),
@@ -334,9 +346,10 @@ class TestExit3Installation:
     def test_core_api_available(self) -> None:
         """All core BOUND API components are importable."""
         from bound import (
-            AcceptanceCheck, BoundCriteria, BoundWeights, BoundWorkflow,
-            EvidenceProvenance, ExecutionEvidence, RiskCheck, StepContract,
-            evaluate_agent_step, start_run,
+            AcceptanceCheck,
+            BoundCriteria,
+            BoundWorkflow,
+            evaluate_agent_step,
         )
         assert AcceptanceCheck is not None
         assert BoundCriteria is not None

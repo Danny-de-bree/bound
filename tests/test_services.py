@@ -10,15 +10,18 @@ Verifies that:
 
 from __future__ import annotations
 
-
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, Union
-from pydantic.fields import PydanticUndefined
 
 import pytest
+from pydantic.fields import PydanticUndefined
 
+from bound.contracts import AcceptanceCheck, BoundPlan, StepContract
+from bound.evidence import EvidenceProvenance, ExecutionEvidence
+from bound.lineage import RunStatus
+from bound.lineage_store import RunSummary
 from bound.models import (
     Action,
     BoundCriteria,
@@ -28,65 +31,60 @@ from bound.models import (
     EvaluationScores,
 )
 from bound.services import (
-    PolicyValidateRequest,
-    PolicyValidateResponse,
-    PolicyExplainRequest,
-    PolicyExplainResponse,
-    PolicyHashRequest,
-    PolicyHashResponse,
-    PolicyIdentity,
-    RunStartRequest,
-    RunStartResponse,
-    RunFinishRequest,
-    RunFinishResponse,
-    RunDeleteRequest,
-    RunDeleteResponse,
-    RunListRequest,
-    RunListResponse,
-    RunInspectRequest,
-    RunInspectResponse,
-    EvaluateRequest,
-    EvaluateResponse,
-    EvaluateWorkflowRequest,
-    EvaluateWorkflowResponse,
-    OutcomeRecordRequest,
-    OutcomeRecordResponse,
-    EvidenceCollectRequest,
-    EvidenceCollectResponse,
     BoundaryEvaluateRequest,
     BoundaryEvaluateResponse,
+    BoundaryService,
     CheckpointCreateRequest,
     CheckpointCreateResponse,
+    CheckpointError,
     CheckpointInspectRequest,
     CheckpointInspectResponse,
     CheckpointListRequest,
     CheckpointListResponse,
     CheckpointRollbackRequest,
     CheckpointRollbackResponse,
-    PolicyService,
-    RunService,
-    EvaluationService,
-    OutcomeService,
-    EvidenceService,
-    BoundaryService,
     CheckpointService,
-    ServiceError,
-    PolicyLoadError,
-    PolicyValidationError,
-    RunNotFoundError,
+    EvaluateRequest,
+    EvaluateResponse,
+    EvaluateWorkflowRequest,
+    EvaluateWorkflowResponse,
     EvaluationInputError,
-    CheckpointError,
+    EvaluationService,
+    EvidenceCollectRequest,
+    EvidenceCollectResponse,
+    EvidenceService,
+    OutcomeRecordRequest,
+    OutcomeRecordResponse,
+    OutcomeService,
+    PolicyExplainRequest,
+    PolicyExplainResponse,
+    PolicyHashRequest,
+    PolicyHashResponse,
+    PolicyIdentity,
+    PolicyLoadError,
+    PolicyService,
+    PolicyValidateRequest,
+    PolicyValidateResponse,
+    PolicyValidationError,
+    RunDeleteRequest,
+    RunDeleteResponse,
+    RunFinishRequest,
+    RunFinishResponse,
+    RunInspectRequest,
+    RunInspectResponse,
+    RunListRequest,
+    RunListResponse,
+    RunNotFoundError,
+    RunService,
+    RunStartRequest,
+    RunStartResponse,
+    ServiceError,
 )
-from bound.contracts import AcceptanceCheck, BoundPlan, RiskCheck, StepContract
-from bound.evidence import CheckEvidence, ExecutionEvidence, EvidenceProvenance
-from bound.lineage import RunStatus
-from bound.lineage_store import RunSummary
 
 # Rebuild models with forward references so model_construct + model_dump works.
 # BoundaryEvaluateRequest references StepContract and ExecutionEvidence via
 # string annotations (forward refs) that need runtime resolution.
-StepContract  # ensure imported
-ExecutionEvidence  # ensure imported
+_ = (StepContract, ExecutionEvidence)  # ensure imported
 BoundaryEvaluateRequest.model_rebuild()
 BoundaryEvaluateResponse.model_rebuild()
 
@@ -217,7 +215,9 @@ def test_services_never_print_at_runtime(capsys: pytest.CaptureFixture[str]) -> 
     Services are the pure logic layer; adapters (CLI, MCP) own I/O.
     """
     # PolicyService — validate a non-existent file (returns, does not print)
-    response = PolicyService.validate(PolicyValidateRequest(path="/tmp/nonexistent-bound-policy-xyz.yaml"))
+    response = PolicyService.validate(
+        PolicyValidateRequest(path="/tmp/nonexistent-bound-policy-xyz.yaml")
+    )
     assert response.valid is False
     out, err = capsys.readouterr()
     assert out == ""
@@ -441,7 +441,10 @@ class TestEvaluationService:
         assert response.signals is not None
 
     def test_evaluate_workflow_raises_on_invalid_input(self) -> None:
-        """EvaluationService.evaluate_workflow raises EvaluationInputError with no acceptance evidence."""
+        """EvaluationService.evaluate_workflow raises EvaluationInputError.
+
+        With no acceptance evidence.
+        """
         # The CodingWorkflowEvaluator raises ValueError when no acceptance
         # signals are provided (all are None).
         with pytest.raises(EvaluationInputError, match="no acceptance evidence"):
@@ -550,7 +553,6 @@ class TestBoundaryService:
         (e.g. ``RuntimeError``) must propagate unchanged so real bugs are
         visible.
         """
-        from bound.bound_workflow import BoundWorkflow
 
         class _ExplodingWorkflow:
             def evaluate_step(self, **_kwargs: object) -> None:
@@ -602,7 +604,10 @@ class TestCliCallsServices:
     """Verify that the CLI handlers call the service layer and reflect its results."""
 
     def test_cli_policy_validate_calls_service(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """bound policy validate on a non-existent file calls PolicyService and reflects the error."""
+        """bound policy validate on a non-existent file calls PolicyService.
+
+        Reflects the error.
+        """
         from bound.cli import main
         rc = main(["policy", "validate", "/tmp/nonexistent-bound-policy-xyz.yaml"])
         out, err = capsys.readouterr()
@@ -679,7 +684,7 @@ def _inject_value(type_hint: Any, field_name: str) -> Any:
     if type_hint is bool:
         return False
     if type_hint is datetime:
-        return datetime(2025, 1, 1, tzinfo=timezone.utc)
+        return datetime(2025, 1, 1, tzinfo=UTC)
     if type_hint is bytes:
         return b""
     if type_hint is None:
@@ -748,7 +753,7 @@ def _inject_value(type_hint: Any, field_name: str) -> Any:
     if "RunSummary" in type_name:
         return RunSummary(
             run_id="test-run", task="test", status=RunStatus.STARTED,
-            started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            started_at=datetime(2025, 1, 1, tzinfo=UTC),
             finished_at=None, step_count=0, event_count=0, incomplete=False,
             path="/tmp/.bound/runs/test-run",
         )

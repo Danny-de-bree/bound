@@ -13,6 +13,7 @@ import yaml
 from pydantic import ValidationError
 
 from bound.evidence import EvidenceProvenance, EvidenceStatus
+from bound.init_project import ProjectDetections, detect_tooling, generate_policy
 from bound.lineage import (
     ActionReportedEvent,
     DecisionGatedEvent,
@@ -21,7 +22,6 @@ from bound.lineage import (
     EvidenceCollectionFailedEvent,
     Outcome,
     ReasonCode,
-    RunStatus,
     generate_evaluation_id,
     generate_step_id,
 )
@@ -46,48 +46,32 @@ from bound.policy_schema import (
     WeightedSignal,
     load_policy_yaml,
 )
-from bound.init_project import detect_tooling, generate_policy, ProjectDetections
 from bound.services import (
+    CheckpointCreateRequest,
+    CheckpointError,
+    CheckpointInspectRequest,
+    CheckpointListRequest,
+    CheckpointRollbackRequest,
+    CheckpointService,
+    EvaluateRequest,
+    EvaluateWorkflowRequest,
+    EvaluationInputError,
+    EvaluationService,
+    OutcomeRecordRequest,
+    OutcomeService,
+    PolicyExplainRequest,
+    PolicyHashRequest,
+    PolicyLoadError,
     PolicyService,
     PolicyValidateRequest,
-    PolicyValidateResponse,
-    PolicyExplainRequest,
-    PolicyExplainResponse,
-    PolicyHashRequest,
-    PolicyHashResponse,
-    PolicyLoadError,
     PolicyValidationError,
+    RunDeleteRequest,
+    RunFinishRequest,
+    RunInspectRequest,
+    RunListRequest,
+    RunNotFoundError,
     RunService,
     RunStartRequest,
-    RunStartResponse,
-    RunFinishRequest,
-    RunFinishResponse,
-    RunListRequest,
-    RunListResponse,
-    RunDeleteRequest,
-    RunDeleteResponse,
-    RunInspectRequest,
-    RunInspectResponse,
-    RunNotFoundError,
-    EvaluationService,
-    EvaluateRequest,
-    EvaluateResponse,
-    EvaluateWorkflowRequest,
-    EvaluateWorkflowResponse,
-    OutcomeService,
-    OutcomeRecordRequest,
-    OutcomeRecordResponse,
-    EvaluationInputError,
-    CheckpointService,
-    CheckpointCreateRequest,
-    CheckpointCreateResponse,
-    CheckpointInspectRequest,
-    CheckpointInspectResponse,
-    CheckpointListRequest,
-    CheckpointListResponse,
-    CheckpointRollbackRequest,
-    CheckpointRollbackResponse,
-    CheckpointError,
 )
 
 logger = logging.getLogger("bound.cli")
@@ -634,7 +618,10 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Capture the current repository state into a BOUND checkpoint.",
     )
     cp_create.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
-    cp_create.add_argument("--step", required=True, metavar="STEP_ID", help="Step id for this checkpoint.")
+    cp_create.add_argument(
+        "--step", required=True, metavar="STEP_ID",
+        help="Step id for this checkpoint.",
+    )
     cp_create.add_argument("--message", default=None, help="Optional checkpoint message.")
     cp_create.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
     cp_create.set_defaults(func=_run_checkpoint_create)
@@ -667,9 +654,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "Use --dry-run for a preview of what would change.",
     )
     rollback_parser.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
-    rollback_parser.add_argument("--checkpoint", required=True, metavar="CHECKPOINT_ID", help="Checkpoint to roll back to.")
-    rollback_parser.add_argument("--dry-run", action="store_true", default=False, help="Preview changes without executing.")
-    rollback_parser.add_argument("--execute", action="store_true", default=False, help="Perform the rollback (opt-in required).")
+    rollback_parser.add_argument(
+        "--checkpoint", required=True, metavar="CHECKPOINT_ID",
+        help="Checkpoint to roll back to.",
+    )
+    rollback_parser.add_argument(
+        "--dry-run", action="store_true", default=False,
+        help="Preview changes without executing.",
+    )
+    rollback_parser.add_argument(
+        "--execute", action="store_true", default=False,
+        help="Perform the rollback (opt-in required).",
+    )
     rollback_parser.set_defaults(func=_run_rollback)
 
     # --- init (Sprint 3) -------------------------------------------------------
@@ -2179,8 +2175,8 @@ def _run_rollback(args: argparse.Namespace) -> int:
 
         if args.dry_run:
             from bound.checkpoint import (
-                load_checkpoint,
                 compute_rollback_preview,
+                load_checkpoint,
             )
             try:
                 cp = load_checkpoint(args.run, args.checkpoint)
@@ -2194,11 +2190,11 @@ def _run_rollback(args: argparse.Namespace) -> int:
             print(f"  Added:       {len(preview['added'])} file(s)")
             print(f"  Unchanged:   {len(preview['unchanged'])} file(s)")
             if preview["changed"]:
-                print(f"  Files to change:")
+                print("  Files to change:")
                 for f in preview["changed"]:
                     print(f"    - {f}")
             if preview["added"]:
-                print(f"  Files to restore:")
+                print("  Files to restore:")
                 for f in preview["added"]:
                     print(f"    - {f}")
             if not preview["head_match"]:
@@ -2208,7 +2204,11 @@ def _run_rollback(args: argparse.Namespace) -> int:
             return 0
 
         if not args.execute:
-            print("error: rollback requires --execute to proceed (use --dry-run for preview)", file=sys.stderr)
+            print(
+                "error: rollback requires --execute to proceed "
+                "(use --dry-run for preview)",
+                file=sys.stderr,
+            )
             return 2
 
         # Execute rollback
@@ -2310,7 +2310,11 @@ def _run_init(args: argparse.Namespace) -> int:
     print("", file=sys.stderr)
     print("Next steps:", file=sys.stderr)
     print("  1. Review the generated bound-policy.yaml", file=sys.stderr)
-    print("  2. Adjust uncertain detections (marked with # UNCERTAIN / # NOT FOUND)", file=sys.stderr)
+    print(
+        "  2. Adjust uncertain detections "
+        "(marked with # UNCERTAIN / # NOT FOUND)",
+        file=sys.stderr,
+    )
     print("  3. Run: bound policy validate bound-policy.yaml", file=sys.stderr)
     print("  4. Start a run: bound run start --task <description>", file=sys.stderr)
     print("", file=sys.stderr)
@@ -2328,7 +2332,11 @@ def _print_detection_summary(detections: ProjectDetections) -> None:
     print("  Type checker: ", detections.type_checker.name, file=sys.stderr)
     print("  Coverage:     ", detections.coverage.name, file=sys.stderr)
     print("  Build system: ", detections.build_system.name, file=sys.stderr)
-    ci = f"{detections.ci_provider.name} ({detections.ci_provider.confidence.value})" if detections.ci_provider else "none"
+    ci = (
+        f"{detections.ci_provider.name} ({detections.ci_provider.confidence.value})"
+        if detections.ci_provider
+        else "none"
+    )
     print(f"  CI provider:  {ci}", file=sys.stderr)
     if detections.git_branch:
         print(f"  Git branch:   {detections.git_branch}", file=sys.stderr)

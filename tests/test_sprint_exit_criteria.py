@@ -24,21 +24,21 @@ import logging
 import socket
 import threading
 from pathlib import Path
-from urllib.request import urlopen, Request
+from urllib.request import Request, urlopen
 
 import pytest
 
 from bound.lineage_store import LineageStore
 from bound.models import Action, BoundCriteria, EvaluationScores
 from bound.services import (
-    EvaluationService,
     EvaluateRequest,
+    EvaluationService,
     OutcomeRecordRequest,
     OutcomeService,
-    RunService,
-    RunStartRequest,
     RunFinishRequest,
     RunInspectRequest,
+    RunService,
+    RunStartRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
     import random
     import time
 
-    from bound.ui import serve, _DashboardHandler
+    from bound.ui import _DashboardHandler, serve
 
     # --- Step 1: Create a run and store a decision via the service layer ---
     start_resp = RunService.start(RunStartRequest(

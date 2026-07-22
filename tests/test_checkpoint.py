@@ -16,8 +16,8 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 import pytest
 
@@ -27,13 +27,12 @@ from bound.checkpoint import (
     capture_checkpoint,
     compute_rollback_preview,
     generate_checkpoint_id,
+    list_checkpoints,
+    load_checkpoint,
     restore_checkpoint_files,
     save_checkpoint,
-    load_checkpoint,
-    list_checkpoints,
     verify_checkpoint_integrity,
 )
-
 
 # =========================================================================
 # Helpers
@@ -111,7 +110,7 @@ class TestComputeRollbackPreview:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         preview = compute_rollback_preview(cp, cwd=worktree)
         assert preview["head_match"] is True
@@ -138,7 +137,7 @@ class TestComputeRollbackPreview:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         preview = compute_rollback_preview(cp, cwd=worktree)
         assert "src/main.py" in preview["changed"]
@@ -162,7 +161,7 @@ class TestComputeRollbackPreview:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         preview = compute_rollback_preview(cp, cwd=worktree)
         assert "src/main.py" in preview["added"]
@@ -180,7 +179,7 @@ class TestComputeRollbackPreview:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         preview = compute_rollback_preview(cp, cwd=worktree)
         assert preview["head_match"] is False
@@ -211,11 +210,15 @@ class TestRestoreCheckpointFiles:
                 "src/main.py": _file_sha256(worktree / "src/main.py"),
             },
             changed_files=[
-                CheckpointFileEntry(path="src/main.py", status=" M", content_hash=_file_sha256(worktree / "src/main.py")),
+                CheckpointFileEntry(
+                    path="src/main.py",
+                    status=" M",
+                    content_hash=_file_sha256(worktree / "src/main.py"),
+                ),
             ],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Modify the file
@@ -252,7 +255,7 @@ class TestRestoreCheckpointFiles:
             ],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Undo the change (simulate user reverting)
@@ -286,7 +289,7 @@ class TestRestoreCheckpointFiles:
             changed_files=[],
             untracked_files=[],
             scope=["src"],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         restored, failed = restore_checkpoint_files(cp, cwd=worktree)
@@ -305,7 +308,7 @@ class TestRestoreCheckpointFiles:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         with pytest.raises(RuntimeError, match="HEAD has diverged"):
             restore_checkpoint_files(cp, cwd=worktree)
@@ -329,7 +332,7 @@ class TestRestoreCheckpointFiles:
             changed_files=[],
             untracked_files=[],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         restore_checkpoint_files(cp, cwd=worktree)
@@ -355,7 +358,7 @@ class TestRestoreCheckpointFiles:
             changed_files=[],
             untracked_files=["new_file.py"],
             scope=[],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         # Delete the untracked file
@@ -462,21 +465,21 @@ class TestGenerateCheckpointId:
 
     def test_deterministic(self) -> None:
         """Same inputs produce the same checkpoint id."""
-        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
         id1 = generate_checkpoint_id(run_id="run-1", step_id="step-1", timestamp=ts)
         id2 = generate_checkpoint_id(run_id="run-1", step_id="step-1", timestamp=ts)
         assert id1 == id2
 
     def test_different_run_produces_different_id(self) -> None:
         """Different run ids produce different checkpoint ids."""
-        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
         id1 = generate_checkpoint_id(run_id="run-a", step_id="step-1", timestamp=ts)
         id2 = generate_checkpoint_id(run_id="run-b", step_id="step-1", timestamp=ts)
         assert id1 != id2
 
     def test_starts_with_cp_prefix(self) -> None:
         """Checkpoint id always starts with 'cp_'."""
-        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
         cp_id = generate_checkpoint_id(run_id="run-1", step_id="step-1", timestamp=ts)
         assert cp_id.startswith("cp_")
         assert len(cp_id) == 19  # "cp_" + 16 hex chars
@@ -590,7 +593,7 @@ class TestCriticalDataLossFixes:
             changed_files=[],
             untracked_files=[],
             scope=["src"],
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
 
         restored, failed = restore_checkpoint_files(cp, cwd=worktree)
@@ -679,7 +682,7 @@ class TestCriticalDataLossFixes:
             artifact_hashes={
                 "README.md": _file_sha256(worktree / "README.md"),
             },
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )
         is_valid, issues = verify_checkpoint_integrity(cp, cwd=worktree)
         assert not is_valid, (

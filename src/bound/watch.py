@@ -12,10 +12,13 @@ import logging
 import signal
 import sys
 import time
-from pydantic import BaseModel, ConfigDict, Field
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from bound.contracts import AcceptanceCheck, StepContract
 from bound.events_watch import (
     WATCH_EVENT_SCHEMA_VERSION,
     WatchControlActionObservedEvent,
@@ -27,23 +30,21 @@ from bound.events_watch import (
     WatchVerificationRequestedEvent,
     parse_watch_event,
 )
-from bound.contracts import AcceptanceCheck, StepContract
 from bound.evidence import EvidenceMetric, EvidenceProvenance, ExecutionEvidence
-from bound.lineage import ReasonCode, generate_evaluation_id
-from bound.models import Action, BoundCriteria, BoundWeights, EvaluationScores
+from bound.lineage import generate_evaluation_id
 from bound.lineage_store import LineageStore, get_default_store
+from bound.models import BoundCriteria, BoundWeights
 from bound.policy_schema import BoundPolicyConfig, load_policy_yaml
 from bound.services import (
     BoundaryEvaluateRequest,
     BoundaryEvaluateResponse,
     BoundaryService,
     EvaluationInputError,
-    OutcomeService,
     OutcomeRecordRequest,
-    OutcomeRecordResponse,
+    OutcomeService,
+    RunFinishRequest,
     RunService,
     RunStartRequest,
-    RunFinishRequest,
 )
 
 # Rebuild models that reference forward-declared types
@@ -90,7 +91,7 @@ def _event_timestamp_epoch(timestamp: str | None) -> float:
             value = value[:-1] + "+00:00"
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.timestamp()
     except (ValueError, TypeError):
         return time.time()
@@ -339,7 +340,7 @@ class WatchEngine:
         # than acting as a lifetime ceiling (W2).
         self._evict_finished_tasks()
         if len(self._tasks) >= _MAX_TASKS and task_id not in self._tasks:
-            self._emit_error(f"watch: too many concurrent tasks")
+            self._emit_error("watch: too many concurrent tasks")
             return
         existing = self._tasks.get(task_id)
         if existing is not None and existing.run_id is not None:
@@ -357,11 +358,6 @@ class WatchEngine:
             existing.seen_sequences.clear()
             return
         try:
-            from bound.lineage import generate_run_id
-            run_id = event.run_id or generate_run_id(
-                task=event.goal[:80],
-                started_at=datetime.now(timezone.utc),
-            )
             metadata: dict[str, str] = {"watch_task_id": task_id}
             if event.plan is not None:
                 metadata["plan"] = event.plan
@@ -403,14 +399,18 @@ class WatchEngine:
         # Exact-duplicate dedup by ``sequence`` is handled separately in
         # :meth:`_dispatch` via ``seen_sequences``.
         now = _event_timestamp_epoch(event.timestamp)
-        if event.step_id == state.current_step_id:
-            if now - state.last_step_event_at < _DEBOUNCE_WINDOW_S:
-                logger.debug("watch: debounced step=%s task=%s", event.step_id, event.task_id)
-                return
+        if (
+            event.step_id == state.current_step_id
+            and now - state.last_step_event_at < _DEBOUNCE_WINDOW_S
+        ):
+            logger.debug("watch: debounced step=%s task=%s", event.step_id, event.task_id)
+            return
         state.current_step_id = event.step_id
         state.last_step_event_at = now
 
-        evaluation_id = generate_evaluation_id(run_id=state.run_id, step_id=event.step_id, attempt=1)
+        evaluation_id = generate_evaluation_id(
+            run_id=state.run_id, step_id=event.step_id, attempt=1
+        )
         state.current_evaluation_id = evaluation_id
 
         # Build a minimal StepContract from the event / task state
@@ -453,7 +453,6 @@ class WatchEngine:
         criteria = self._build_criteria()
 
         # Run boundary evaluation
-        action = Action(description=desc, goal=goal)
         try:
             response = BoundaryService.evaluate(BoundaryEvaluateRequest(
                 contract=contract,
@@ -507,7 +506,9 @@ class WatchEngine:
             self._emit_error("watch: policy not loaded")
             return
 
-        evaluation_id = generate_evaluation_id(run_id=state.run_id, step_id=event.step_id, attempt=1)
+        evaluation_id = generate_evaluation_id(
+            run_id=state.run_id, step_id=event.step_id, attempt=1
+        )
         state.current_evaluation_id = evaluation_id
 
         goal = state.goal or "unknown"
@@ -643,7 +644,10 @@ class WatchEngine:
             self._emit_error(f"watch: failed to finish run: {exc}")
             return
         state.finished = True
-        logger.info("watch: finished run=%s task=%s outcome=%s", state.run_id, event.task_id, event.outcome)
+        logger.info(
+            "watch: finished run=%s task=%s outcome=%s",
+            state.run_id, event.task_id, event.outcome,
+        )
 
     def _build_criteria(self) -> BoundCriteria:
         """Build :class:`BoundCriteria` with sensible defaults.
@@ -683,7 +687,7 @@ class WatchEngine:
                 "schema_version": WATCH_EVENT_SCHEMA_VERSION,
                 "event": "decision_emitted",
                 "task_id": event.task_id,
-                "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "step_id": getattr(event, "step_id", ""),
                 "evaluation_id": evaluation_id,
                 "decision": response.result.decision,

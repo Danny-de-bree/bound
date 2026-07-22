@@ -35,9 +35,8 @@ from bound import (
 )
 from bound.contracts import StepBudget, StepContract
 from bound.evidence import CheckEvidence, EvidenceMetric, EvidenceStatus, ExecutionEvidence
-from bound.lineage_store import LineageStore
 from bound.integration import evaluate_agent_step
-
+from bound.lineage_store import LineageStore
 
 # =========================================================================
 # Canonical scenario constants

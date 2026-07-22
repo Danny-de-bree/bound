@@ -471,13 +471,17 @@ def test_adapters_use_service_layer() -> None:
         imports_bound_services = False
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                if any(alias.name == "bound.services" or alias.name.startswith("bound.services.") for alias in node.names):
+                if any(
+                    alias.name == "bound.services" or alias.name.startswith("bound.services.")
+                    for alias in node.names
+                ):
                     imports_bound_services = True
                     break
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and (node.module == "bound.services" or node.module.startswith("bound.services.")):
-                    imports_bound_services = True
-                    break
+            elif isinstance(node, ast.ImportFrom) and node.module and (
+                node.module == "bound.services" or node.module.startswith("bound.services.")
+            ):
+                imports_bound_services = True
+                break
         if not imports_bound_services:
             pytest.xfail(
                 f"Adapter {rel_name} does not yet import from bound.services "
@@ -1201,9 +1205,10 @@ def test_service_modules_do_not_use_print() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 func = node.value.func
-                if isinstance(func, ast.Name) and func.id == "print":
-                    offenders.setdefault(rel, []).append(node.lineno)
-                elif isinstance(func, ast.Attribute) and func.attr == "print":
+                if (
+                    isinstance(func, ast.Name) and func.id == "print"
+                    or isinstance(func, ast.Attribute) and func.attr == "print"
+                ):
                     offenders.setdefault(rel, []).append(node.lineno)
 
     assert not offenders, (
@@ -1230,7 +1235,12 @@ def test_service_layer_does_not_call_sys_exit() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 func = node.func
-                if isinstance(func, ast.Attribute) and func.attr == "exit" and isinstance(func.value, ast.Name) and func.value.id == "sys":
+                if (
+                    isinstance(func, ast.Attribute)
+                    and func.attr == "exit"
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == "sys"
+                ):
                     offenders.setdefault(rel, []).append(node.lineno)
 
     assert not offenders, (
@@ -1297,7 +1307,7 @@ def test_service_layer_evaluation_runs_with_socket_blocked_and_no_api_key(
     _wipe_api_keys(monkeypatch)
 
     from bound.models import Action, BoundCriteria, EvaluationScores
-    from bound.services import EvaluationService, EvaluateRequest
+    from bound.services import EvaluateRequest, EvaluationService
 
     scores = EvaluationScores(acceptance=0.9, influence=0.2, risk=0.1, cost=0.2)
     action = Action(description="Book the direct flight", goal="Travel from Paris to New York")
@@ -1326,12 +1336,12 @@ def test_service_layer_run_service_starts_and_inspects_with_socket_blocked(
     creates a temporary store, blocks sockets, wipes API keys, and verifies
     the full start → inspect → list cycle works.
     """
-    from bound.lineage_store import LineageStore, configure
+    from bound.lineage_store import LineageStore
     from bound.services import (
-        RunService,
-        RunStartRequest,
         RunInspectRequest,
         RunListRequest,
+        RunService,
+        RunStartRequest,
     )
 
     _block_sockets(monkeypatch)

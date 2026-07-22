@@ -14,26 +14,25 @@ import sys
 import time
 import webbrowser
 from collections.abc import Mapping
-from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
 from bound.cli import (
     _DECISION_COLORS,
+    _INDEPENDENTLY_VERIFIED,
     _PROVENANCE_COLORS,
-    _RunAuditIndex,
     _fmt_dt,
     _html_escape,
+    _RunAuditIndex,
     _sv,
-    _INDEPENDENTLY_VERIFIED,
 )
-from bound.lineage import RunStatus
 from bound.lineage_store import (
     LineageStore,
     RunLog,
-    RunSummary,
     RunNotFound,
+    RunSummary,
     get_default_store,
 )
 
@@ -960,17 +959,17 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                     count = len(summaries)
                 except Exception:
                     count = last_count
-                now = datetime.now(timezone.utc).isoformat()
+                now = datetime.now(UTC).isoformat()
                 if count != last_count:
                     self.wfile.write(
-                        f"event: run_count\ndata: {count}\n\n".encode("utf-8")
+                        f"event: run_count\ndata: {count}\n\n".encode()
                     )
                     self.wfile.flush()
                     last_count = count
                 else:
                     # Heartbeat every 5 seconds to keep the connection alive
                     self.wfile.write(
-                        f": heartbeat {now}\n\n".encode("utf-8")
+                        f": heartbeat {now}\n\n".encode()
                     )
                     self.wfile.flush()
                 time.sleep(5)
@@ -1007,7 +1006,6 @@ def serve(
     except OSError as exc:
         if "in use" in str(exc).lower() or "address already in use" in str(exc).lower():
             alt_port = port + 1
-            alt_url = f"http://{host}:{alt_port}"
             print(
                 f"error: port {port} is already in use.\n"
                 f"       Try a different port: bound ui --port {alt_port}\n"

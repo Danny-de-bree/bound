@@ -25,10 +25,11 @@ import json
 import logging
 import os
 import subprocess
-from pydantic import BaseModel, ConfigDict, Field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ ENV_CHECKPOINTS_DIR: str = "BOUND_CHECKPOINTS_DIR"
 
 def generate_checkpoint_id(*, run_id: str, step_id: str, timestamp: datetime) -> str:
     """Return a deterministic, reproducible ``checkpoint_id``."""
-    utc = timestamp.astimezone(timezone.utc)
+    utc = timestamp.astimezone(UTC)
     payload = f"{run_id}|{step_id}|{utc.isoformat()}"
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
     return f"cp_{digest}"
@@ -107,10 +108,7 @@ def _git_diff_scoped(cwd: Path, scope: list[str]) -> str:
     in-scope paths are captured, so that restoring the diff later can never
     touch out-of-scope files.
     """
-    if scope:
-        proc = _git("diff", "HEAD", "--", *scope, cwd=cwd)
-    else:
-        proc = _git("diff", "HEAD", cwd=cwd)
+    proc = _git("diff", "HEAD", "--", *scope, cwd=cwd) if scope else _git("diff", "HEAD", cwd=cwd)
     return proc.stdout
 
 
@@ -256,7 +254,7 @@ def capture_checkpoint(
     """
     cwd = cwd or Path.cwd()
     scope = scope or []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     checkpoint_id = generate_checkpoint_id(
         run_id=run_id, step_id=step_id, timestamp=now
     )
@@ -926,71 +924,6 @@ def restore_checkpoint_files(
 
     return restored, failed
 
-
-def compute_rollback_preview(
-    cp: Checkpoint,
-    cwd: Path | None = None,
-) -> dict[str, object]:
-    """Compare the current working tree against a checkpoint's recorded state.
-
-    Scans every file in the checkpoint's artifact_hashes and reports
-    which files would be changed, added, or left unchanged by a rollback.
-
-    Args:
-        cp: The checkpoint to compare against.
-        cwd: Working directory (defaults to current).
-
-    Returns:
-        A dict with keys:
-        * "changed" — list of file paths that exist but whose content
-          differs from the checkpoint.
-        * "added" — list of paths that are in the checkpoint but are
-          missing from the working tree (would be restored).
-        * "removed" — list of paths that exist in the working tree
-          but are not in the checkpoint (would be left in place).
-        * "unchanged" — list of paths whose content matches the
-          checkpoint.
-        * "total" — total number of files in the checkpoint.
-        * "head_match" — True if the current HEAD matches the
-          checkpoint's head_commit.
-    """
-    cwd = cwd or Path.cwd()
-
-    current_head = _git_head(cwd)
-    head_match = (
-        cp.head_commit is not None and current_head == cp.head_commit
-    )
-
-    changed: list[str] = []
-    added: list[str] = []
-    removed: list[str] = []
-    unchanged: list[str] = []
-
-    for path, expected_hash in cp.artifact_hashes.items():
-        full_path = cwd / path
-        if not full_path.exists():
-            added.append(path)
-            continue
-        if not full_path.is_file():
-            changed.append(path)
-            continue
-        try:
-            actual_hash = _file_sha256(full_path)
-            if actual_hash == expected_hash:
-                unchanged.append(path)
-            else:
-                changed.append(path)
-        except OSError:
-            changed.append(path)
-
-    return {
-        "changed": changed,
-        "added": added,
-        "removed": removed,
-        "unchanged": unchanged,
-        "total": len(cp.artifact_hashes),
-        "head_match": head_match,
-    }
 
 def compute_rollback_preview(
     cp: Checkpoint,

@@ -11,7 +11,6 @@ so that the same commit always produces the same ZIP.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import zipfile
 from pathlib import Path
@@ -47,9 +46,8 @@ def _should_exclude(path: Path) -> bool:
             return True
     name = path.name
     for pattern in EXCLUDE_PATTERNS:
-        if pattern.startswith("*"):
-            if name.endswith(pattern[1:]):
-                return True
+        if pattern.startswith("*") and name.endswith(pattern[1:]):
+            return True
     return False
 
 
@@ -102,13 +100,12 @@ def build_skill_zip(*, out_dir: str | Path) -> Path:
         # Verify no pycache or DS_Store leaked in
         for name in names:
             for pattern in EXCLUDE_PATTERNS:
-                if pattern.startswith("*"):
-                    if name.endswith(pattern[1:]):
-                        print(
-                            f"❌ ZIP contains excluded file: {name}",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
+                if pattern.startswith("*") and name.endswith(pattern[1:]):
+                    print(
+                        f"❌ ZIP contains excluded file: {name}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
 
         # Check that all entries have the deterministic timestamp
         for name in names:

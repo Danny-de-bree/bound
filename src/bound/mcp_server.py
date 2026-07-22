@@ -18,36 +18,37 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import ValidationError
 
 from bound.services import (
+    BoundaryEvaluateRequest,
+    BoundaryService,
+    CheckpointCreateRequest,
     CheckpointError,
-    EvaluationInputError,
-    PolicyLoadError,
-    PolicyValidationError,
-    ServiceError,
-    RunNotFoundError,
-    PolicyService,
-    PolicyValidateRequest,
-    PolicyExplainRequest,
-    PolicyHashRequest,
-    RunService,
-    RunStartRequest,
-    RunFinishRequest,
-    RunListRequest,
-    RunInspectRequest,
-    EvaluationService,
+    CheckpointListRequest,
+    CheckpointService,
     EvaluateRequest,
     EvaluateWorkflowRequest,
-    EvidenceService,
+    EvaluationInputError,
+    EvaluationService,
     EvidenceCollectRequest,
-    BoundaryService,
-    BoundaryEvaluateRequest,
-    CheckpointService,
-    CheckpointCreateRequest,
-    CheckpointListRequest,
+    EvidenceService,
+    PolicyExplainRequest,
+    PolicyHashRequest,
+    PolicyLoadError,
+    PolicyService,
+    PolicyValidateRequest,
+    PolicyValidationError,
+    RunFinishRequest,
+    RunInspectRequest,
+    RunListRequest,
+    RunNotFoundError,
+    RunService,
+    RunStartRequest,
+    ServiceError,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,10 +105,7 @@ def _json_schema_from_model(model: type) -> dict[str, Any]:
         if origin is not None:
             args = getattr(field.annotation, "__args__", ())
             non_none = [a for a in args if a is not type(None)]
-            if non_none:
-                schema = _type_to_schema(non_none[0])
-            else:
-                schema = {"type": "string"}
+            schema = _type_to_schema(non_none[0]) if non_none else {"type": "string"}
         else:
             schema = _type_to_schema(field.annotation)
         if field.description:

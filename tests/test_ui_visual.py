@@ -9,9 +9,7 @@ Verifies that:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from bound.lineage import (
     Attempt,
@@ -41,9 +39,11 @@ from bound.ui import (
 # =========================================================================
 
 
-def _utc(year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0) -> datetime:
+def _utc(
+    year: int, month: int, day: int, hour: int = 0, minute: int = 0, second: int = 0
+) -> datetime:
     """Create a timezone-aware UTC datetime."""
-    return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+    return datetime(year, month, day, hour, minute, second, tzinfo=UTC)
 
 
 def _make_run_summary(

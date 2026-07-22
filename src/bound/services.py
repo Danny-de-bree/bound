@@ -14,21 +14,22 @@ and never parse ``argparse.Namespace`` — that is the adapter's job.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, SkipValidation
+from pydantic import BaseModel, ConfigDict, Field, SkipValidation, ValidationError
 
+from bound.contracts import StepContract
 from bound.evaluator import StaticEvaluator
-from bound.evidence import EvidenceProvenance
+from bound.evidence import EvidenceProvenance, ExecutionEvidence
 from bound.lineage import (
     ReasonCode,
     RunStatus,
     generate_evaluation_id,
     generate_step_id,
 )
+from bound.lineage_api import RunContext
 from bound.lineage_store import (
     LineageStore,
     RunLog,
@@ -54,10 +55,9 @@ from bound.policy_schema import (
 from bound.prompt import generate_prompt
 from bound.workflow import CodingWorkflowEvaluator
 
-from bound.lineage_api import RunContext
-
 if TYPE_CHECKING:
     from bound.contracts import BoundPlan, ContractGenerator
+    from bound.lineage import Evaluation, EvidenceCollectedEvent
 
 
 # =========================================================================
@@ -570,8 +570,8 @@ class BoundaryEvaluateRequest(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-    contract: 'StepContract'
-    evidence: 'ExecutionEvidence'
+    contract: StepContract
+    evidence: ExecutionEvidence
     criteria: SkipValidation[BoundCriteria]
     policy_config: BoundPolicyConfig | None = None
     run: RunContext | None = None
@@ -1510,9 +1510,8 @@ class EvaluationService:
         payload["signals"] = request.signals.model_dump()
         prompt = generate_prompt(result)
 
-        lineage_info = None
         if request.run_id is not None:
-            lineage_info = EvaluationService._record_evaluation(
+            EvaluationService._record_evaluation(
                 run_id=request.run_id,
                 step=request.step or "default",
                 attempt=request.attempt,
@@ -1844,10 +1843,10 @@ class CheckpointService:
             CheckpointError: If the checkpoint cannot be loaded or restored.
         """
         from bound.checkpoint import (
-            load_checkpoint,
-            verify_checkpoint_integrity,
-            restore_checkpoint_files,
             compute_rollback_preview,
+            load_checkpoint,
+            restore_checkpoint_files,
+            verify_checkpoint_integrity,
         )
 
         store = _get_store(request.store)

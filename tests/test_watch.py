@@ -17,25 +17,24 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pytest
 from pydantic import ValidationError
 
-from bound.lineage_store import LineageStore
-
 from bound.events_watch import (
     WATCH_EVENT_SCHEMA_VERSION,
     parse_watch_event,
 )
+from bound.lineage_store import LineageStore
 from bound.models import (
     BoundCriteria,
     EvaluationResult,
 )
 from bound.services import (
     BoundaryEvaluateResponse,
-    OutcomeRecordRequest,
-    RunFinishRequest,
-    RunStartResponse,
-    RunFinishResponse,
     BoundaryService,
-    RunService,
+    OutcomeRecordRequest,
     OutcomeService,
+    RunFinishRequest,
+    RunFinishResponse,
+    RunService,
+    RunStartResponse,
 )
 from bound.watch import (
     WatchConfig,
@@ -172,7 +171,7 @@ class TestWatchEngineEventLoop:
         engine._store, _ = _sentinel_store()
         event = _make_event("task_started", schema_version="0.0")
         engine._stdin = [json.dumps(event) + "\n"]
-        code = engine.run()
+        engine.run()
 # ---------------------------------------------------------------------------
 # _handle_task_started
 # ---------------------------------------------------------------------------

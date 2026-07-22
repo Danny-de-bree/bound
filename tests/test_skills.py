@@ -116,7 +116,7 @@ def test_prebuilt_zip_no_pycache() -> None:
 
 def test_zip_has_deterministic_timestamps(tmp_path: Path) -> None:
     """All ZIP entries must have the canonical deterministic timestamp."""
-    from scripts.build_skill_zip import build_skill_zip, DETERMINISTIC_TIMESTAMP
+    from scripts.build_skill_zip import DETERMINISTIC_TIMESTAMP, build_skill_zip
 
     zip_path = build_skill_zip(out_dir=tmp_path)
     with zipfile.ZipFile(zip_path) as zf:
