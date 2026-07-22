@@ -137,18 +137,18 @@ jobs:
       - name: Verify Skills ZIP structure
         run: |
           uv run python -c "
-import zipfile
-with zipfile.ZipFile('release/skills/BOUND-agent-skill.zip') as zf:
-    names = zf.namelist()
-    assert 'bound/SKILL.md' in names, 'Missing bound/SKILL.md'
-    assert 'bound/agents/openai.yaml' in names, 'Missing agents/openai.yaml'
-    assert 'bound/references/integration-report.md' in names, 'Missing references/integration-report.md'
-    for n in names:
-        assert '__pycache__' not in n, f'Contains pycache: {n}'
-        assert not n.endswith('.pyc'), f'Contains .pyc: {n}'
-        assert not n.endswith('.DS_Store'), f'Contains .DS_Store: {n}'
-    print(f'✅ ZIP structure valid ({len(names)} files)')
-"
+          import zipfile
+          with zipfile.ZipFile('release/skills/BOUND-agent-skill.zip') as zf:
+              names = zf.namelist()
+              assert 'bound/SKILL.md' in names, 'Missing bound/SKILL.md'
+              assert 'bound/agents/openai.yaml' in names, 'Missing agents/openai.yaml'
+              assert 'bound/references/integration-report.md' in names, 'Missing references/integration-report.md'
+              for n in names:
+                  assert '__pycache__' not in n, f'Contains pycache: {n}'
+                  assert not n.endswith('.pyc'), f'Contains .pyc: {n}'
+                  assert not n.endswith('.DS_Store'), f'Contains .DS_Store: {n}'
+              print(f'✅ ZIP structure valid ({len(names)} files)')
+          "
 
       - name: Generate checksums
         run: |
