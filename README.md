@@ -28,6 +28,10 @@ any agent, any language. **The model proposes. The harness decides.**
 
 BOUND emits the signal; the agent performs the action.
 
+## Get started in 3 sentences
+
+Install the CLI with `pip install bound-policy` and add one of the integration prompts to your agent so it knows how and when to call BOUND. Onboard your project with `bound init` — it auto-detects your test, lint, and type-check tooling and generates a reviewable `bound-policy.yaml` without running any tool or touching the network. Then let the agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict BOUND returns — open `bound ui` if you want to watch live.
+
 ## Install — two parts, one time
 
 You need **both**: the BOUND CLI on your machine, and the integration prompt
