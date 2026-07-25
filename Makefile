@@ -1,10 +1,11 @@
-.PHONY: help sync lint test check build clean tag release
+.PHONY: help sync lock lint test check build clean tag release
 
 help:
 	@echo "make sync                  Install/sync dependencies"
+	@echo "make lock                  Update uv.lock after dependency changes"
 	@echo "make lint                  Run Ruff"
 	@echo "make test                  Run tests"
-	@echo "make check                 Run lint + tests"
+	@echo "make check                 Run lockfile check + lint + tests"
 	@echo "make build                 Build wheel + sdist"
 	@echo "make clean                 Remove build artifacts"
 	@echo "make tag VERSION=0.4.0     Create annotated git tag"
@@ -13,13 +14,19 @@ help:
 sync:
 	uv sync
 
+lock:
+	uv lock
+
 lint:
 	uv run ruff check .
 
 test:
 	uv run pytest -q
 
-check: lint test
+check: lock-check lint test
+
+lock-check:
+	uv lock --check
 
 build: check
 	rm -rf dist/
