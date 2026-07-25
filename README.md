@@ -30,34 +30,39 @@ BOUND emits the signal; the agent performs the action.
 
 ## Get started in 3 sentences
 
-Install the CLI with `pip install bound-policy` and add one of the integration prompts to your agent so it knows how and when to call BOUND. Onboard your project with `bound setup --agent generic` — it auto-detects your test, lint, and type-check tooling, generates a reviewable `bound-policy.yaml`, and installs the integration prompt without running any tool or touching the network. Then let the agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict BOUND returns — open `bound ui` if you want to watch live.
+Install with `pip install bound-policy`, then run `bound setup --agent generic` — it auto-detects your test, lint, and type-check tooling, generates a `bound-policy.yaml`, installs the integration prompt, and validates everything in one command. Then let your agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict. Open `bound ui` in a second terminal to watch decisions live.
 
-## Install — two parts, one time
+## Install — two parts, one command
 
-You need **both**: the BOUND CLI on your machine, and the integration prompt
-in your agent. The agent calls the CLI; the CLI does the work.
+You need the BOUND CLI on your machine **and** the integration prompt in your
+agent. `bound setup` handles both.
 
-### 1. Install the BOUND CLI on your machine
+### 1. Install the BOUND CLI
 
 ```bash
 pip install bound-policy
 ```
 
-### 2. Add the integration prompt to your agent
+### 2. Onboard your project
 
-The prompt tells your agent how and when to call BOUND. Pick one:
+```bash
+bound setup --agent generic
+```
 
-| Agent | How to install the prompt |
+This auto-detects your test, lint, and type-check tooling, generates
+`bound-policy.yaml`, installs the integration prompt for your agent, and
+validates the policy — all without running any tool or touching the network.
+
+For other agents, pass `--agent`:
+
+| Agent | Command |
 | --- | --- |
-| **Cline** | Paste [`integrations/cline/INSTALL_BOUND.md`](integrations/cline/INSTALL_BOUND.md) into a Cline session |
-| **Codex** | Paste [`integrations/codex/INSTALL_BOUND.md`](integrations/codex/INSTALL_BOUND.md) into a Codex session |
-| **Claude Code** | Paste [`integrations/claude-code/INSTALL_BOUND.md`](integrations/claude-code/INSTALL_BOUND.md) into Claude Code |
-| **Kilo Code** | Paste [`integrations/kilo-code/INSTALL_BOUND.md`](integrations/kilo-code/INSTALL_BOUND.md) into Kilo Code |
-| **Any agent** | Paste [`integrations/generic/INSTALL_BOUND.md`](integrations/generic/INSTALL_BOUND.md) |
-| **skills.sh** | `npx skills add Danny-de-bree/bound --skill bound` |
+| Any agent | `bound setup --agent generic` |
+| Cline | `bound setup --agent cline` |
+| Codex | `bound setup --agent codex` |
+| Claude Code | `bound setup --agent claude-code` |
 
-That's it. The agent now calls `bound evaluate` on your machine whenever it
-finishes a meaningful step. You run `bound ui` whenever you want to watch.
+Or paste a prompt manually from [`integrations/`](integrations/).
 
 ## How it works in an agent
 
@@ -68,28 +73,24 @@ ACCEPT / RETRY / REPLAN / ROLLBACK → the agent acts on it.
 A real session looks like this:
 
 ```text
-1. Agent creates a bound-policy.yaml
-   → Python project: bound setup --agent generic (auto-detects pytest, ruff, mypy)
-   → JavaScript/Go/Rust/anything: write one based on the default policy
-     (it's just YAML — test command, lint command, threshold)
+1. Onboard the project
+   → bound setup --agent generic (auto-detects pytest, ruff, mypy,
+     generates bound-policy.yaml, installs integration prompt, validates)
 
-2. Agent validates the policy
-   → bound policy validate bound-policy.yaml
-
-3. Agent starts a run
+2. Agent starts a run
    → bound run start "Add input validation to registration"
 
-4. Agent implements, runs tests → 0/2 pass (regex broken)
+3. Agent implements, runs tests → 0/2 pass (regex broken)
    → bound evaluate-workflow --test-pass-rate 0.0 --lint-passed ...
    → Decision: REPLAN  (S=-0.55, tests failing badly)
    → bound outcome --decision REPLAN --note "regex escaping broken"
 
-5. Agent fixes code, runs tests → 3/3 pass
+4. Agent fixes code, runs tests → 3/3 pass
    → bound evaluate-workflow --test-pass-rate 1.0 --lint-passed --type-check-passed ...
    → Decision: ACCEPT  (S=1.05 ≥ T=0.70)
    → bound outcome --decision ACCEPT --note "all tests pass"
 
-6. Agent finishes the run
+5. Agent finishes the run
    → bound run finish --status completed
 ```
 
@@ -153,7 +154,7 @@ MIT © Danny de Bree. See [LICENSE](LICENSE).
 
 ## Guides
 
-- **[Python & CLI reference](docs/python-usage.md)** — install, full command options, `bound init`, collectors, Python API
+- **[Python & CLI reference](docs/python-usage.md)** — install, `bound setup`, `bound doctor`, `bound init`, collectors, Python API
 - **[Architecture & scoring model](architecture/README.md)** — how the bounded-utility formula works
 - **[Decision lineage](docs/lineage.md)** — run history, evidence provenance, inspection
 - **[Default policy](src/bound/default_policy.yaml)** — a fully documented starting point
