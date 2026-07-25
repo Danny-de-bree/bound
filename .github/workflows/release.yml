@@ -7,12 +7,11 @@
 #      sdist, Skills ZIP, checksums) en upload 1 immutable bundle.
 #   2. publish-github     — download de bundle, push de tag, maak GitHub
 #      Release met alle assets.
-#   3. publish-pypi       — download de bundle, publiceer naar PyPI via
-#      trusted publishing (OIDC).
+#   3. publish-pypi       — download de assets van de GitHub Release,
+#      publiceer naar PyPI via trusted publishing (OIDC).
 #
-# Er wordt NOOIT opnieuw gebouwd. Hetzelfde artifact gaat naar GitHub
-# EN PyPI. Herpublicatie (recovery) gebeurt via publish.yml, dat ook
-# nooit opnieuw bouwt.
+# De stappen lopen sequentieel: GitHub Release bestaat altijd voordat
+# PyPI wordt gepubliceerd. Herpublicatie kan altijd via publish.yml.
 #
 # Trigger: Actions tab → "Release" → "Run workflow" → voer de versie in
 # (zonder voorloop-v, bv. "0.7.0"). De input MOET gelijk zijn aan
@@ -200,22 +199,31 @@ jobs:
             release/SHA256SUMS.txt
 
   # ═════════════════════════════════════════════════════════════════
-  #  publish-pypi  — PyPI publicatie (downloadt bundle, geen rebuild)
+  #  publish-pypi  — PyPI publicatie (downloadt van GitHub Release)
   # ═════════════════════════════════════════════════════════════════
   publish-pypi:
     name: Publish to PyPI
-    needs: [quality-and-build]
+    needs: [publish-github]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write
+      contents: read
 
     steps:
-      - name: Download release bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: release-bundle-${{ inputs.version }}
-          path: release/
+      - name: Download assets from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ inputs.version }}"
+          mkdir -p release/python
+          echo "Downloading assets from GitHub Release $TAG ..."
+          gh release download "$TAG" \
+            --pattern "*.whl" \
+            --pattern "*.tar.gz" \
+            --dir release/python/
+          echo "Downloaded:"
+          ls -la release/python/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@v1.12.4
