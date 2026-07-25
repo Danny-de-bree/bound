@@ -96,12 +96,8 @@ def test_prompt_substitutes_components_correctly() -> None:
     prompt = generate_prompt(result)
 
     assert "S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)" in prompt
-    assert (
-        f"({result.weights.acceptance:.2f} × {result.scores.acceptance:.2f})" in prompt
-    )
-    assert (
-        f"({result.weights.influence:.2f} × {result.scores.influence:.2f})" in prompt
-    )
+    assert f"({result.weights.acceptance:.2f} × {result.scores.acceptance:.2f})" in prompt
+    assert f"({result.weights.influence:.2f} × {result.scores.influence:.2f})" in prompt
     assert f"({result.weights.risk:.2f} × {result.scores.risk:.2f})" in prompt
     assert f"({result.weights.cost:.2f} × {result.scores.cost:.2f})" in prompt
     assert f"S = {result.score:.2f}" in prompt
@@ -175,9 +171,7 @@ def test_prompt_includes_threshold_metadata() -> None:
         (dict(acceptance=0.3, risk=0.2, cost=0.2, threshold=0.6), "REPLAN"),
     ],
 )
-def test_prompt_under_150_words(
-    kwargs: dict[str, float], expected_decision: str
-) -> None:
+def test_prompt_under_150_words(kwargs: dict[str, float], expected_decision: str) -> None:
     """Every decision branch stays under the 150-word limit.
 
     Each of the four decisions is exercised explicitly (and its decision
@@ -192,9 +186,6 @@ def test_prompt_under_150_words(
     assert result.decision == expected_decision
     assert word_count(prompt) < MAX_WORDS
     assert word_count(prompt) < 150
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -271,4 +262,3 @@ def test_non_accept_prompt_uses_v02_decision_wording(
     assert "meets the required acceptance threshold and does not exceed" not in prompt
     for phrase in phrases:
         assert phrase in prompt
-

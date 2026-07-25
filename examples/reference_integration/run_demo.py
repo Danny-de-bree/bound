@@ -229,9 +229,7 @@ def build_contract(plan_id: str = DEFAULT_PLAN_ID) -> StepContract:
         risk_checks=[
             RiskCheck(
                 id="no-unexpected-files",
-                description=(
-                    "No files outside the v0.6 change set were modified or added."
-                ),
+                description=("No files outside the v0.6 change set were modified or added."),
                 severity=0.6,
             ),
         ],
@@ -270,9 +268,7 @@ def _collect_evidence_and_raw() -> tuple[ExecutionEvidence, dict[str, RawCommand
     full_source = " ".join(VERIFICATION_COMMAND)
 
     # Service-specific suite.
-    service_proc = _run_command(
-        SERVICE_VERIFICATION_COMMAND, cwd=REPO_ROOT, nested=True
-    )
+    service_proc = _run_command(SERVICE_VERIFICATION_COMMAND, cwd=REPO_ROOT, nested=True)
     service_summary = parse_pytest_summary(service_proc.stdout)
     service_evidence = ServiceTestEvidence(
         command_succeeded=service_proc.returncode == 0,
@@ -284,9 +280,7 @@ def _collect_evidence_and_raw() -> tuple[ExecutionEvidence, dict[str, RawCommand
     # failed-command factory so "no unexpected files" can never become a pass.
     git_proc = _run_command(("git", "status", "--porcelain"), cwd=REPO_ROOT)
     if git_proc.returncode == 0:
-        git = parse_git_status_porcelain(
-            git_proc.stdout, ALLOWED_PATH_PREFIXES
-        )
+        git = parse_git_status_porcelain(git_proc.stdout, ALLOWED_PATH_PREFIXES)
         risk_source = "git status --porcelain"
         risk_details = (
             "no unexpected paths"
@@ -311,8 +305,7 @@ def _collect_evidence_and_raw() -> tuple[ExecutionEvidence, dict[str, RawCommand
                 passed=tests_pass,
                 source=full_source,
                 details=(
-                    f"exit_code={full_proc.returncode}; "
-                    f"executed={full_summary.executed_test_count}"
+                    f"exit_code={full_proc.returncode}; executed={full_summary.executed_test_count}"
                 ),
             ),
             CheckEvidence(
@@ -387,9 +380,7 @@ def build_run_trace(plan_id: str = DEFAULT_PLAN_ID) -> RunTrace:
     decision = result.evaluation.decision
     next_action = result.next_action
     trajectory = [
-        t.replace("{decision}", str(decision)).replace(
-            "{next_action}", str(next_action)
-        )
+        t.replace("{decision}", str(decision)).replace("{next_action}", str(next_action))
         for t in _TRAJECTORY_TEMPLATE
     ]
 
@@ -441,9 +432,7 @@ def write_artifacts(
     """
     run = build_run_trace(plan_id)
     run_json_path.parent.mkdir(parents=True, exist_ok=True)
-    run_json_path.write_text(
-        run.model_dump_json(indent=2) + "\n", encoding="utf-8"
-    )
+    run_json_path.write_text(run.model_dump_json(indent=2) + "\n", encoding="utf-8")
     report_path.write_text(render_from_trace(run) + "\n", encoding="utf-8")
     return run
 
@@ -467,8 +456,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-
-
-

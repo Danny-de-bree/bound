@@ -94,33 +94,60 @@ BoundaryEvaluateResponse.model_rebuild()
 # =========================================================================
 
 _SERVICE_MODELS: list[type[Any]] = [
-    PolicyValidateRequest, PolicyValidateResponse,
-    PolicyExplainRequest, PolicyExplainResponse,
-    PolicyHashRequest, PolicyHashResponse, PolicyIdentity,
-    RunStartRequest, RunStartResponse,
-    RunFinishRequest, RunFinishResponse,
-    RunDeleteRequest, RunDeleteResponse,
-    RunListRequest, RunListResponse,
-    RunInspectRequest, RunInspectResponse,
-    EvaluateRequest, EvaluateResponse,
-    EvaluateWorkflowRequest, EvaluateWorkflowResponse,
-    OutcomeRecordRequest, OutcomeRecordResponse,
-    EvidenceCollectRequest, EvidenceCollectResponse,
-    BoundaryEvaluateRequest, BoundaryEvaluateResponse,
-    CheckpointCreateRequest, CheckpointCreateResponse,
-    CheckpointInspectRequest, CheckpointInspectResponse,
-    CheckpointListRequest, CheckpointListResponse,
-    CheckpointRollbackRequest, CheckpointRollbackResponse,
+    PolicyValidateRequest,
+    PolicyValidateResponse,
+    PolicyExplainRequest,
+    PolicyExplainResponse,
+    PolicyHashRequest,
+    PolicyHashResponse,
+    PolicyIdentity,
+    RunStartRequest,
+    RunStartResponse,
+    RunFinishRequest,
+    RunFinishResponse,
+    RunDeleteRequest,
+    RunDeleteResponse,
+    RunListRequest,
+    RunListResponse,
+    RunInspectRequest,
+    RunInspectResponse,
+    EvaluateRequest,
+    EvaluateResponse,
+    EvaluateWorkflowRequest,
+    EvaluateWorkflowResponse,
+    OutcomeRecordRequest,
+    OutcomeRecordResponse,
+    EvidenceCollectRequest,
+    EvidenceCollectResponse,
+    BoundaryEvaluateRequest,
+    BoundaryEvaluateResponse,
+    CheckpointCreateRequest,
+    CheckpointCreateResponse,
+    CheckpointInspectRequest,
+    CheckpointInspectResponse,
+    CheckpointListRequest,
+    CheckpointListResponse,
+    CheckpointRollbackRequest,
+    CheckpointRollbackResponse,
 ]
 
 _SERVICE_CLASSES: list[type[Any]] = [
-    PolicyService, RunService, EvaluationService,
-    OutcomeService, EvidenceService, BoundaryService, CheckpointService,
+    PolicyService,
+    RunService,
+    EvaluationService,
+    OutcomeService,
+    EvidenceService,
+    BoundaryService,
+    CheckpointService,
 ]
 
 _SERVICE_ERRORS: list[type[Exception]] = [
-    ServiceError, PolicyLoadError, PolicyValidationError,
-    RunNotFoundError, EvaluationInputError, CheckpointError,
+    ServiceError,
+    PolicyLoadError,
+    PolicyValidationError,
+    RunNotFoundError,
+    EvaluationInputError,
+    CheckpointError,
 ]
 # =========================================================================
 # 1. Serialization determinism
@@ -150,9 +177,7 @@ def test_all_service_models_serialization_is_deterministic() -> None:
             as_dict_2 = instance.model_dump(mode="json")
             json_1 = json.dumps(as_dict_1, default=str, sort_keys=True)
             json_2 = json.dumps(as_dict_2, default=str, sort_keys=True)
-            assert json_1 == json_2, (
-                f"{model.__name__} serialization is not deterministic"
-            )
+            assert json_1 == json_2, f"{model.__name__} serialization is not deterministic"
         except Exception as exc:
             pytest.fail(f"{model.__name__} determinism check failed: {exc}")
 
@@ -165,9 +190,7 @@ def test_all_service_models_serialization_is_deterministic() -> None:
 def test_service_errors_form_a_hierarchy() -> None:
     """All service errors must inherit from ServiceError."""
     for err in _SERVICE_ERRORS:
-        assert issubclass(err, ServiceError), (
-            f"{err.__name__} does not inherit from ServiceError"
-        )
+        assert issubclass(err, ServiceError), f"{err.__name__} does not inherit from ServiceError"
 
 
 def test_all_service_models_have_forbid_and_frozen() -> None:
@@ -182,9 +205,9 @@ def test_all_service_models_have_forbid_and_frozen() -> None:
         assert cfg.get("extra") == "forbid", (
             f"{model.__name__} is missing extra='forbid' in model_config"
         )
-        assert cfg.get("frozen") is True, (
-            f"{model.__name__} is missing frozen=True in model_config"
-        )
+        assert cfg.get("frozen") is True, f"{model.__name__} is missing frozen=True in model_config"
+
+
 # =========================================================================
 # 3. No print/sys.exit in services
 # =========================================================================
@@ -192,9 +215,7 @@ def test_all_service_models_have_forbid_and_frozen() -> None:
 
 def test_services_module_has_no_print_or_sys_exit() -> None:
     """The services.py source must not contain print( or sys.exit."""
-    services_path = (
-        Path(__file__).resolve().parent.parent / "src" / "bound" / "services.py"
-    )
+    services_path = Path(__file__).resolve().parent.parent / "src" / "bound" / "services.py"
     source = services_path.read_text(encoding="utf-8")
     # Strip docstring before checking — module-level docstring mentions sys.exit
     clean = _strip_docstring(source)
@@ -224,11 +245,13 @@ def test_services_never_print_at_runtime(capsys: pytest.CaptureFixture[str]) -> 
     assert err == ""
 
     # EvaluationService — happy path
-    response = EvaluationService.evaluate(EvaluateRequest(
-        action=Action(description="Test", goal="Test"),
-        scores=EvaluationScores(acceptance=0.9, influence=0.0, risk=0.0, cost=0.0),
-        criteria=BoundCriteria(threshold=0.6),
-    ))
+    response = EvaluationService.evaluate(
+        EvaluateRequest(
+            action=Action(description="Test", goal="Test"),
+            scores=EvaluationScores(acceptance=0.9, influence=0.0, risk=0.0, cost=0.0),
+            criteria=BoundCriteria(threshold=0.6),
+        )
+    )
     assert response.result.decision == "ACCEPT"
     out, err = capsys.readouterr()
     assert out == ""
@@ -246,8 +269,12 @@ def _strip_docstring(source: str) -> str:
             if start == -1:
                 start = i
                 # Check if it ends on the same line
-                if stripped.endswith('"""') and stripped != '"""' or \
-                   stripped.endswith("'''") and stripped != "'''":
+                if (
+                    stripped.endswith('"""')
+                    and stripped != '"""'
+                    or stripped.endswith("'''")
+                    and stripped != "'''"
+                ):
                     # Single-line docstring
                     lines[i] = ""
                     break
@@ -267,6 +294,7 @@ def _strip_docstring(source: str) -> str:
 
 # --- PolicyService ---
 
+
 class TestPolicyService:
     """Integration tests for PolicyService."""
 
@@ -283,7 +311,9 @@ class TestPolicyService:
     def test_explain_raises_policy_load_error(self) -> None:
         """PolicyService.explain raises PolicyLoadError for a non-existent file."""
         with pytest.raises(PolicyLoadError, match="policy file not found"):
-            PolicyService.explain(PolicyExplainRequest(path="/tmp/nonexistent-bound-policy-xyz.yaml"))
+            PolicyService.explain(
+                PolicyExplainRequest(path="/tmp/nonexistent-bound-policy-xyz.yaml")
+            )
 
     def test_explain_raises_policy_validation_error(self, tmp_path: Path) -> None:
         """PolicyService.explain raises PolicyValidationError for invalid YAML."""
@@ -330,6 +360,7 @@ class TestPolicyService:
 
 
 # --- RunService ---
+
 
 class TestRunService:
     """Integration tests for RunService."""
@@ -383,16 +414,19 @@ class TestRunService:
 
 # --- EvaluationService ---
 
+
 class TestEvaluationService:
     """Integration tests for EvaluationService."""
 
     def test_evaluate_returns_typed_response(self) -> None:
         """EvaluationService.evaluate returns EvaluateResponse with result."""
-        response = EvaluationService.evaluate(EvaluateRequest(
-            action=Action(description="Book flight", goal="Travel"),
-            scores=EvaluationScores(acceptance=0.9, influence=0.2, risk=0.1, cost=0.2),
-            criteria=BoundCriteria(threshold=0.6),
-        ))
+        response = EvaluationService.evaluate(
+            EvaluateRequest(
+                action=Action(description="Book flight", goal="Travel"),
+                scores=EvaluationScores(acceptance=0.9, influence=0.2, risk=0.1, cost=0.2),
+                criteria=BoundCriteria(threshold=0.6),
+            )
+        )
         assert isinstance(response, EvaluateResponse)
         assert isinstance(response.result, EvaluationResult)
         assert response.result.decision == "ACCEPT"
@@ -404,11 +438,13 @@ class TestEvaluationService:
     def test_evaluate_retry_below_threshold(self) -> None:
         """A score within retry-margin below threshold yields RETRY."""
         # Score = 0.55, threshold = 0.6, gap = 0.05 <= retry_margin(0.1) -> RETRY
-        response = EvaluationService.evaluate(EvaluateRequest(
-            action=Action(description="Marginal action", goal="Travel"),
-            scores=EvaluationScores(acceptance=0.55, influence=0.0, risk=0.0, cost=0.0),
-            criteria=BoundCriteria(threshold=0.6),
-        ))
+        response = EvaluationService.evaluate(
+            EvaluateRequest(
+                action=Action(description="Marginal action", goal="Travel"),
+                scores=EvaluationScores(acceptance=0.55, influence=0.0, risk=0.0, cost=0.0),
+                criteria=BoundCriteria(threshold=0.6),
+            )
+        )
         assert response.result.decision == "RETRY"
 
     def test_evaluate_raises_on_invalid_input(self) -> None:
@@ -418,23 +454,29 @@ class TestEvaluationService:
         # raises ValueError when no evaluator is bound - so this test verifies
         # the service does NOT raise for valid inputs (the error is never triggered
         # because the service always binds an evaluator).
-        response = EvaluationService.evaluate(EvaluateRequest(
-            action=Action(description="Test", goal="Test"),
-            scores=EvaluationScores(acceptance=0.5, influence=0.0, risk=0.0, cost=0.0),
-            criteria=BoundCriteria(threshold=0.6),
-        ))
+        response = EvaluationService.evaluate(
+            EvaluateRequest(
+                action=Action(description="Test", goal="Test"),
+                scores=EvaluationScores(acceptance=0.5, influence=0.0, risk=0.0, cost=0.0),
+                criteria=BoundCriteria(threshold=0.6),
+            )
+        )
         # Service handles all valid inputs gracefully
         assert isinstance(response, EvaluateResponse)
 
     def test_evaluate_workflow_returns_typed_response(self) -> None:
         """EvaluationService.evaluate_workflow returns EvaluateWorkflowResponse."""
-        response = EvaluationService.evaluate_workflow(EvaluateWorkflowRequest(
-            action=Action(description="Implement feature", goal="Ship feature"),
-            signals=CodingWorkflowSignals(
-                test_pass_rate=1.0, lint_passed=True, type_check_passed=True,
-            ),
-            criteria=BoundCriteria(threshold=0.6),
-        ))
+        response = EvaluationService.evaluate_workflow(
+            EvaluateWorkflowRequest(
+                action=Action(description="Implement feature", goal="Ship feature"),
+                signals=CodingWorkflowSignals(
+                    test_pass_rate=1.0,
+                    lint_passed=True,
+                    type_check_passed=True,
+                ),
+                criteria=BoundCriteria(threshold=0.6),
+            )
+        )
         assert isinstance(response, EvaluateWorkflowResponse)
         assert isinstance(response.result, EvaluationResult)
         assert "signals" in response.payload
@@ -448,14 +490,17 @@ class TestEvaluationService:
         # The CodingWorkflowEvaluator raises ValueError when no acceptance
         # signals are provided (all are None).
         with pytest.raises(EvaluationInputError, match="no acceptance evidence"):
-            EvaluationService.evaluate_workflow(EvaluateWorkflowRequest(
-                action=Action(description="Test", goal="Test"),
-                signals=CodingWorkflowSignals(),
-                criteria=BoundCriteria(threshold=0.6),
-            ))
+            EvaluationService.evaluate_workflow(
+                EvaluateWorkflowRequest(
+                    action=Action(description="Test", goal="Test"),
+                    signals=CodingWorkflowSignals(),
+                    criteria=BoundCriteria(threshold=0.6),
+                )
+            )
 
 
 # --- OutcomeService ---
+
 
 class TestOutcomeService:
     """Integration tests for OutcomeService."""
@@ -463,15 +508,18 @@ class TestOutcomeService:
     def test_record_raises_not_found(self) -> None:
         """OutcomeService.record raises RunNotFoundError for a non-existent run."""
         with pytest.raises(RunNotFoundError, match="no lineage run"):
-            OutcomeService.record(OutcomeRecordRequest(
-                run_id="nonexistent",
-                step_id="step-1",
-                evaluation_id="eval-1",
-                decision="ACCEPT",
-            ))
+            OutcomeService.record(
+                OutcomeRecordRequest(
+                    run_id="nonexistent",
+                    step_id="step-1",
+                    evaluation_id="eval-1",
+                    decision="ACCEPT",
+                )
+            )
 
 
 # --- EvidenceService ---
+
 
 class TestEvidenceService:
     """Integration tests for EvidenceService."""
@@ -483,14 +531,16 @@ class TestEvidenceService:
         stale ``run_id`` never produces a spurious lineage event.
         """
         with pytest.raises(RunNotFoundError, match="no lineage run"):
-            EvidenceService.collect(EvidenceCollectRequest(
-                run_id="nonexistent",
-                step_id="step-1",
-                evaluation_id="eval-1",
-                check_id="check-1",
-                provenance=EvidenceProvenance.OBSERVED,
-                passed=True,
-            ))
+            EvidenceService.collect(
+                EvidenceCollectRequest(
+                    run_id="nonexistent",
+                    step_id="step-1",
+                    evaluation_id="eval-1",
+                    check_id="check-1",
+                    provenance=EvidenceProvenance.OBSERVED,
+                    passed=True,
+                )
+            )
 
     def test_collect_happy_path(self) -> None:
         """EvidenceService.collect records evidence for an existing run.
@@ -500,15 +550,17 @@ class TestEvidenceService:
         ``generate_event_id`` call that was missing ``sequence``).
         """
         start = RunService.start(RunStartRequest(task="evidence collect test"))
-        response = EvidenceService.collect(EvidenceCollectRequest(
-            run_id=start.run_id,
-            step_id="step-1",
-            evaluation_id="eval-1",
-            check_id="check-1",
-            provenance=EvidenceProvenance.OBSERVED,
-            passed=True,
-            collector="test-collector",
-        ))
+        response = EvidenceService.collect(
+            EvidenceCollectRequest(
+                run_id=start.run_id,
+                step_id="step-1",
+                evaluation_id="eval-1",
+                check_id="check-1",
+                provenance=EvidenceProvenance.OBSERVED,
+                passed=True,
+                collector="test-collector",
+            )
+        )
         assert isinstance(response, EvidenceCollectResponse)
         assert response.event_id != ""
         assert response.run_id == start.run_id
@@ -516,6 +568,7 @@ class TestEvidenceService:
 
 
 # --- BoundaryService ---
+
 
 class TestBoundaryService:
     """Integration tests for BoundaryService."""
@@ -525,19 +578,24 @@ class TestBoundaryService:
         BoundaryEvaluateResponse."""
         # This test just verifies the method accepts the typed request and returns
         # a typed response, even if the evaluation may not produce a meaningful result.
-        response = BoundaryService.evaluate(BoundaryEvaluateRequest(
-            contract=StepContract(
-                id="test", description="Test", goal="Goal",
-                acceptance_checks=[
-                    AcceptanceCheck(
-                        id="c1", description="d1",
-                        accepted_provenance=[EvidenceProvenance.OBSERVED],
-                    ),
-                ],
-            ),
-            evidence=ExecutionEvidence(),
-            criteria=BoundCriteria(threshold=0.5),
-        ))
+        response = BoundaryService.evaluate(
+            BoundaryEvaluateRequest(
+                contract=StepContract(
+                    id="test",
+                    description="Test",
+                    goal="Goal",
+                    acceptance_checks=[
+                        AcceptanceCheck(
+                            id="c1",
+                            description="d1",
+                            accepted_provenance=[EvidenceProvenance.OBSERVED],
+                        ),
+                    ],
+                ),
+                evidence=ExecutionEvidence(),
+                criteria=BoundCriteria(threshold=0.5),
+            )
+        )
         assert isinstance(response, BoundaryEvaluateResponse)
         assert isinstance(response.result, EvaluationResult)
 
@@ -558,27 +616,31 @@ class TestBoundaryService:
             def evaluate_step(self, **_kwargs: object) -> None:
                 raise RuntimeError("unexpected internal failure")
 
-        monkeypatch.setattr(
-            "bound.bound_workflow.BoundWorkflow", _ExplodingWorkflow
-        )
+        monkeypatch.setattr("bound.bound_workflow.BoundWorkflow", _ExplodingWorkflow)
 
         with pytest.raises(RuntimeError, match="unexpected internal failure"):
-            BoundaryService.evaluate(BoundaryEvaluateRequest(
-                contract=StepContract(
-                    id="test", description="Test", goal="Goal",
-                    acceptance_checks=[
-                        AcceptanceCheck(
-                            id="c1", description="d1",
-                            accepted_provenance=[EvidenceProvenance.OBSERVED],
-                        ),
-                    ],
-                ),
-                evidence=ExecutionEvidence(),
-                criteria=BoundCriteria(threshold=0.5),
-            ))
+            BoundaryService.evaluate(
+                BoundaryEvaluateRequest(
+                    contract=StepContract(
+                        id="test",
+                        description="Test",
+                        goal="Goal",
+                        acceptance_checks=[
+                            AcceptanceCheck(
+                                id="c1",
+                                description="d1",
+                                accepted_provenance=[EvidenceProvenance.OBSERVED],
+                            ),
+                        ],
+                    ),
+                    evidence=ExecutionEvidence(),
+                    criteria=BoundCriteria(threshold=0.5),
+                )
+            )
 
 
 # --- CheckpointService ---
+
 
 class TestCheckpointService:
     """Integration tests for CheckpointService."""
@@ -600,6 +662,7 @@ class TestCheckpointService:
 # 5. CLI output reflects service results
 # =========================================================================
 
+
 class TestCliCallsServices:
     """Verify that the CLI handlers call the service layer and reflect its results."""
 
@@ -609,6 +672,7 @@ class TestCliCallsServices:
         Reflects the error.
         """
         from bound.cli import main
+
         rc = main(["policy", "validate", "/tmp/nonexistent-bound-policy-xyz.yaml"])
         out, err = capsys.readouterr()
         assert rc != 0
@@ -617,6 +681,7 @@ class TestCliCallsServices:
     def test_cli_policy_hash_calls_service(self, capsys: pytest.CaptureFixture[str]) -> None:
         """bound policy hash on the default policy calls PolicyService.hash."""
         from bound.cli import main
+
         default = Path(__file__).resolve().parent.parent / "src" / "bound" / "default_policy.yaml"
         rc = main(["policy", "hash", str(default)])
         out, _ = capsys.readouterr()
@@ -626,16 +691,26 @@ class TestCliCallsServices:
     def test_cli_evaluate_calls_service(self, capsys: pytest.CaptureFixture[str]) -> None:
         """bound evaluate calls EvaluationService and writes JSON to stdout."""
         from bound.cli import main
-        rc = main([
-            "evaluate",
-            "--action", "Book flight",
-            "--goal", "Travel",
-            "--acceptance", "0.9",
-            "--influence", "0.2",
-            "--risk", "0.1",
-            "--cost", "0.2",
-            "--threshold", "0.6",
-        ])
+
+        rc = main(
+            [
+                "evaluate",
+                "--action",
+                "Book flight",
+                "--goal",
+                "Travel",
+                "--acceptance",
+                "0.9",
+                "--influence",
+                "0.2",
+                "--risk",
+                "0.1",
+                "--cost",
+                "0.2",
+                "--threshold",
+                "0.6",
+            ]
+        )
         out, err = capsys.readouterr()
         assert rc == 0
         payload = json.loads(out)
@@ -646,6 +721,7 @@ class TestCliCallsServices:
     def test_cli_run_start_calls_service(self, capsys: pytest.CaptureFixture[str]) -> None:
         """bound run start calls RunService.start and prints the run_id."""
         from bound.cli import main
+
         rc = main(["run", "start", "test task from cli"])
         out, _ = capsys.readouterr()
         assert rc == 0
@@ -715,14 +791,10 @@ def _inject_value(type_hint: Any, field_name: str) -> Any:
     if "BoundCriteria" in type_name:
         return BoundCriteria(threshold=0.5)
     if "CodingWorkflowSignals" in type_name:
-        return CodingWorkflowSignals(
-            test_pass_rate=1.0, lint_passed=True, type_check_passed=True
-        )
+        return CodingWorkflowSignals(test_pass_rate=1.0, lint_passed=True, type_check_passed=True)
     if "EvaluationResult" in type_name:
         return EvaluationResult.model_construct(
-            scores=EvaluationScores(
-                acceptance=0.5, influence=0.0, risk=0.0, cost=0.0
-            ),
+            scores=EvaluationScores(acceptance=0.5, influence=0.0, risk=0.0, cost=0.0),
             weights=BoundWeights(),
             threshold=0.6,
             acceptance_component=0.5,
@@ -735,10 +807,13 @@ def _inject_value(type_hint: Any, field_name: str) -> Any:
         )
     if "StepContract" in type_name:
         return StepContract(
-            id="test-contract", description="Test", goal="Goal",
+            id="test-contract",
+            description="Test",
+            goal="Goal",
             acceptance_checks=[
                 AcceptanceCheck(
-                    id="check-1", description="Check",
+                    id="check-1",
+                    description="Check",
                     accepted_provenance=[EvidenceProvenance.OBSERVED],
                 ),
             ],
@@ -752,9 +827,14 @@ def _inject_value(type_hint: Any, field_name: str) -> Any:
         return RunStatus.STARTED
     if "RunSummary" in type_name:
         return RunSummary(
-            run_id="test-run", task="test", status=RunStatus.STARTED,
+            run_id="test-run",
+            task="test",
+            status=RunStatus.STARTED,
             started_at=datetime(2025, 1, 1, tzinfo=UTC),
-            finished_at=None, step_count=0, event_count=0, incomplete=False,
+            finished_at=None,
+            step_count=0,
+            event_count=0,
+            incomplete=False,
             path="/tmp/.bound/runs/test-run",
         )
     if hasattr(type_hint, "model_fields"):

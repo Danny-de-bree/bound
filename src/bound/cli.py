@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from bound.doctor import run_doctor
 from bound.evidence import EvidenceProvenance, EvidenceStatus
 from bound.init_project import ProjectDetections, detect_tooling, generate_policy
 from bound.lineage import (
@@ -73,6 +74,7 @@ from bound.services import (
     RunService,
     RunStartRequest,
 )
+from bound.setup import SetupError, setup_project
 
 logger = logging.getLogger("bound.cli")
 
@@ -133,7 +135,10 @@ def _add_weight_and_threshold_args(sub: argparse.ArgumentParser) -> None:
         ),
     )
     sub.add_argument(
-        "--threshold", type=float, required=True, help="Acceptance threshold T (>= 0)."
+        "--threshold",
+        type=float,
+        required=True,
+        help="Acceptance threshold T (>= 0).",
     )
     sub.add_argument(
         "--retry-margin",
@@ -218,10 +223,16 @@ def _build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--goal", required=True, help="The larger goal the action advances.")
     evaluate.add_argument("--context", default=None, help="Optional additional context.")
     evaluate.add_argument(
-        "--acceptance", type=float, required=True, help="Acceptance score A in [0, 1]."
+        "--acceptance",
+        type=float,
+        required=True,
+        help="Acceptance score A in [0, 1].",
     )
     evaluate.add_argument(
-        "--influence", type=float, required=True, help="Downstream influence I in [-1, 1]."
+        "--influence",
+        type=float,
+        required=True,
+        help="Downstream influence I in [-1, 1].",
     )
     evaluate.add_argument("--risk", type=float, required=True, help="Risk penalty R in [0, 1].")
     evaluate.add_argument("--cost", type=float, required=True, help="Resource penalty C in [0, 1].")
@@ -272,7 +283,10 @@ def _build_parser() -> argparse.ArgumentParser:
     workflow.add_argument("--goal", required=True, help="The larger goal the action advances.")
     workflow.add_argument("--context", default=None, help="Optional additional context.")
     workflow.add_argument(
-        "--test-pass-rate", type=float, default=None, help="Fraction of tests passing in [0, 1]."
+        "--test-pass-rate",
+        type=float,
+        default=None,
+        help="Fraction of tests passing in [0, 1].",
     )
     workflow.add_argument(
         "--lint-passed",
@@ -293,10 +307,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Fraction of required checks passing in [0, 1].",
     )
     workflow.add_argument(
-        "--retry-count", type=int, default=0, help="Number of retries performed so far."
+        "--retry-count",
+        type=int,
+        default=0,
+        help="Number of retries performed so far.",
     )
     workflow.add_argument(
-        "--tool-call-count", type=int, default=0, help="Number of tool calls performed so far."
+        "--tool-call-count",
+        type=int,
+        default=0,
+        help="Number of tool calls performed so far.",
     )
     workflow.add_argument("--token-usage", type=int, default=None, help="Total tokens consumed.")
     workflow.add_argument(
@@ -306,7 +326,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Wall-clock execution time in seconds.",
     )
     workflow.add_argument(
-        "--files-changed", type=int, default=None, help="Number of files changed."
+        "--files-changed",
+        type=int,
+        default=None,
+        help="Number of files changed.",
     )
     workflow.add_argument(
         "--unexpected-files-changed",
@@ -533,7 +556,9 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     policy_sub = policy_parser.add_subparsers(
-        dest="policy_command", metavar="<policy command>", required=True
+        dest="policy_command",
+        metavar="<policy command>",
+        required=True,
     )
 
     def _add_policy_file_arg(p: argparse.ArgumentParser) -> None:
@@ -602,14 +627,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     watch_parser.set_defaults(func=_run_watch)
 
-# --- checkpoint -----------------------------------------------------------
+    # --- checkpoint -----------------------------------------------------------
     cp_parser = subparsers.add_parser(
         "checkpoint",
         help="Manage BOWN checkpoints (create/inspect/list).",
         description="Manage BOUND checkpoints for safe state preservation and rollback.",
     )
     cp_sub = cp_parser.add_subparsers(
-        dest="checkpoint_command", metavar="<checkpoint command>", required=True
+        dest="checkpoint_command",
+        metavar="<checkpoint command>",
+        required=True,
     )
 
     cp_create = cp_sub.add_parser(
@@ -619,7 +646,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cp_create.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
     cp_create.add_argument(
-        "--step", required=True, metavar="STEP_ID",
+        "--step",
+        required=True,
+        metavar="STEP_ID",
         help="Step id for this checkpoint.",
     )
     cp_create.add_argument("--message", default=None, help="Optional checkpoint message.")
@@ -655,15 +684,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     rollback_parser.add_argument("--run", required=True, metavar="RUN_ID", help="Owning run id.")
     rollback_parser.add_argument(
-        "--checkpoint", required=True, metavar="CHECKPOINT_ID",
+        "--checkpoint",
+        required=True,
+        metavar="CHECKPOINT_ID",
         help="Checkpoint to roll back to.",
     )
     rollback_parser.add_argument(
-        "--dry-run", action="store_true", default=False,
+        "--dry-run",
+        action="store_true",
+        default=False,
         help="Preview changes without executing.",
     )
     rollback_parser.add_argument(
-        "--execute", action="store_true", default=False,
+        "--execute",
+        action="store_true",
+        default=False,
         help="Perform the rollback (opt-in required).",
     )
     rollback_parser.set_defaults(func=_run_rollback)
@@ -716,6 +751,83 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Print the generated policy to stdout instead of writing to disk.",
     )
     init_parser.set_defaults(func=_run_init)
+
+    # --- setup (v0.8.1) ---------------------------------------------------
+    setup_parser = subparsers.add_parser(
+        "setup",
+        help=(
+            "Set up BOUND for this project — detect tooling, generate policy, install integration."
+        ),
+        description=(
+            "Detect project tooling (test framework, linter, type checker, "
+            "build system, Git), generate or update bound-policy.yaml, install "
+            "the selected agent integration, create .bound/ directories, "
+            "validate the policy, and perform a smoke evaluation. "
+            "Must not execute project commands unless --verify is given. "
+            "Must not overwrite an existing policy without --force."
+        ),
+    )
+    setup_parser.add_argument(
+        "--agent",
+        default="generic",
+        choices=["codex", "claude-code", "cline", "generic"],
+        help="Agent to install the integration for. Defaults to 'generic'.",
+    )
+    setup_parser.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    setup_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Describe every intended filesystem change without writing files.",
+    )
+    setup_parser.add_argument(
+        "--verify",
+        action="store_true",
+        default=False,
+        help="Run smoke evaluation after setup (validates the generated policy).",
+    )
+    setup_parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Overwrite an existing bound-policy.yaml without prompting.",
+    )
+    setup_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit the result as a JSON object instead of human-readable output.",
+    )
+    setup_parser.set_defaults(func=_run_setup)
+
+    # --- doctor (v0.8.1) ---------------------------------------------------
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Run setup diagnostics — check BOUND installation health.",
+        description=(
+            "Run read-only diagnostics against the current project: BOUND version, "
+            "Python version, policy presence/validity, configured collectors, "
+            "collector command availability, Git repository state, checkpoint "
+            "support, integration installation status, writable lineage directory, "
+            "and stale/incompatible configuration. Never mutates the project."
+        ),
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit machine-readable JSON output with a stable schema.",
+    )
+    doctor_parser.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    doctor_parser.set_defaults(func=_run_doctor)
 
     return parser
 
@@ -826,19 +938,26 @@ _NEXT_ACTION_REASON = {
 def _run_run_start(args: argparse.Namespace) -> int:
     """Execute ``bound run start``."""
     metadata = dict(args.metadata) if args.metadata else {}
-    response = RunService.start(RunStartRequest(
-        task=args.task,
-        metadata=metadata,
-        store=_store(),
-    ))
+    response = RunService.start(
+        RunStartRequest(
+            task=args.task,
+            metadata=metadata,
+            store=_store(),
+        ),
+    )
     if args.json:
-        print(json.dumps({
-            "run_id": response.run_id,
-            "task": response.task,
-            "started_at": response.started_at,
-            "status": response.status,
-            "schema_version": response.schema_version,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "run_id": response.run_id,
+                    "task": response.task,
+                    "started_at": response.started_at,
+                    "status": response.status,
+                    "schema_version": response.schema_version,
+                },
+                indent=2,
+            ),
+        )
     else:
         print(response.run_id)
     return 0
@@ -847,21 +966,28 @@ def _run_run_start(args: argparse.Namespace) -> int:
 def _run_run_finish(args: argparse.Namespace) -> int:
     """Execute ``bound run finish``."""
     try:
-        response = RunService.finish(RunFinishRequest(
-            run_id=args.run_id,
-            status=args.status,
-            note=args.note,
-            store=_store(),
-        ))
+        response = RunService.finish(
+            RunFinishRequest(
+                run_id=args.run_id,
+                status=args.status,
+                note=args.note,
+                store=_store(),
+            ),
+        )
     except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
     if args.json:
-        print(json.dumps({
-            "run_id": response.run_id,
-            "status": response.status,
-            "finished_at": response.finished_at,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "run_id": response.run_id,
+                    "status": response.status,
+                    "finished_at": response.finished_at,
+                },
+                indent=2,
+            ),
+        )
     else:
         print(f"finished run {response.run_id} ({response.status})")
     return 0
@@ -882,7 +1008,7 @@ def _run_run_list(args: argparse.Namespace) -> int:
         started = s.started_at.strftime("%Y-%m-%d %H:%M:%S") if s.started_at else "-"
         print(
             f"{s.run_id:<34} {s.status.value:<12} {s.task[:28]:<28} {started:<20} "
-            f"{'yes' if s.incomplete else 'no'}"
+            f"{'yes' if s.incomplete else 'no'}",
         )
     return 0
 
@@ -890,10 +1016,12 @@ def _run_run_list(args: argparse.Namespace) -> int:
 def _run_run_delete(args: argparse.Namespace) -> int:
     """Execute ``bound run delete``."""
     try:
-        response = RunService.delete(RunDeleteRequest(
-            run_id=args.run_id,
-            store=_store(),
-        ))
+        response = RunService.delete(
+            RunDeleteRequest(
+                run_id=args.run_id,
+                store=_store(),
+            ),
+        )
     except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
@@ -938,18 +1066,18 @@ _PROVENANCE_STRENGTH: dict[EvidenceProvenance, int] = {
 #: BOUND-controlled collector or a trusted attestation, never agent
 #: self-report. Drives the "Critical evidence coverage" metric.
 _INDEPENDENTLY_VERIFIED: frozenset[EvidenceProvenance] = frozenset(
-    {EvidenceProvenance.OBSERVED, EvidenceProvenance.VERIFIED, EvidenceProvenance.ATTESTED}
+    {EvidenceProvenance.OBSERVED, EvidenceProvenance.VERIFIED, EvidenceProvenance.ATTESTED},
 )
 
 #: Provenance that is *not* independently verified — selected by
 #: ``bound inspect --only-unverified``.
 _UNVERIFIED_PROVENANCE: frozenset[EvidenceProvenance] = frozenset(
-    {EvidenceProvenance.CLAIMED, EvidenceProvenance.DEFAULTED, EvidenceProvenance.MISSING}
+    {EvidenceProvenance.CLAIMED, EvidenceProvenance.DEFAULTED, EvidenceProvenance.MISSING},
 )
 
 #: Evidence statuses that mean the check could not be independently confirmed.
 _UNVERIFIED_STATUS: frozenset[EvidenceStatus] = frozenset(
-    {EvidenceStatus.UNVERIFIED, EvidenceStatus.MISSING, EvidenceStatus.INVALID}
+    {EvidenceStatus.UNVERIFIED, EvidenceStatus.MISSING, EvidenceStatus.INVALID},
 )
 
 
@@ -1007,7 +1135,8 @@ def _check_provenance_line(event: EvidenceCollectedEvent) -> str:
 
 
 def _filter_checks(
-    events: list[EvidenceCollectedEvent], only_unverified: bool
+    events: list[EvidenceCollectedEvent],
+    only_unverified: bool,
 ) -> list[EvidenceCollectedEvent]:
     """Keep only unverified/claimed/missing evidence when ``only_unverified``."""
     if not only_unverified:
@@ -1025,7 +1154,7 @@ class _RunAuditIndex:
     action reports to the right step/attempt.
     """
 
-    __slots__ = ("collected", "failures", "gates", "actions")
+    __slots__ = ("actions", "collected", "failures", "gates")
 
     def __init__(self) -> None:
         self.collected: dict[str, list[EvidenceCollectedEvent]] = {}
@@ -1090,7 +1219,7 @@ def _render_inspect_tree(log: RunLog, *, only_unverified: bool = False) -> str:
     if total:
         out.append(
             f"Critical evidence coverage: {pct}% independently verified "
-            f"({verified}/{total} collected checks)"
+            f"({verified}/{total} collected checks)",
         )
     else:
         out.append("Critical evidence coverage: no collector evidence recorded")
@@ -1111,9 +1240,7 @@ def _render_inspect_tree(log: RunLog, *, only_unverified: bool = False) -> str:
         outcomes_by_step.setdefault(o.step_id, []).append(o)
 
     for idx, step in enumerate(log.steps):
-        out.append(
-            f"Step {idx + 1} · {step.description or step.contract_id} · {step.status.value}"
-        )
+        out.append(f"Step {idx + 1} · {step.description or step.contract_id} · {step.status.value}")
         step_evals = evals_by_step.get(step.step_id, [])
         step_outcomes = outcomes_by_step.get(step.step_id, [])
         step_collected = audit.collected.get(step.step_id, [])
@@ -1122,18 +1249,17 @@ def _render_inspect_tree(log: RunLog, *, only_unverified: bool = False) -> str:
             is_last = a_idx == len(step.attempts) - 1
             branch = "└──" if is_last else "├──"
             cont = "    " if is_last else "│   "
-            ev = next(
-                (e for e in step_evals if e.evaluation_id == attempt.evaluation_id), None
-            )
+            ev = next((e for e in step_evals if e.evaluation_id == attempt.evaluation_id), None)
             if ev is not None:
                 out.append(
-                    f"{branch} Attempt {attempt.attempt} · {ev.decision} · {_checks_summary(ev)}"
+                    f"{branch} Attempt {attempt.attempt} · {ev.decision} · {_checks_summary(ev)}",
                 )
             else:
                 out.append(f"{branch} Attempt {attempt.attempt} · (no evaluation)")
             children: list[tuple[str, list[str]]] = []
             outcome = next(
-                (o for o in step_outcomes if o.evaluation_id == attempt.evaluation_id), None
+                (o for o in step_outcomes if o.evaluation_id == attempt.evaluation_id),
+                None,
             )
             if outcome is not None:
                 children.append((f"Outcome: {outcome.note or outcome.next_action}", []))
@@ -1148,7 +1274,7 @@ def _render_inspect_tree(log: RunLog, *, only_unverified: bool = False) -> str:
                         f"I={sc.influence:.2f} R={sc.risk:.2f} C={sc.cost:.2f}) "
                         f"T={ev.threshold:.4f}",
                         [],
-                    )
+                    ),
                 )
             check_lines = _filter_checks(step_collected, only_unverified)
             if check_lines:
@@ -1180,7 +1306,7 @@ def _render_inspect_tree(log: RunLog, *, only_unverified: bool = False) -> str:
                             )
                             for f in step_failures
                         ],
-                    )
+                    ),
                 )
             for ci, (header, details) in enumerate(children):
                 c_last = ci == len(children) - 1
@@ -1210,7 +1336,7 @@ def _check_json(event: EvidenceCollectedEvent) -> dict[str, object]:
     }
 
 
-def _policy_from_run(config) -> dict[str, object] | None:  # noqa: ANN001
+def _policy_from_run(config) -> dict[str, object] | None:
     """Extract the policy identity (id/version/hash) from a run config snapshot.
 
     Returns ``None`` when the run carried no policy (schema-1.0 traces or runs
@@ -1331,10 +1457,7 @@ _DECISION_COLORS: dict[str, str] = {
 def _html_escape(text: str) -> str:
     """Escape a string for safe inclusion in HTML text content."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
@@ -1380,7 +1503,7 @@ def _render_inspect_html(log: RunLog) -> str:
         "font-size:0.75rem;font-weight:600;margin-right:4px;}"
         ".ev{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;"
         "font-size:0.8rem;margin:4px 0;}"
-        ".kv{color:#555;}"
+        ".kv{color:#555;}",
     )
     parts.append("</style></head><body>")
 
@@ -1396,7 +1519,7 @@ def _render_inspect_html(log: RunLog) -> str:
     if cfg is not None and cfg.policy_id is not None:
         meta.append(
             f"<strong>Policy:</strong> {_html_escape(cfg.policy_id)}@"
-            f"{_html_escape(cfg.policy_version or '?')}"
+            f"{_html_escape(cfg.policy_version or '?')}",
         )
         if cfg.policy_hash is not None:
             meta.append(f"<strong>Policy hash:</strong> {_html_escape(cfg.policy_hash)}")
@@ -1413,18 +1536,17 @@ def _render_inspect_html(log: RunLog) -> str:
         parts.append(
             f"<div><strong>Step:</strong> {_html_escape(step.contract_id)} "
             f"<span class='kv'>({_sv(step.status)})</span> "
-            f"<span class='kv'>step_id={_html_escape(step.step_id)}</span></div>"
+            f"<span class='kv'>step_id={_html_escape(step.step_id)}</span></div>",
         )
         evals = [e for e in log.evaluations if e.step_id == step.step_id]
         if not evals:
             parts.append("<div class='kv'><em>(no evaluations)</em></div>")
         for ev in evals:
             parts.append("<div class='attempt'>")
-            decision = ev.decision if ev.decision else "(none)"
+            decision = ev.decision or "(none)"
             color = _DECISION_COLORS.get(decision, "#616161")
             parts.append(
-                f"<span class='badge' style='background:{color}'>"
-                f"{_html_escape(decision)}</span>"
+                f"<span class='badge' style='background:{color}'>{_html_escape(decision)}</span>",
             )
             if ev.attempt is not None:
                 parts.append(f"<span class='kv'>attempt {ev.attempt}</span>")
@@ -1439,7 +1561,7 @@ def _render_inspect_html(log: RunLog) -> str:
                     f"<div class='ev'><span class='badge' style='background:{pcolor}'>"
                     f"{_html_escape(prov)}</span>"
                     f"{_html_escape(row.check_id or row.collector or '?')} "
-                    f"<span class='kv'>{_html_escape(status)}</span></div>"
+                    f"<span class='kv'>{_html_escape(status)}</span></div>",
                 )
             gate = None
             for g in audit.gates.get(ev.step_id, []):
@@ -1456,12 +1578,12 @@ def _render_inspect_html(log: RunLog) -> str:
                     f"<div class='kv'>candidate {_html_escape(cd)} &rarr; "
                     f"<span class='badge' style='background:{fd_color}'>"
                     f"{_html_escape(fd)}</span>"
-                    f" assurance {_html_escape(_sv(gate.assurance))}</div>"
+                    f" assurance {_html_escape(_sv(gate.assurance))}</div>",
                 )
             for oc in [o for o in log.outcomes if o.step_id == step.step_id]:
                 parts.append(
                     f"<div class='kv'>outcome: {_html_escape(oc.decision)}"
-                    f" &rarr; {_html_escape(oc.next_action)}</div>"
+                    f" &rarr; {_html_escape(oc.next_action)}</div>",
                 )
             parts.append("</div>")
         parts.append("</div>")
@@ -1469,7 +1591,7 @@ def _render_inspect_html(log: RunLog) -> str:
     parts.append(
         "<p class='kv'>ROLLBACK and other control actions are executed by the "
         "agent / integration, not by BOUND. This timeline is a local view of "
-        "recorded lineage; no hosted service is contacted.</p>"
+        "recorded lineage; no hosted service is contacted.</p>",
     )
     parts.append("</body></html>")
     return "\n".join(parts)
@@ -1485,11 +1607,13 @@ def _run_inspect(args: argparse.Namespace) -> int:
     ``--html PATH`` writes a self-contained local HTML timeline (Phase 9.3).
     """
     try:
-        response = RunService.inspect(RunInspectRequest(
-            run_id=args.run_id,
-            only_unverified=args.only_unverified,
-            store=_store(),
-        ))
+        response = RunService.inspect(
+            RunInspectRequest(
+                run_id=args.run_id,
+                only_unverified=args.only_unverified,
+                store=_store(),
+            ),
+        )
     except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
@@ -1524,35 +1648,44 @@ def _run_outcome(args: argparse.Namespace) -> int:
     """Execute ``bound outcome --run ...``."""
     step_id = generate_step_id(run_id=args.run, contract_id=args.step, attempt=args.attempt)
     evaluation_id = args.evaluation_id or generate_evaluation_id(
-        run_id=args.run, step_id=step_id, attempt=args.attempt
+        run_id=args.run,
+        step_id=step_id,
+        attempt=args.attempt,
     )
     try:
-        response = OutcomeService.record(OutcomeRecordRequest(
-            run_id=args.run,
-            step_id=step_id,
-            evaluation_id=evaluation_id,
-            decision=args.decision,
-            next_action=args.next_action,
-            reason_code=args.reason_code,
-            note=args.note,
-            store=_store(),
-        ))
+        response = OutcomeService.record(
+            OutcomeRecordRequest(
+                run_id=args.run,
+                step_id=step_id,
+                evaluation_id=evaluation_id,
+                decision=args.decision,
+                next_action=args.next_action,
+                reason_code=args.reason_code,
+                note=args.note,
+                store=_store(),
+            ),
+        )
     except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
     if args.json:
-        print(json.dumps({
-            "run_id": response.run_id,
-            "step_id": response.step_id,
-            "evaluation_id": response.evaluation_id,
-            "decision": response.decision,
-            "next_action": response.next_action,
-            "reason_code": response.reason_code,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "run_id": response.run_id,
+                    "step_id": response.step_id,
+                    "evaluation_id": response.evaluation_id,
+                    "decision": response.decision,
+                    "next_action": response.next_action,
+                    "reason_code": response.reason_code,
+                },
+                indent=2,
+            ),
+        )
     else:
         print(
             f"recorded outcome for {response.run_id} / {response.step_id}: "
-            f"{response.decision} -> {response.next_action}"
+            f"{response.decision} -> {response.next_action}",
         )
     return 0
 
@@ -1622,23 +1755,26 @@ def _policy_warnings(policy: BoundPolicyConfig) -> list[str]:
     warnings: list[str] = []
     collector_ids = set(policy.collectors)
 
-    def _check(check_id: str, collector: str | None, *,
-               is_blocker: bool, accepted: list[EvidenceProvenance] | None) -> None:
+    def _check(
+        check_id: str,
+        collector: str | None,
+        *,
+        is_blocker: bool,
+        accepted: list[EvidenceProvenance] | None,
+    ) -> None:
         if collector is None:
             kind = "blocker" if is_blocker else "check"
             warnings.append(
                 f"{kind} '{check_id}' binds no collector; its evidence cannot "
-                "be independently collected and will be CLAIMED/MISSING"
+                "be independently collected and will be CLAIMED/MISSING",
             )
         elif collector not in collector_ids:
-            warnings.append(
-                f"check '{check_id}' references unknown collector '{collector}'"
-            )
+            warnings.append(f"check '{check_id}' references unknown collector '{collector}'")
         acc = _provenance_set(accepted)
         if acc == {EvidenceProvenance.CLAIMED}:
             warnings.append(
                 f"check '{check_id}' accepts only CLAIMED evidence; it relies "
-                "solely on agent self-report and can never be independently verified"
+                "solely on agent self-report and can never be independently verified",
             )
         # Subjective checks: no collector and no accepted-provenance restriction,
         # or the only accepted provenance is EVALUATED (a judge). These are
@@ -1646,20 +1782,17 @@ def _policy_warnings(policy: BoundPolicyConfig) -> list[str]:
         if collector is None and (not acc or EvidenceProvenance.EVALUATED in acc):
             warnings.append(
                 f"check '{check_id}' appears subjective/unmeasurable; consider "
-                "evaluating it in a separate human/judge step rather than a gate"
+                "evaluating it in a separate human/judge step rather than a gate",
             )
 
     for gate in policy.acceptance_checks:
-        _check(gate.id, gate.collector, is_blocker=True,
-               accepted=gate.accepted_provenance)
+        _check(gate.id, gate.collector, is_blocker=True, accepted=gate.accepted_provenance)
     for gate in policy.risk_checks:
-        _check(gate.id, gate.collector, is_blocker=True,
-               accepted=gate.accepted_provenance)
+        _check(gate.id, gate.collector, is_blocker=True, accepted=gate.accepted_provenance)
     for sig in policy.quality_checks:
         if sig.importance == "ignore":
             continue
-        _check(sig.id, sig.collector, is_blocker=False,
-               accepted=sig.accepted_provenance)
+        _check(sig.id, sig.collector, is_blocker=False, accepted=sig.accepted_provenance)
     return warnings
 
 
@@ -1703,7 +1836,7 @@ def _signal_summary_line(sig: WeightedSignal) -> str:
     return "  ".join(parts)
 
 
-def _budget_summary_line(name: str, dim) -> str:  # noqa: ANN001
+def _budget_summary_line(name: str, dim) -> str:
     """Render one budget dimension as a single human-readable summary line."""
     parts = [f"- {name}"]
     if not dim.enabled:
@@ -1744,7 +1877,9 @@ def _run_policy_validate(args: argparse.Namespace) -> int:
                 "id": response.policy.id,
                 "version": response.policy.version,
                 "hash": response.policy.hash,
-            } if response.policy else None,
+            }
+            if response.policy
+            else None,
             "warnings": response.warnings,
         }
         print(json.dumps(payload, indent=2))
@@ -1752,7 +1887,7 @@ def _run_policy_validate(args: argparse.Namespace) -> int:
         print(f"policy {response.policy.id}@{response.policy.version}: valid")
         print(f"policy hash: {response.policy.hash}")
         if response.warnings:
-            print("")
+            print()
             print("warnings:")
             for w in response.warnings:
                 print(f"  - {w}")
@@ -1788,7 +1923,9 @@ def _run_policy_explain(args: argparse.Namespace) -> int:
                 "id": response.policy.id,
                 "version": response.policy.version,
                 "hash": response.policy.hash,
-            } if response.policy else None,
+            }
+            if response.policy
+            else None,
             "collectors": response.collectors,
             "acceptance_checks": response.acceptance_checks,
             "quality_checks": response.quality_checks,
@@ -1829,7 +1966,9 @@ def _run_policy_hash(args: argparse.Namespace) -> int:
                 "id": response.policy.id,
                 "version": response.policy.version,
                 "hash": response.policy.hash,
-            } if response.policy else None,
+            }
+            if response.policy
+            else None,
         }
         print(json.dumps(payload, indent=2))
     else:
@@ -1837,9 +1976,7 @@ def _run_policy_hash(args: argparse.Namespace) -> int:
     return 0
 
 
-def _record_evaluation_for_run(
-    args: argparse.Namespace, result: EvaluationResult
-) -> dict | int:
+def _record_evaluation_for_run(args: argparse.Namespace, result: EvaluationResult) -> dict | int:
     """Record ``step_started`` + ``evaluation_recorded`` for ``bound evaluate --run``."""
     store = _store()
     try:
@@ -1855,9 +1992,7 @@ def _record_evaluation_for_run(
         step_id=step_id,
         description=args.description,
     )
-    evaluation_id = generate_evaluation_id(
-        run_id=args.run, step_id=step_id, attempt=args.attempt
-    )
+    evaluation_id = generate_evaluation_id(run_id=args.run, step_id=step_id, attempt=args.attempt)
     store.record_evaluation(
         args.run,
         step_id=step_id,
@@ -1909,16 +2044,18 @@ def _run_evaluate(args: argparse.Namespace) -> int:
         return EXIT_VALIDATION_ERROR
 
     try:
-        response = EvaluationService.evaluate(EvaluateRequest(
-            action=action,
-            scores=scores,
-            criteria=criteria,
-            run_id=getattr(args, "run", None),
-            step=getattr(args, "step", None),
-            attempt=getattr(args, "attempt", 1),
-            description=getattr(args, "description", None),
-            store=_store(),
-        ))
+        response = EvaluationService.evaluate(
+            EvaluateRequest(
+                action=action,
+                scores=scores,
+                criteria=criteria,
+                run_id=getattr(args, "run", None),
+                step=getattr(args, "step", None),
+                attempt=getattr(args, "attempt", 1),
+                description=getattr(args, "description", None),
+                store=_store(),
+            ),
+        )
     except EvaluationInputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
@@ -1996,17 +2133,19 @@ def _run_evaluate_workflow(args: argparse.Namespace) -> int:
         return EXIT_VALIDATION_ERROR
 
     try:
-        response = EvaluationService.evaluate_workflow(EvaluateWorkflowRequest(
-            action=action,
-            signals=signals,
-            criteria=criteria,
-            influence=args.influence if args.influence is not None else 0.0,
-            run_id=getattr(args, "run", None),
-            step=getattr(args, "step", None),
-            attempt=getattr(args, "attempt", 1),
-            description=getattr(args, "description", None),
-            store=_store(),
-        ))
+        response = EvaluationService.evaluate_workflow(
+            EvaluateWorkflowRequest(
+                action=action,
+                signals=signals,
+                criteria=criteria,
+                influence=args.influence if args.influence is not None else 0.0,
+                run_id=getattr(args, "run", None),
+                step=getattr(args, "step", None),
+                attempt=getattr(args, "attempt", 1),
+                description=getattr(args, "description", None),
+                store=_store(),
+            ),
+        )
     except EvaluationInputError as exc:
         print(f"error: could not evaluate workflow: {exc}", file=sys.stderr)
         return EXIT_VALIDATION_ERROR
@@ -2025,7 +2164,7 @@ def _run_evaluate_workflow(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_integration_spec(args: argparse.Namespace) -> int:  # noqa: ARG001
+def _run_integration_spec(args: argparse.Namespace) -> int:
     """Execute the ``bound integration-spec`` subcommand.
 
     Emits the framework-neutral BOUND integration specification as structured
@@ -2083,11 +2222,13 @@ def _run_watch(args: argparse.Namespace) -> int:
 def _run_checkpoint_create(args: argparse.Namespace) -> int:
     """Execute ``bound checkpoint create --run --step``."""
     try:
-        response = CheckpointService.create(CheckpointCreateRequest(
-            run_id=args.run,
-            step_id=args.step,
-            message=getattr(args, "message", None),
-        ))
+        response = CheckpointService.create(
+            CheckpointCreateRequest(
+                run_id=args.run,
+                step_id=args.step,
+                message=getattr(args, "message", None),
+            ),
+        )
     except CheckpointError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -2096,14 +2237,19 @@ def _run_checkpoint_create(args: argparse.Namespace) -> int:
         return EXIT_NOT_FOUND
 
     if args.json:
-        print(json.dumps({
-            "checkpoint_id": response.checkpoint_id,
-            "run_id": response.run_id,
-            "step_id": response.step_id,
-            "path": response.path,
-            "changed_files_count": response.changed_files_count,
-            "untracked_files_count": response.untracked_files_count,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "checkpoint_id": response.checkpoint_id,
+                    "run_id": response.run_id,
+                    "step_id": response.step_id,
+                    "path": response.path,
+                    "changed_files_count": response.changed_files_count,
+                    "untracked_files_count": response.untracked_files_count,
+                },
+                indent=2,
+            ),
+        )
     else:
         print(f"checkpoint {response.checkpoint_id} created for run {response.run_id}")
         print(f"  path: {response.path}")
@@ -2115,10 +2261,12 @@ def _run_checkpoint_create(args: argparse.Namespace) -> int:
 def _run_checkpoint_inspect(args: argparse.Namespace) -> int:
     """Execute ``bound checkpoint inspect <checkpoint_id>``."""
     try:
-        response = CheckpointService.inspect(CheckpointInspectRequest(
-            run_id=args.run,
-            checkpoint_id=args.checkpoint_id,
-        ))
+        response = CheckpointService.inspect(
+            CheckpointInspectRequest(
+                run_id=args.run,
+                checkpoint_id=args.checkpoint_id,
+            ),
+        )
     except CheckpointError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -2145,18 +2293,25 @@ def _run_checkpoint_inspect(args: argparse.Namespace) -> int:
 def _run_checkpoint_list(args: argparse.Namespace) -> int:
     """Execute ``bound checkpoint list --run``."""
     try:
-        response = CheckpointService.list_checkpoints(CheckpointListRequest(
-            run_id=args.run,
-        ))
+        response = CheckpointService.list_checkpoints(
+            CheckpointListRequest(
+                run_id=args.run,
+            ),
+        )
     except RunNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NOT_FOUND
 
     if args.json:
-        print(json.dumps({
-            "run_id": response.run_id,
-            "checkpoint_ids": response.checkpoint_ids,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "run_id": response.run_id,
+                    "checkpoint_ids": response.checkpoint_ids,
+                },
+                indent=2,
+            ),
+        )
     else:
         if not response.checkpoint_ids:
             print(f"(no checkpoints found for run {response.run_id})")
@@ -2165,6 +2320,8 @@ def _run_checkpoint_list(args: argparse.Namespace) -> int:
         for cp_id in response.checkpoint_ids:
             print(f"  {cp_id}")
     return 0
+
+
 def _run_rollback(args: argparse.Namespace) -> int:
     """Execute ``bound rollback --run --checkpoint``."""
     try:
@@ -2178,6 +2335,7 @@ def _run_rollback(args: argparse.Namespace) -> int:
                 compute_rollback_preview,
                 load_checkpoint,
             )
+
             try:
                 cp = load_checkpoint(args.run, args.checkpoint)
             except (FileNotFoundError, RuntimeError) as exc:
@@ -2205,8 +2363,7 @@ def _run_rollback(args: argparse.Namespace) -> int:
 
         if not args.execute:
             print(
-                "error: rollback requires --execute to proceed "
-                "(use --dry-run for preview)",
+                "error: rollback requires --execute to proceed (use --dry-run for preview)",
                 file=sys.stderr,
             )
             return 2
@@ -2269,14 +2426,18 @@ def _run_init(args: argparse.Namespace) -> int:
     _print_detection_summary(detections)
 
     # --- Generate policy ---
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("Generating bound-policy.yaml ...", file=sys.stderr)
     yaml_content = generate_policy(detections)
 
     # --- Validate via PolicyService ---
     import tempfile
+
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False, encoding="utf-8"
+        mode="w",
+        suffix=".yaml",
+        delete=False,
+        encoding="utf-8",
     ) as tmp:
         tmp.write(yaml_content)
         tmp_path = tmp.name
@@ -2307,18 +2468,204 @@ def _run_init(args: argparse.Namespace) -> int:
         print(f"Wrote {policy_path}", file=sys.stderr)
 
     # --- Next actions ---
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     print("Next steps:", file=sys.stderr)
     print("  1. Review the generated bound-policy.yaml", file=sys.stderr)
     print(
-        "  2. Adjust uncertain detections "
-        "(marked with # UNCERTAIN / # NOT FOUND)",
+        "  2. Adjust uncertain detections (marked with # UNCERTAIN / # NOT FOUND)",
         file=sys.stderr,
     )
     print("  3. Run: bound policy validate bound-policy.yaml", file=sys.stderr)
     print("  4. Start a run: bound run start --task <description>", file=sys.stderr)
-    print("", file=sys.stderr)
+    print(file=sys.stderr)
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Setup command (v0.8.1)
+# ---------------------------------------------------------------------------
+
+
+def _run_setup(args: argparse.Namespace) -> int:
+    """Execute the ``bound setup`` subcommand.
+
+    Detects tooling in *project_dir*, generates/updates ``bound-policy.yaml``,
+    installs the selected agent integration, creates ``.bound/`` directories,
+    validates the policy, and optionally performs a smoke evaluation.
+
+    Args:
+        args: Parsed namespace with ``agent``, ``project_dir``, ``dry_run``,
+            ``verify``, ``force``, and ``json``.
+
+    Returns:
+        ``0`` on success, ``1`` on error.
+    """
+    project_dir = Path(args.project_dir).resolve()
+
+    if not project_dir.is_dir():
+        print(f"error: directory not found: {project_dir}", file=sys.stderr)
+        return 1
+
+    try:
+        result = setup_project(
+            project_dir=project_dir,
+            agent_id=args.agent,
+            dry_run=args.dry_run,
+            force=args.force,
+            verify=args.verify,
+        )
+    except SetupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    # --- Output ---
+    if args.json:
+        import json as _json
+
+        payload = {
+            "project_dir": result.project_dir,
+            "agent_id": result.agent_id,
+            "policy_path": result.policy_path,
+            "policy_valid": result.policy_valid,
+            "policy_warnings": result.policy_warnings,
+            "installation": (
+                result.installation.model_dump(mode="json") if result.installation else None
+            ),
+            "next_commands": result.next_commands,
+        }
+        print(_json.dumps(payload, indent=2))
+        return 0
+
+    # Human-readable output
+    print("BOUND setup", file=sys.stderr)
+    print(file=sys.stderr)
+
+    # Detections
+    print("✓ Python project detected", file=sys.stderr)
+
+    detections = detect_tooling(project_dir)
+    if detections.test_framework:
+        print(f"✓ {detections.test_framework.name} detected", file=sys.stderr)
+    else:
+        print("✗ No test framework detected", file=sys.stderr)
+
+    if detections.linter:
+        print(f"✓ {detections.linter.name} detected", file=sys.stderr)
+    else:
+        print("✗ No linter detected", file=sys.stderr)
+
+    if detections.type_checker:
+        print(f"✓ {detections.type_checker.name} detected", file=sys.stderr)
+    else:
+        print("✗ No type checker detected", file=sys.stderr)
+
+    if detections.git_branch:
+        print("✓ Git checkpoints available", file=sys.stderr)
+    else:
+        print("✗ Git not detected", file=sys.stderr)
+
+    # Policy
+    if args.dry_run:
+        print("○ bound-policy.yaml (would be generated)", file=sys.stderr)
+    else:
+        print("✓ bound-policy.yaml generated", file=sys.stderr)
+
+    # Integration
+    if result.installation:
+        for change in result.installation.changes:
+            marker = "○" if args.dry_run else "✓" if change.kind in ("create", "modify") else "·"
+            print(f"{marker} {change.description}", file=sys.stderr)
+        print(
+            f"✓ {result.installation.display_name} integration "
+            f"{'planned' if args.dry_run else 'installed'}",
+            file=sys.stderr,
+        )
+
+    # Policy validation
+    if result.policy_valid:
+        print("✓ Policy validated", file=sys.stderr)
+    else:
+        for w in result.policy_warnings:
+            print(f"! {w}", file=sys.stderr)
+
+    # Smoke eval
+    if args.verify:
+        print("✓ Smoke evaluation passed", file=sys.stderr)
+
+    # Next commands
+    print(file=sys.stderr)
+    print("Next:", file=sys.stderr)
+    print(file=sys.stderr)
+    for cmd in result.next_commands:
+        print(f"  {cmd}", file=sys.stderr)
+
+    return 0
+
+
+def _run_doctor(args: argparse.Namespace) -> int:
+    """Execute the ``bound doctor`` subcommand.
+
+    Runs all diagnostic checks against *project_dir*, renders results as a
+    human-readable table or JSON, and exits with the appropriate code.
+
+    Args:
+        args: Parsed namespace with ``json`` and ``project_dir``.
+
+    Returns:
+        ``0`` on clean, ``1`` on warnings only, ``2`` on errors.
+    """
+    project_dir = Path(args.project_dir).resolve()
+    report = run_doctor(project_dir)
+
+    if args.json:
+        # Stable JSON schema: { "checks": [...], "project_dir": "...",
+        #   "summary": { "pass": N, "warning": N, "error": N } }
+        json.dump(
+            {
+                "checks": [
+                    {
+                        "status": c.status,
+                        "name": c.name,
+                        "message": c.message,
+                        "detail": c.detail,
+                    }
+                    for c in report.checks
+                ],
+                "project_dir": str(report.project_dir),
+                "summary": {
+                    "pass": report.pass_count,
+                    "warning": report.warning_count,
+                    "error": report.error_count,
+                },
+            },
+            sys.stdout,
+            indent=2,
+        )
+        sys.stdout.write("\n")
+    else:
+        # Human-readable table
+        status_colors = {"PASS": "✓", "WARNING": "⚠", "ERROR": "✗"}
+        for c in report.checks:
+            icon = status_colors.get(c.status, c.status)
+            print(f"  {icon} {c.status:7}  {c.name:35}  {c.message}")
+            if c.detail:
+                for line in c.detail.split("\n"):
+                    print(f"         {'':35}  {line}")
+        print()
+        summary = (
+            f"{report.pass_count} passed, "
+            f"{report.warning_count} warning(s), "
+            f"{report.error_count} error(s)"
+        )
+        print(summary)
+
+    return report.recommended_exit_code
 
 
 def _print_detection_summary(detections: ProjectDetections) -> None:

@@ -18,14 +18,22 @@ DEFAULT_POLICY = REPO_ROOT / "src" / "bound" / "default_policy.yaml"
 # The exact ``bound evaluate`` invocation from the project's definition-of-done.
 _DOD_ARGS = [
     "evaluate",
-    "--action", "Book the direct flight",
-    "--goal", "Travel from Paris to New York",
-    "--acceptance", "0.9",
-    "--influence", "0.2",
-    "--risk", "0.1",
-    "--cost", "0.2",
-    "--weight", "1.0",
-    "--threshold", "0.6",
+    "--action",
+    "Book the direct flight",
+    "--goal",
+    "Travel from Paris to New York",
+    "--acceptance",
+    "0.9",
+    "--influence",
+    "0.2",
+    "--risk",
+    "0.1",
+    "--cost",
+    "0.2",
+    "--weight",
+    "1.0",
+    "--threshold",
+    "0.6",
 ]
 
 # Fields the auditable JSON payload must expose (per the CLI JSON-output spec).
@@ -280,7 +288,6 @@ def test_evaluate_subprocess_end_to_end() -> None:
     assert "Decision: ACCEPT" in proc.stderr
 
 
-
 # ---------------------------------------------------------------------------
 # v0.2 symmetric weights, retry-margin, rollback threshold, deprecated alias
 # ---------------------------------------------------------------------------
@@ -295,14 +302,22 @@ def test_evaluate_acceptance_weight_flag_sets_weight(capsys: pytest.CaptureFixtu
     """
     args = [
         "evaluate",
-        "--action", "Refactor authentication",
-        "--goal", "Ship secure login",
-        "--acceptance", "0.9",
-        "--influence", "0.2",
-        "--risk", "0.1",
-        "--cost", "0.2",
-        "--acceptance-weight", "2.0",
-        "--threshold", "0.6",
+        "--action",
+        "Refactor authentication",
+        "--goal",
+        "Ship secure login",
+        "--acceptance",
+        "0.9",
+        "--influence",
+        "0.2",
+        "--risk",
+        "0.1",
+        "--cost",
+        "0.2",
+        "--acceptance-weight",
+        "2.0",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     out, _ = capsys.readouterr()
@@ -324,14 +339,22 @@ def test_evaluate_weight_flag_is_deprecated_alias(capsys: pytest.CaptureFixture[
     """
     args = [
         "evaluate",
-        "--action", "Refactor authentication",
-        "--goal", "Ship secure login",
-        "--acceptance", "0.9",
-        "--influence", "0.2",
-        "--risk", "0.1",
-        "--cost", "0.2",
-        "--weight", "2.0",
-        "--threshold", "0.6",
+        "--action",
+        "Refactor authentication",
+        "--goal",
+        "Ship secure login",
+        "--acceptance",
+        "0.9",
+        "--influence",
+        "0.2",
+        "--risk",
+        "0.1",
+        "--cost",
+        "0.2",
+        "--weight",
+        "2.0",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     out, _ = capsys.readouterr()
@@ -353,15 +376,24 @@ def test_evaluate_rejects_weight_and_symmetric_weights_conflict(
     """
     args = [
         "evaluate",
-        "--action", "Refactor authentication",
-        "--goal", "Ship secure login",
-        "--acceptance", "0.9",
-        "--influence", "0.2",
-        "--risk", "0.1",
-        "--cost", "0.2",
-        "--weight", "2.0",
-        "--risk-weight", "0.5",
-        "--threshold", "0.6",
+        "--action",
+        "Refactor authentication",
+        "--goal",
+        "Ship secure login",
+        "--acceptance",
+        "0.9",
+        "--influence",
+        "0.2",
+        "--risk",
+        "0.1",
+        "--cost",
+        "0.2",
+        "--weight",
+        "2.0",
+        "--risk-weight",
+        "0.5",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     out, err = capsys.readouterr()
@@ -381,13 +413,20 @@ def test_evaluate_retry_margin_flag_changes_decision(
     """
     base = [
         "evaluate",
-        "--action", "Refactor authentication",
-        "--goal", "Ship secure login",
-        "--acceptance", "0.55",
-        "--influence", "0.0",
-        "--risk", "0.0",
-        "--cost", "0.0",
-        "--threshold", "0.6",
+        "--action",
+        "Refactor authentication",
+        "--goal",
+        "Ship secure login",
+        "--acceptance",
+        "0.55",
+        "--influence",
+        "0.0",
+        "--risk",
+        "0.0",
+        "--cost",
+        "0.0",
+        "--threshold",
+        "0.6",
     ]
 
     rc = main(base)
@@ -411,14 +450,22 @@ def test_evaluate_rollback_threshold_flag_overrides_score(
     """
     args = [
         "evaluate",
-        "--action", "Refactor authentication",
-        "--goal", "Ship secure login",
-        "--acceptance", "0.9",
-        "--influence", "0.2",
-        "--risk", "0.1",
-        "--cost", "0.2",
-        "--rollback-risk-threshold", "0.05",
-        "--threshold", "0.6",
+        "--action",
+        "Refactor authentication",
+        "--goal",
+        "Ship secure login",
+        "--acceptance",
+        "0.9",
+        "--influence",
+        "0.2",
+        "--risk",
+        "0.1",
+        "--cost",
+        "0.2",
+        "--rollback-risk-threshold",
+        "0.05",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     assert rc == 0
@@ -438,9 +485,12 @@ def test_evaluate_rollback_threshold_flag_overrides_score(
 
 _WORKFLOW_BASE = [
     "evaluate-workflow",
-    "--action", "Implement feature X",
-    "--goal", "Complete issue #123",
-    "--threshold", "0.6",
+    "--action",
+    "Implement feature X",
+    "--goal",
+    "Complete issue #123",
+    "--threshold",
+    "0.6",
 ]
 
 _WORKFLOW_FIELDS = _JSON_FIELDS | {"signals", "provenance"}
@@ -456,12 +506,16 @@ def test_evaluate_workflow_writes_json_and_prompt(capsys: pytest.CaptureFixture[
     """
     args = [
         *_WORKFLOW_BASE,
-        "--test-pass-rate", "1.0",
+        "--test-pass-rate",
+        "1.0",
         "--lint-passed",
         "--type-check-passed",
-        "--required-checks-passed", "1.0",
-        "--retry-count", "2",
-        "--tool-call-count", "14",
+        "--required-checks-passed",
+        "1.0",
+        "--retry-count",
+        "2",
+        "--tool-call-count",
+        "14",
         "--rollback-available",
     ]
     rc = main(args)
@@ -501,11 +555,16 @@ def test_evaluate_workflow_no_acceptance_evidence_errors(
     """
     args = [
         "evaluate-workflow",
-        "--action", "Implement feature X",
-        "--goal", "Complete issue #123",
-        "--retry-count", "1",
-        "--tool-call-count", "3",
-        "--threshold", "0.6",
+        "--action",
+        "Implement feature X",
+        "--goal",
+        "Complete issue #123",
+        "--retry-count",
+        "1",
+        "--tool-call-count",
+        "3",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     out, err = capsys.readouterr()
@@ -521,10 +580,14 @@ def test_evaluate_workflow_rejects_out_of_range_signal(
     """An out-of-range signal fails Pydantic validation with no JSON on STDOUT."""
     args = [
         "evaluate-workflow",
-        "--action", "Implement feature X",
-        "--goal", "Complete issue #123",
-        "--test-pass-rate", "1.5",
-        "--threshold", "0.6",
+        "--action",
+        "Implement feature X",
+        "--goal",
+        "Complete issue #123",
+        "--test-pass-rate",
+        "1.5",
+        "--threshold",
+        "0.6",
     ]
     rc = main(args)
     out, err = capsys.readouterr()
@@ -550,14 +613,19 @@ def test_evaluate_workflow_respects_weights(capsys: pytest.CaptureFixture[str]) 
     """``evaluate-workflow`` honours the same ``--*-weight`` flags as ``evaluate``."""
     args = [
         *_WORKFLOW_BASE,
-        "--test-pass-rate", "1.0",
+        "--test-pass-rate",
+        "1.0",
         "--lint-passed",
         "--type-check-passed",
-        "--required-checks-passed", "1.0",
-        "--retry-count", "0",
-        "--tool-call-count", "0",
+        "--required-checks-passed",
+        "1.0",
+        "--retry-count",
+        "0",
+        "--tool-call-count",
+        "0",
         "--rollback-available",
-        "--cost-weight", "0.0",
+        "--cost-weight",
+        "0.0",
     ]
     rc = main(args)
     out, _ = capsys.readouterr()
@@ -678,8 +746,13 @@ def test_policy_explain_json_is_machine_readable(
     payload = json.loads(out)
     assert payload["policy"]["id"] == "coding-default"
     for key in (
-        "collectors", "acceptance_checks", "quality_checks",
-        "risk_checks", "budgets", "change_scope", "approvals",
+        "collectors",
+        "acceptance_checks",
+        "quality_checks",
+        "risk_checks",
+        "budgets",
+        "change_scope",
+        "approvals",
     ):
         assert key in payload
 
@@ -706,9 +779,7 @@ def test_policy_hash_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert payload["policy"]["id"] == "coding-default"
 
 
-def test_policy_hash_invalid_exits_one(
-    capsys: pytest.CaptureFixture[str], tmp_path: Path
-) -> None:
+def test_policy_hash_invalid_exits_one(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     """``bound policy hash`` on an invalid file exits 1."""
     bad = tmp_path / "bad.yaml"
     bad.write_text("not: a mapping\n", encoding="utf-8")
@@ -716,4 +787,3 @@ def test_policy_hash_invalid_exits_one(
     _, err = capsys.readouterr()
     assert rc == 1
     assert "invalid policy" in err
-

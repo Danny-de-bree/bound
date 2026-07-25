@@ -185,12 +185,12 @@ def _acceptance_check(
 
 
 def _minimal_yaml() -> str:
-    return '''
+    return """
 schema_version: "1.0"
 policy:
   id: security-test
   version: "1.0"
-'''
+"""
 
 
 class TestBlockerUncompensable:
@@ -292,40 +292,51 @@ class TestSchemaDriftRejected:
             parse_policy_yaml(_minimal_yaml() + "unknown_section: {}\n")
 
     def test_unknown_nested_field_in_gate_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 acceptance_checks:
   - id: tests-pass
     description: "tests"
     bogus_field: true
 """
+        )
         with pytest.raises(ValidationError):
             parse_policy_yaml(bad)
 
     def test_unknown_field_in_budget_dimension_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 budgets:
   tool_calls:
     hard_limit: 20
     on_hard: replan
     stray_key: 1
 """
+        )
         with pytest.raises(ValidationError):
             parse_policy_yaml(bad)
 
     def test_unknown_field_in_collector_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 collectors:
   pytest:
     type: pytest
     not_a_field: true
 """
+        )
         with pytest.raises(ValidationError):
             parse_policy_yaml(bad)
 
 
 class TestDuplicateIdsRejected:
     def test_duplicate_check_id_across_lists_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 acceptance_checks:
   - id: dup
     description: "first"
@@ -333,24 +344,30 @@ quality_checks:
   - id: dup
     description: "second"
 """
+        )
         with pytest.raises(ValidationError) as exc:
             parse_policy_yaml(bad)
         assert "duplicate check id" in str(exc.value)
 
     def test_duplicate_check_id_within_same_list_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 acceptance_checks:
   - id: dup
     description: "first"
   - id: dup
     description: "second"
 """
+        )
         with pytest.raises(ValidationError) as exc:
             parse_policy_yaml(bad)
         assert "duplicate check id" in str(exc.value)
 
     def test_duplicate_risk_check_id_rejected(self) -> None:
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 risk_checks:
   - id: dup
     description: "first"
@@ -358,13 +375,16 @@ acceptance_checks:
   - id: dup
     description: "second"
 """
+        )
         with pytest.raises(ValidationError) as exc:
             parse_policy_yaml(bad)
         assert "duplicate check id" in str(exc.value)
 
     def test_duplicate_collector_id_rejected(self) -> None:
         """Duplicate YAML mapping keys for a collector raise at load time."""
-        bad = _minimal_yaml() + """
+        bad = (
+            _minimal_yaml()
+            + """
 collectors:
   pytest:
     type: pytest
@@ -372,6 +392,7 @@ collectors:
     type: command
     command: ["echo", "hi"]
 """
+        )
         with pytest.raises(ValueError):
             parse_policy_yaml(bad)
 
@@ -557,12 +578,8 @@ class TestWeakeningRequiresApproval:
         assert policy_changed_since(base, weakened) is True
 
     def test_expanded_scope_changes_hash(self) -> None:
-        base = _policy(
-            change_scope=ChangeScope(allowed_paths=["src/**", "tests/**"])
-        )
-        weakened = _policy(
-            change_scope=ChangeScope(allowed_paths=["src/**", "tests/**", "**"])
-        )
+        base = _policy(change_scope=ChangeScope(allowed_paths=["src/**", "tests/**"]))
+        weakened = _policy(change_scope=ChangeScope(allowed_paths=["src/**", "tests/**", "**"]))
         assert policy_changed_since(base, weakened) is True
 
     def test_weakened_provenance_changes_hash(self) -> None:
@@ -675,9 +692,7 @@ class TestActivePolicyCannotBeWeakened:
             budget_action=EvidencePolicyAction.ROLLBACK,
         )
         assert gate.forced_action is EvidencePolicyAction.ROLLBACK
-        gate2 = PolicyGateOutcome(
-            blocker_failed=True, blocker_action=EvidencePolicyAction.REPLAN
-        )
+        gate2 = PolicyGateOutcome(blocker_failed=True, blocker_action=EvidencePolicyAction.REPLAN)
         assert gate2.forced_action is EvidencePolicyAction.REPLAN
         assert PolicyGateOutcome().forced_action is None
 
@@ -690,9 +705,7 @@ class TestBudgetEnforcement:
             acceptance=[_gate("tests-pass")],
             quality=[_signal("lint", importance="high")],
             budgets={
-                "tool_calls": BudgetDimension(
-                    hard_limit=20, on_hard=EvidencePolicyAction.REPLAN
-                )
+                "tool_calls": BudgetDimension(hard_limit=20, on_hard=EvidencePolicyAction.REPLAN)
             },
         )
         contract = _contract(acceptance=[_acceptance_check("tests-pass")])
@@ -716,9 +729,7 @@ class TestBudgetEnforcement:
             acceptance=[_gate("tests-pass")],
             quality=[_signal("lint", importance="high")],
             budgets={
-                "tool_calls": BudgetDimension(
-                    hard_limit=20, on_hard=EvidencePolicyAction.REPLAN
-                )
+                "tool_calls": BudgetDimension(hard_limit=20, on_hard=EvidencePolicyAction.REPLAN)
             },
         )
         contract = _contract(acceptance=[_acceptance_check("tests-pass")])
@@ -739,9 +750,7 @@ class TestBudgetEnforcement:
             acceptance=[_gate("tests-pass")],
             quality=[_signal("lint", importance="high")],
             budgets={
-                "tool_calls": BudgetDimension(
-                    hard_limit=20, on_hard=EvidencePolicyAction.REPLAN
-                )
+                "tool_calls": BudgetDimension(hard_limit=20, on_hard=EvidencePolicyAction.REPLAN)
             },
         )
         contract = _contract(acceptance=[_acceptance_check("tests-pass")])
@@ -800,9 +809,7 @@ class TestWeightedSignalScoring:
 class TestGoldenDemo:
     """The Phase 12 golden demo runs end-to-end and ends in ACCEPT (todo 12)."""
 
-    def test_golden_demo_ends_in_accept(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_golden_demo_ends_in_accept(self, capsys: pytest.CaptureFixture[str]) -> None:
         import importlib
         import sys
 

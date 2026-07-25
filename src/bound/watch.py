@@ -148,6 +148,7 @@ class WatchShutdown(BaseException):
     catches it to flush incomplete tasks before exiting.
     """
 
+
 class WatchEngine:
     """Event-driven watch engine.
 
@@ -180,8 +181,9 @@ class WatchEngine:
             handlers, or ``None`` if signals could not be installed (e.g.
             running outside the main thread).
         """
+
         def _shutdown(signum: int, frame: Any) -> None:
-            raise WatchShutdown()
+            raise WatchShutdown
 
         try:
             prev_term = signal.getsignal(signal.SIGTERM)
@@ -264,9 +266,7 @@ class WatchEngine:
                 continue
 
             if event.schema_version != WATCH_EVENT_SCHEMA_VERSION:
-                self._emit_error(
-                    f"watch: unsupported schema_version={event.schema_version!r}"
-                )
+                self._emit_error(f"watch: unsupported schema_version={event.schema_version!r}")
                 continue
 
             try:
@@ -291,8 +291,7 @@ class WatchEngine:
         if event.sequence is not None:
             state = self._tasks.get(task_id)
             if state is not None and event.sequence in state.seen_sequences:
-                logger.debug("watch: duplicate seq=%s task=%s",
-                             event.sequence, task_id)
+                logger.debug("watch: duplicate seq=%s task=%s", event.sequence, task_id)
                 return
 
         if isinstance(event, WatchTaskStartedEvent):
@@ -363,16 +362,22 @@ class WatchEngine:
                 metadata["plan"] = event.plan
             if event.context is not None:
                 metadata["context"] = event.context
-            response = RunService.start(RunStartRequest(
-                task=event.goal[:200],
-                metadata=metadata,
-                store=self._store,
-            ))
+            response = RunService.start(
+                RunStartRequest(
+                    task=event.goal[:200],
+                    metadata=metadata,
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to start run: {exc}")
             return
-        state = _TaskState(task_id=task_id, run_id=response.run_id,
-                           goal=event.goal, plan=event.plan)
+        state = _TaskState(
+            task_id=task_id,
+            run_id=response.run_id,
+            goal=event.goal,
+            plan=event.plan,
+        )
         self._tasks[task_id] = state
         logger.info("watch: started run=%s task=%s", response.run_id, task_id)
 
@@ -409,7 +414,9 @@ class WatchEngine:
         state.last_step_event_at = now
 
         evaluation_id = generate_evaluation_id(
-            run_id=state.run_id, step_id=event.step_id, attempt=1
+            run_id=state.run_id,
+            step_id=event.step_id,
+            attempt=1,
         )
         state.current_evaluation_id = evaluation_id
 
@@ -437,15 +444,18 @@ class WatchEngine:
             evidence_kwargs["produced_artifacts"] = event.changed_files
         if event.tool_calls is not None:
             evidence_kwargs["tool_call_count"] = EvidenceMetric(
-                value=float(event.tool_calls), provenance=EvidenceProvenance.CLAIMED,
+                value=float(event.tool_calls),
+                provenance=EvidenceProvenance.CLAIMED,
             )
         if event.tokens_used is not None:
             evidence_kwargs["token_usage"] = EvidenceMetric(
-                value=float(event.tokens_used), provenance=EvidenceProvenance.CLAIMED,
+                value=float(event.tokens_used),
+                provenance=EvidenceProvenance.CLAIMED,
             )
         if event.duration_ms is not None:
             evidence_kwargs["runtime_seconds"] = EvidenceMetric(
-                value=event.duration_ms / 1000.0, provenance=EvidenceProvenance.CLAIMED,
+                value=event.duration_ms / 1000.0,
+                provenance=EvidenceProvenance.CLAIMED,
             )
         evidence = ExecutionEvidence(**evidence_kwargs)  # type: ignore[arg-type]
 
@@ -454,15 +464,17 @@ class WatchEngine:
 
         # Run boundary evaluation
         try:
-            response = BoundaryService.evaluate(BoundaryEvaluateRequest(
-                contract=contract,
-                evidence=evidence,
-                criteria=criteria,  # type: ignore[arg-type]
-                policy_config=self._policy,
-                attempt=event.attempt,
-                step_id=event.step_id,
-                description=desc,
-            ))
+            response = BoundaryService.evaluate(
+                BoundaryEvaluateRequest(
+                    contract=contract,
+                    evidence=evidence,
+                    criteria=criteria,  # type: ignore[arg-type]
+                    policy_config=self._policy,
+                    attempt=event.attempt,
+                    step_id=event.step_id,
+                    description=desc,
+                ),
+            )
         except EvaluationInputError as exc:
             self._emit_error(f"watch: boundary evaluation failed: {exc}")
             return
@@ -472,15 +484,17 @@ class WatchEngine:
 
         # Record the outcome in lineage
         try:
-            OutcomeService.record(OutcomeRecordRequest(
-                run_id=state.run_id,
-                step_id=event.step_id,
-                evaluation_id=evaluation_id,
-                decision=response.result.decision,
-                next_action=response.next_action,
-                note=response.feedback[:500],
-                store=self._store,
-            ))
+            OutcomeService.record(
+                OutcomeRecordRequest(
+                    run_id=state.run_id,
+                    step_id=event.step_id,
+                    evaluation_id=evaluation_id,
+                    decision=response.result.decision,
+                    next_action=response.next_action,
+                    note=response.feedback[:500],
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to record outcome: {exc}")
 
@@ -507,7 +521,9 @@ class WatchEngine:
             return
 
         evaluation_id = generate_evaluation_id(
-            run_id=state.run_id, step_id=event.step_id, attempt=1
+            run_id=state.run_id,
+            step_id=event.step_id,
+            attempt=1,
         )
         state.current_evaluation_id = evaluation_id
 
@@ -533,14 +549,16 @@ class WatchEngine:
 
         criteria = self._build_criteria()
         try:
-            response = BoundaryService.evaluate(BoundaryEvaluateRequest(
-                contract=contract,
-                evidence=evidence,
-                criteria=criteria,  # type: ignore[arg-type]
-                policy_config=self._policy,
-                step_id=event.step_id,
-                description=desc,
-            ))
+            response = BoundaryService.evaluate(
+                BoundaryEvaluateRequest(
+                    contract=contract,
+                    evidence=evidence,
+                    criteria=criteria,  # type: ignore[arg-type]
+                    policy_config=self._policy,
+                    step_id=event.step_id,
+                    description=desc,
+                ),
+            )
         except EvaluationInputError as exc:
             self._emit_error(f"watch: verification evaluation failed: {exc}")
             return
@@ -549,15 +567,17 @@ class WatchEngine:
             return
 
         try:
-            OutcomeService.record(OutcomeRecordRequest(
-                run_id=state.run_id,
-                step_id=event.step_id,
-                evaluation_id=evaluation_id,
-                decision=response.result.decision,
-                next_action=response.next_action,
-                note=response.feedback[:500],
-                store=self._store,
-            ))
+            OutcomeService.record(
+                OutcomeRecordRequest(
+                    run_id=state.run_id,
+                    step_id=event.step_id,
+                    evaluation_id=evaluation_id,
+                    decision=response.result.decision,
+                    next_action=response.next_action,
+                    note=response.feedback[:500],
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to record verification outcome: {exc}")
 
@@ -579,15 +599,17 @@ class WatchEngine:
             self._emit_error(f"watch: no active run for task={event.task_id}")
             return
         try:
-            OutcomeService.record(OutcomeRecordRequest(
-                run_id=state.run_id,
-                step_id=event.step_id,
-                evaluation_id=event.evaluation_id,
-                decision=event.action.upper(),
-                next_action=event.action,
-                note=event.note or "agent reported control action",
-                store=self._store,
-            ))
+            OutcomeService.record(
+                OutcomeRecordRequest(
+                    run_id=state.run_id,
+                    step_id=event.step_id,
+                    evaluation_id=event.evaluation_id,
+                    decision=event.action.upper(),
+                    next_action=event.action,
+                    note=event.note or "agent reported control action",
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to record reported action: {exc}")
 
@@ -610,15 +632,17 @@ class WatchEngine:
         if event.note:
             note = f"{note}; {event.note}"
         try:
-            OutcomeService.record(OutcomeRecordRequest(
-                run_id=state.run_id,
-                step_id=event.step_id,
-                evaluation_id=event.evaluation_id,
-                decision=event.observed_action.upper(),
-                next_action=event.observed_action,
-                note=note,
-                store=self._store,
-            ))
+            OutcomeService.record(
+                OutcomeRecordRequest(
+                    run_id=state.run_id,
+                    step_id=event.step_id,
+                    evaluation_id=event.evaluation_id,
+                    decision=event.observed_action.upper(),
+                    next_action=event.observed_action,
+                    note=note,
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to record observed action: {exc}")
 
@@ -634,19 +658,23 @@ class WatchEngine:
             self._emit_error(f"watch: no active run for task={event.task_id}")
             return
         try:
-            RunService.finish(RunFinishRequest(
-                run_id=state.run_id,
-                status=event.outcome,
-                note=event.summary or f"task finished: {event.outcome}",
-                store=self._store,
-            ))
+            RunService.finish(
+                RunFinishRequest(
+                    run_id=state.run_id,
+                    status=event.outcome,
+                    note=event.summary or f"task finished: {event.outcome}",
+                    store=self._store,
+                ),
+            )
         except Exception as exc:
             self._emit_error(f"watch: failed to finish run: {exc}")
             return
         state.finished = True
         logger.info(
             "watch: finished run=%s task=%s outcome=%s",
-            state.run_id, event.task_id, event.outcome,
+            state.run_id,
+            event.task_id,
+            event.outcome,
         )
 
     def _build_criteria(self) -> BoundCriteria:
@@ -722,12 +750,14 @@ class WatchEngine:
         for task_id, state in self._tasks.items():
             if not state.finished and state.run_id:
                 try:
-                    RunService.finish(RunFinishRequest(
-                        run_id=state.run_id,
-                        status="interrupted",
-                        note="watch interrupted",
-                        store=self._store,
-                    ))
+                    RunService.finish(
+                        RunFinishRequest(
+                            run_id=state.run_id,
+                            status="interrupted",
+                            note="watch interrupted",
+                            store=self._store,
+                        ),
+                    )
                 except Exception as exc:
                     logger.warning("watch: failed to flush task=%s: %s", task_id, exc)
 

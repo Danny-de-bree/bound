@@ -113,42 +113,44 @@ class TestExit1FreshRepository:
         (tmp_path / "src").mkdir(parents=True, exist_ok=True)
         (tmp_path / "tests").mkdir(parents=True, exist_ok=True)
         (tmp_path / "src" / "main.py").write_text("x = 1\n")
-        (tmp_path / "tests" / "test_main.py").write_text(
-            "def test_x(): assert True\n"
-        )
+        (tmp_path / "tests" / "test_main.py").write_text("def test_x(): assert True\n")
         (tmp_path / "pyproject.toml").write_text(
             "[project]\nname = 'test-project'\nversion = '0.1.0'\n"
         )
 
         # Create a valid policy matching the project structure
         policy_path = tmp_path / "bound-policy.yaml"
-        policy_path.write_text(yaml.dump({
-            "schema_version": "1.0",
-            "policy": {"id": "test-project", "version": "1.0"},
-            "collectors": {
-                "pytest": {"type": "pytest"},
-            },
-            "acceptance_checks": [
+        policy_path.write_text(
+            yaml.dump(
                 {
-                    "id": "tests-pass",
-                    "description": "All tests pass",
-                    "collector": "pytest",
-                    "on_failure": "replan",
-                },
-            ],
-            "quality_checks": [],
-            "budgets": {},
-            "change_scope": {"allowed_paths": ["src/", "tests/"]},
-        }))
+                    "schema_version": "1.0",
+                    "policy": {"id": "test-project", "version": "1.0"},
+                    "collectors": {
+                        "pytest": {"type": "pytest"},
+                    },
+                    "acceptance_checks": [
+                        {
+                            "id": "tests-pass",
+                            "description": "All tests pass",
+                            "collector": "pytest",
+                            "on_failure": "replan",
+                        },
+                    ],
+                    "quality_checks": [],
+                    "budgets": {},
+                    "change_scope": {"allowed_paths": ["src/", "tests/"]},
+                }
+            )
+        )
 
         assert policy_path.exists()
 
-        validate_resp = PolicyService.validate(PolicyValidateRequest(
-            path=str(policy_path),
-        ))
-        assert validate_resp.valid, (
-            f"Policy validation failed: {validate_resp.errors}"
+        validate_resp = PolicyService.validate(
+            PolicyValidateRequest(
+                path=str(policy_path),
+            )
         )
+        assert validate_resp.valid, f"Policy validation failed: {validate_resp.errors}"
         assert validate_resp.policy is not None
         assert validate_resp.policy.hash.startswith("sha256:")
 
@@ -164,26 +166,32 @@ class TestExit1FreshRepository:
 
         # Create and validate a policy inline (simulating bound init)
         policy_path = tmp_path / "bound-policy.yaml"
-        policy_path.write_text(yaml.dump({
-            "schema_version": "1.0",
-            "policy": {"id": "test-project", "version": "1.0"},
-            "collectors": {"pytest": {"type": "pytest"}},
-            "acceptance_checks": [
+        policy_path.write_text(
+            yaml.dump(
                 {
-                    "id": "tests-pass",
-                    "description": "All tests pass",
-                    "collector": "pytest",
-                    "on_failure": "replan",
-                },
-            ],
-            "quality_checks": [],
-            "budgets": {},
-            "change_scope": {"allowed_paths": ["src/", "tests/"]},
-        }))
+                    "schema_version": "1.0",
+                    "policy": {"id": "test-project", "version": "1.0"},
+                    "collectors": {"pytest": {"type": "pytest"}},
+                    "acceptance_checks": [
+                        {
+                            "id": "tests-pass",
+                            "description": "All tests pass",
+                            "collector": "pytest",
+                            "on_failure": "replan",
+                        },
+                    ],
+                    "quality_checks": [],
+                    "budgets": {},
+                    "change_scope": {"allowed_paths": ["src/", "tests/"]},
+                }
+            )
+        )
 
-        validate_resp = PolicyService.validate(PolicyValidateRequest(
-            path=str(policy_path),
-        ))
+        validate_resp = PolicyService.validate(
+            PolicyValidateRequest(
+                path=str(policy_path),
+            )
+        )
         assert validate_resp.valid
 
         elapsed = time.time() - start
@@ -192,13 +200,17 @@ class TestExit1FreshRepository:
     def test_policy_validate_via_service(self, tmp_path: Path) -> None:
         """The policy service validates a policy correctly."""
         policy_path = tmp_path / "bound-policy.yaml"
-        policy_path.write_text(yaml.dump({
-            "schema_version": "1.0",
-            "policy": {"id": "test-validate", "version": "1.0"},
-            "collectors": {"pytest": {"type": "pytest"}},
-            "budgets": {},
-            "change_scope": {"allowed_paths": ["src/", "tests/"]},
-        }))
+        policy_path.write_text(
+            yaml.dump(
+                {
+                    "schema_version": "1.0",
+                    "policy": {"id": "test-validate", "version": "1.0"},
+                    "collectors": {"pytest": {"type": "pytest"}},
+                    "budgets": {},
+                    "change_scope": {"allowed_paths": ["src/", "tests/"]},
+                }
+            )
+        )
 
         resp = PolicyService.validate(PolicyValidateRequest(path=str(policy_path)))
         assert resp.valid
@@ -216,10 +228,18 @@ class TestExit2AgentIntegration:
     """Exit 2: At least one agent integration completes the full scenario."""
 
     REQUIRED_PHRASES = [
-        "StepContract", "ExecutionEvidence", "evaluate",
-        "ACCEPT", "REPLAN", "RETRY", "ROLLBACK",
-        "bound run", "bound inspect", "bound outcome",
-        "pip install", "bound-policy",
+        "StepContract",
+        "ExecutionEvidence",
+        "evaluate",
+        "ACCEPT",
+        "REPLAN",
+        "RETRY",
+        "ROLLBACK",
+        "bound run",
+        "bound inspect",
+        "bound outcome",
+        "pip install",
+        "bound-policy",
     ]
 
     def test_integration_docs_cover_all_steps(self) -> None:
@@ -239,11 +259,11 @@ class TestExit2AgentIntegration:
         assert conformance_path.exists()
         result = subprocess.run(
             [sys.executable, str(conformance_path)],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
-        assert result.returncode == 0, (
-            f"Conformance test failed:\n{result.stdout}\n{result.stderr}"
-        )
+        assert result.returncode == 0, f"Conformance test failed:\n{result.stdout}\n{result.stderr}"
         assert "PASSED" in result.stdout
 
     def test_scenario_via_services(self, temp_store: LineageStore) -> None:
@@ -252,11 +272,13 @@ class TestExit2AgentIntegration:
             run_id = run.run_id
 
             contract = StepContract(
-                id="PHASE-001", description="Implement email validation",
+                id="PHASE-001",
+                description="Implement email validation",
                 goal="Add email validation",
                 acceptance_checks=[
                     AcceptanceCheck(
-                        id="tests-pass", description="All tests pass",
+                        id="tests-pass",
+                        description="All tests pass",
                         accepted_provenance=[
                             EvidenceProvenance.VERIFIED,
                             EvidenceProvenance.OBSERVED,
@@ -267,27 +289,37 @@ class TestExit2AgentIntegration:
                 ],
                 risk_checks=[
                     RiskCheck(
-                        id="lint-warnings", description="No lint warnings",
+                        id="lint-warnings",
+                        description="No lint warnings",
                         severity=0.5,
                         accepted_provenance=[
                             EvidenceProvenance.VERIFIED,
                             EvidenceProvenance.OBSERVED,
                         ],
                         on_missing=EvidencePolicyAction.ACCEPT,
-                        on_claimed=EvidencePolicyAction.RETRY, decision_critical=False,
+                        on_claimed=EvidencePolicyAction.RETRY,
+                        decision_critical=False,
                     ),
                 ],
                 budget=StepBudget(max_retries=3),
             )
             evidence = ExecutionEvidence(
                 acceptance=[
-                    CheckEvidence(check_id="tests-pass", passed=True, status=EvidenceStatus.PASSED,
-                                  source="pytest run", provenance=EvidenceProvenance.VERIFIED),
+                    CheckEvidence(
+                        check_id="tests-pass",
+                        passed=True,
+                        status=EvidenceStatus.PASSED,
+                        source="pytest run",
+                        provenance=EvidenceProvenance.VERIFIED,
+                    ),
                 ],
                 risks=[
                     CheckEvidence(
-                        check_id="lint-warnings", passed=True, status=EvidenceStatus.PASSED,
-                        source="ruff check", provenance=EvidenceProvenance.VERIFIED,
+                        check_id="lint-warnings",
+                        passed=True,
+                        status=EvidenceStatus.PASSED,
+                        source="ruff check",
+                        provenance=EvidenceProvenance.VERIFIED,
                     ),
                 ],
                 retry_count=EvidenceMetric(value=0, provenance=EvidenceProvenance.OBSERVED),
@@ -296,8 +328,12 @@ class TestExit2AgentIntegration:
             criteria = BoundCriteria(threshold=0.7)
 
             result = evaluate_agent_step(
-                contract=contract, evidence=evidence, criteria=criteria,
-                run=run, attempt=1, step_id="PHASE-001",
+                contract=contract,
+                evidence=evidence,
+                criteria=criteria,
+                run=run,
+                attempt=1,
+                step_id="PHASE-001",
             )
             assert result.evaluation.decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK")
             assert result.next_action in ("continue", "retry", "replan", "rollback")
@@ -323,6 +359,7 @@ class TestExit3Installation:
     def test_package_importable(self) -> None:
         """The ``bound`` package can be imported and reports a version."""
         import bound  # noqa: F811
+
         version = getattr(bound, "__version__", None)
         assert version is not None, "bound.__version__ must be set"
         assert isinstance(version, str)
@@ -332,7 +369,9 @@ class TestExit3Installation:
         """The ``bound`` CLI entry point is registered."""
         result = subprocess.run(
             [sys.executable, "-m", "bound.cli", "--help"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         assert result.returncode == 0
         assert "BOUND" in result.stdout
@@ -351,6 +390,7 @@ class TestExit3Installation:
             BoundWorkflow,
             evaluate_agent_step,
         )
+
         assert AcceptanceCheck is not None
         assert BoundCriteria is not None
         assert BoundWorkflow is not None
@@ -384,12 +424,8 @@ class TestExit4InstructionOnly:
         for doc_rel in INSTRUCTION_ONLY_DOCS:
             doc_path = INTEGRATIONS_DIR / doc_rel
             text = doc_path.read_text(encoding="utf-8")
-            assert "Instruction-only" in text, (
-                f"{doc_rel} is missing 'Instruction-only' label"
-            )
-            assert "not enforced" in text.lower(), (
-                f"{doc_rel} is missing 'not enforced' disclaimer"
-            )
+            assert "Instruction-only" in text, f"{doc_rel} is missing 'Instruction-only' label"
+            assert "not enforced" in text.lower(), f"{doc_rel} is missing 'not enforced' disclaimer"
 
     def test_instruction_only_no_enforcement_claims(self) -> None:
         """Instruction-only docs do not claim enforcement they cannot provide."""
@@ -400,11 +436,18 @@ class TestExit4InstructionOnly:
 
             for i, line in enumerate(lines):
                 lower = line.lower()
-                if any(skip in lower for skip in (
-                    "collector", "independent", "deterministic",
-                    "bounded-utility", "the agent follows these instructions",
-                    "not a programmatic enforcement", "programmatic hooks",
-                )):
+                if any(
+                    skip in lower
+                    for skip in (
+                        "collector",
+                        "independent",
+                        "deterministic",
+                        "bounded-utility",
+                        "the agent follows these instructions",
+                        "not a programmatic enforcement",
+                        "programmatic hooks",
+                    )
+                ):
                     continue
 
                 for keyword in ENFORCEMENT_KEYWORDS:
@@ -412,7 +455,7 @@ class TestExit4InstructionOnly:
                         if "bound" in lower and keyword in lower:
                             continue
                         pytest.fail(
-                            f"{doc_rel}:{i+1}: "
+                            f"{doc_rel}:{i + 1}: "
                             f"Instruction-only doc claims enforcement: "
                             f"'{line.strip()}'"
                         )
@@ -422,9 +465,7 @@ class TestExit4InstructionOnly:
         for doc_rel in INSTRUCTION_ONLY_DOCS:
             doc_path = INTEGRATIONS_DIR / doc_rel
             text = doc_path.read_text(encoding="utf-8").lower()
-            has_qualifier = any(
-                phrase in text for phrase in self.QUALIFYING_PHRASES
-            )
+            has_qualifier = any(phrase in text for phrase in self.QUALIFYING_PHRASES)
             assert has_qualifier, (
                 f"{doc_rel} does not use qualifying language about its "
                 f"instruction-only nature. Expected one of: "

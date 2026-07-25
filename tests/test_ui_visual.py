@@ -102,9 +102,7 @@ def _make_minimal_run_log() -> RunLog:
         run_id="run-001",
         step_id="step-001",
         attempt=1,
-        scores=EvaluationScores(
-            acceptance=0.9, influence=0.2, risk=0.1, cost=0.2
-        ),
+        scores=EvaluationScores(acceptance=0.9, influence=0.2, risk=0.1, cost=0.2),
         score=0.85,
         threshold=0.6,
         decision="ACCEPT",
@@ -249,8 +247,7 @@ def test_run_detail_has_doctype_and_structure() -> None:
 def test_overview_html_matches_snapshot_on_same_inputs() -> None:
     """Same inputs must produce identical HTML across test runs."""
     summaries = [
-        _make_run_summary("run-001", "Implement feature X",
-                          RunStatus.COMPLETED, finished=True),
+        _make_run_summary("run-001", "Implement feature X", RunStatus.COMPLETED, finished=True),
     ]
     html = _render_overview_page(summaries, "/tmp/.bound/runs")
     assert "<a href='/run/run-001'" in html

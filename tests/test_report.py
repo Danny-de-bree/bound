@@ -37,9 +37,7 @@ def _green_contract() -> StepContract:
         description="Test contract for report rendering.",
         goal="A green evaluation for testing the report renderer.",
         acceptance_checks=[
-            AcceptanceCheck(
-                id="tests-pass", description="Full suite green.", required=True
-            ),
+            AcceptanceCheck(id="tests-pass", description="Full suite green.", required=True),
             AcceptanceCheck(
                 id="service-tests-pass",
                 description="Service tests green.",
@@ -352,7 +350,6 @@ def test_render_from_trace_omits_policy_without_config() -> None:
     assert "Policy:" not in report
 
 
-
 def test_run_trace_schema_version_is_2() -> None:
     """New traces default to schema_version 2.0."""
     trace = _make_trace()
@@ -465,6 +462,3 @@ def test_report_shows_collector_failures_and_missing_critical() -> None:
     assert "0% independently verified" in report or "33% independently verified" in report
     # The provenance table marks the invalid check's status.
     assert "[invalid]" in report
-
-
-

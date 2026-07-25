@@ -61,9 +61,7 @@ def _block_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch socket.socket and socket.create_connection to raise."""
 
     def _no_network(*_args: object, **_kwargs: object) -> socket.socket:
-        raise AssertionError(
-            "Sprint exit criteria test triggered a network connection"
-        )
+        raise AssertionError("Sprint exit criteria test triggered a network connection")
 
     monkeypatch.setattr(socket, "socket", _no_network)
     monkeypatch.setattr(socket, "create_connection", _no_network)
@@ -88,11 +86,11 @@ def test_readme_describes_bound_purpose() -> None:
     text = readme.read_text(encoding="utf-8")
 
     # The README must state BOUND's core purpose.
-    assert "deterministic control harness" in text.lower() or \
-           "deterministic control signals" in text.lower() or \
-           "deterministic decision harness" in text.lower(), (
-        "README must describe BOUND as a deterministic control mechanism"
-    )
+    assert (
+        "deterministic control harness" in text.lower()
+        or "deterministic control signals" in text.lower()
+        or "deterministic decision harness" in text.lower()
+    ), "README must describe BOUND as a deterministic control mechanism"
 
     # The README must mention the four control decisions.
     assert "ACCEPT" in text, "README must mention the ACCEPT decision"
@@ -129,11 +127,13 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
     from bound.ui import _DashboardHandler, serve
 
     # --- Step 1: Create a run and store a decision via the service layer ---
-    start_resp = RunService.start(RunStartRequest(
-        task="Book the direct flight",
-        metadata={"demo": "exit2"},
-        store=temp_store,
-    ))
+    start_resp = RunService.start(
+        RunStartRequest(
+            task="Book the direct flight",
+            metadata={"demo": "exit2"},
+            store=temp_store,
+        )
+    )
     run_id = start_resp.run_id
     assert run_id, "RunService.start must return a run_id"
 
@@ -144,16 +144,18 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
     )
     criteria = BoundCriteria(weight=1.0, threshold=0.6)
 
-    eval_resp = EvaluationService.evaluate(EvaluateRequest(
-        action=action,
-        scores=scores,
-        criteria=criteria,
-        run_id=run_id,
-        step="flight-booking",
-        attempt=1,
-        description="Book the direct flight",
-        store=temp_store,
-    ))
+    eval_resp = EvaluationService.evaluate(
+        EvaluateRequest(
+            action=action,
+            scores=scores,
+            criteria=criteria,
+            run_id=run_id,
+            step="flight-booking",
+            attempt=1,
+            description="Book the direct flight",
+            store=temp_store,
+        )
+    )
     assert eval_resp.result.decision == "ACCEPT"
     assert eval_resp.result.score == pytest.approx(0.8, abs=1e-12)
     assert eval_resp.lineage is not None, "Lineage must be recorded"
@@ -161,14 +163,16 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
     expected_eval_id = eval_resp.lineage["evaluation_id"]
 
     # Record an outcome so the dashboard has complete traceability.
-    OutcomeService.record(OutcomeRecordRequest(
-        run_id=run_id,
-        step_id=expected_step_id,
-        evaluation_id=expected_eval_id,
-        decision="ACCEPT",
-        next_action="continue",
-        store=temp_store,
-    ))
+    OutcomeService.record(
+        OutcomeRecordRequest(
+            run_id=run_id,
+            step_id=expected_step_id,
+            evaluation_id=expected_eval_id,
+            decision="ACCEPT",
+            next_action="continue",
+            store=temp_store,
+        )
+    )
 
     # Finish the run so the dashboard sees a complete state.
     RunService.finish(RunFinishRequest(run_id=run_id, store=temp_store))
@@ -214,9 +218,7 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
     for ev in evaluations:
         if ev.get("step_id") == expected_step_id:
             eval_found = True
-            assert ev["decision"] == "ACCEPT", (
-                f"Expected ACCEPT, got {ev['decision']}"
-            )
+            assert ev["decision"] == "ACCEPT", f"Expected ACCEPT, got {ev['decision']}"
             assert ev["score"] == pytest.approx(0.8, abs=1e-12), (
                 f"Expected score 0.8, got {ev['score']}"
             )
@@ -224,9 +226,7 @@ def test_dashboard_api_returns_stored_decision_lineage(temp_store: LineageStore)
             assert ev["scores"]["acceptance"] == 0.9
             break
 
-    assert eval_found, (
-        f"The dashboard API must return the evaluation for step {expected_step_id}"
-    )
+    assert eval_found, f"The dashboard API must return the evaluation for step {expected_step_id}"
 
     # The outcomes must contain the recorded outcome.
     outcomes = data["outcomes"]
@@ -259,10 +259,18 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
     _block_sockets(monkeypatch)
 
     # Ensure no API keys are set (the demo must work without credentials).
-    for var in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY",
-                "DEEPSEEK_API_KEY", "COHERE_API_KEY", "MISTRAL_API_KEY",
-                "REPLICATE_API_TOKEN", "TOGETHER_API_KEY",
-                "HUGGINGFACEHUB_API_TOKEN", "VERTEX_API_KEY"):
+    for var in (
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "COHERE_API_KEY",
+        "MISTRAL_API_KEY",
+        "REPLICATE_API_TOKEN",
+        "TOGETHER_API_KEY",
+        "HUGGINGFACEHUB_API_TOKEN",
+        "VERTEX_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
 
     # Create a fresh lineage store (simulates a clean checkout).
@@ -272,11 +280,13 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
     )
 
     # --- Step 1: Start a run ---
-    start_resp = RunService.start(RunStartRequest(
-        task="Book the direct flight",
-        metadata={"demo": "exit3", "version": "0.8.0"},
-        store=store,
-    ))
+    start_resp = RunService.start(
+        RunStartRequest(
+            task="Book the direct flight",
+            metadata={"demo": "exit3", "version": "0.8.0"},
+            store=store,
+        )
+    )
     run_id = start_resp.run_id
     assert run_id, "Must get a run_id"
     assert start_resp.status == "started"
@@ -290,16 +300,18 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
     )
     criteria = BoundCriteria(weight=1.0, threshold=0.6)
 
-    eval_resp = EvaluationService.evaluate(EvaluateRequest(
-        action=action,
-        scores=scores,
-        criteria=criteria,
-        run_id=run_id,
-        step="flight-booking",
-        attempt=1,
-        description="Book the direct flight",
-        store=store,
-    ))
+    eval_resp = EvaluationService.evaluate(
+        EvaluateRequest(
+            action=action,
+            scores=scores,
+            criteria=criteria,
+            run_id=run_id,
+            step="flight-booking",
+            attempt=1,
+            description="Book the direct flight",
+            store=store,
+        )
+    )
 
     # Verify the deterministic result.
     assert eval_resp.result.decision == "ACCEPT"
@@ -323,37 +335,41 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
 
     # Lineage info must be recorded when run_id is provided.
     assert eval_resp.lineage is not None, "Lineage must be recorded"
-    assert "evaluation_id" in eval_resp.lineage, (
-        "Lineage must contain an evaluation_id"
-    )
+    assert "evaluation_id" in eval_resp.lineage, "Lineage must contain an evaluation_id"
 
     # --- Step 3: Record the outcome ---
-    outcome_resp = OutcomeService.record(OutcomeRecordRequest(
-        run_id=run_id,
-        step_id=eval_resp.lineage["step_id"],
-        evaluation_id=eval_resp.lineage["evaluation_id"],
-        decision="ACCEPT",
-        next_action="continue",
-        store=store,
-    ))
+    outcome_resp = OutcomeService.record(
+        OutcomeRecordRequest(
+            run_id=run_id,
+            step_id=eval_resp.lineage["step_id"],
+            evaluation_id=eval_resp.lineage["evaluation_id"],
+            decision="ACCEPT",
+            next_action="continue",
+            store=store,
+        )
+    )
     assert outcome_resp.run_id == run_id
     assert outcome_resp.decision == "ACCEPT"
     assert outcome_resp.evaluation_id == eval_resp.lineage["evaluation_id"]
 
     # --- Step 4: Finish the run ---
-    finish_resp = RunService.finish(RunFinishRequest(
-        run_id=run_id,
-        status="completed",
-        store=store,
-    ))
+    finish_resp = RunService.finish(
+        RunFinishRequest(
+            run_id=run_id,
+            status="completed",
+            store=store,
+        )
+    )
     assert finish_resp.run_id == run_id
     assert finish_resp.status == "completed"
 
     # --- Step 5: Inspect the run and verify complete lineage ---
-    inspect_resp = RunService.inspect(RunInspectRequest(
-        run_id=run_id,
-        store=store,
-    ))
+    inspect_resp = RunService.inspect(
+        RunInspectRequest(
+            run_id=run_id,
+            store=store,
+        )
+    )
     log = inspect_resp.log
 
     # The run metadata must match.
@@ -367,9 +383,7 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
 
     # The evaluation decision must match.
     last_eval = log.evaluations[-1]
-    assert last_eval.decision == "ACCEPT", (
-        f"Expected ACCEPT, got {last_eval.decision}"
-    )
+    assert last_eval.decision == "ACCEPT", f"Expected ACCEPT, got {last_eval.decision}"
     assert last_eval.score == pytest.approx(0.8, abs=1e-12)
 
     # The outcome must reference the evaluation.
@@ -380,18 +394,18 @@ def test_demo_scenario_reproduces_without_manual_evidence_injection(
     )
 
     # The run must be marked as completed.
-    assert log.run.status == "completed", (
-        f"Expected completed, got {log.run.status}"
-    )
+    assert log.run.status == "completed", f"Expected completed, got {log.run.status}"
 
     # --- Step 6: Reproducibility check ---
     # Re-running the exact same evaluation must produce the same result.
-    replay = EvaluationService.evaluate(EvaluateRequest(
-        action=action,
-        scores=scores,
-        criteria=criteria,
-        store=store,
-    ))
+    replay = EvaluationService.evaluate(
+        EvaluateRequest(
+            action=action,
+            scores=scores,
+            criteria=criteria,
+            store=store,
+        )
+    )
     assert replay.result.decision == "ACCEPT"
     assert replay.result.score == pytest.approx(0.8, abs=1e-12)
     assert replay.payload == eval_resp.payload, (

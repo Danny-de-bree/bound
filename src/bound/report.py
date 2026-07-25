@@ -27,13 +27,13 @@ __all__ = [
 #: metric and provenance breakdown — produced by a BOUND-controlled collector
 #: or a trusted attestation, never agent self-report (CLAIMED).
 _REPORT_INDEPENDENT: frozenset[EvidenceProvenance] = frozenset(
-    {EvidenceProvenance.OBSERVED, EvidenceProvenance.VERIFIED, EvidenceProvenance.ATTESTED}
+    {EvidenceProvenance.OBSERVED, EvidenceProvenance.VERIFIED, EvidenceProvenance.ATTESTED},
 )
 
 #: Evidence statuses that mean a check could not be independently confirmed —
 #: a collector crash, a stale artefact, or an undetermined outcome.
 _UNVERIFIABLE_STATUS: frozenset[EvidenceStatus] = frozenset(
-    {EvidenceStatus.INVALID, EvidenceStatus.UNVERIFIED, EvidenceStatus.MISSING}
+    {EvidenceStatus.INVALID, EvidenceStatus.UNVERIFIED, EvidenceStatus.MISSING},
 )
 
 #: Provenance ranked by trust strength (higher = more trustworthy), used to pick
@@ -320,13 +320,14 @@ def _evidence_table(checks: Sequence[CheckEvidence]) -> str:
         status = f" [{c.status.value}]" if c.status in _UNVERIFIABLE_STATUS else ""
         lines.append(
             f"| `{c.check_id}` | {_passed_label(c.passed)} | {provenance} | "
-            f"`{collector}` | `{source}` | {details}{status} |"
+            f"`{collector}` | `{source}` | {details}{status} |",
         )
     return "\n".join(lines)
 
 
 def _is_independently_verified(
-    provenance: EvidenceProvenance, status: EvidenceStatus | None
+    provenance: EvidenceProvenance,
+    status: EvidenceStatus | None,
 ) -> bool:
     """Whether a piece of evidence counts as independently verified."""
     if status in _UNVERIFIABLE_STATUS:
@@ -361,9 +362,7 @@ def _collector_failures(ev: ExecutionEvidence) -> list[str]:
     return failures
 
 
-def _missing_critical_evidence(
-    contract: StepContract, ev: ExecutionEvidence
-) -> list[str]:
+def _missing_critical_evidence(contract: StepContract, ev: ExecutionEvidence) -> list[str]:
     """List decision-critical checks lacking independently verified evidence.
 
     A critical check is *missing* when no evidence was collected for it, or
@@ -388,9 +387,7 @@ def _missing_critical_evidence(
     return missing
 
 
-def _critical_coverage(
-    contract: StepContract, ev: ExecutionEvidence
-) -> tuple[int, int, int]:
+def _critical_coverage(contract: StepContract, ev: ExecutionEvidence) -> tuple[int, int, int]:
     """Compute independently-verified coverage over decision-critical checks.
 
     Returns ``(verified, total, percent)``. A critical check is *verified*
@@ -424,9 +421,7 @@ def _dimension_provenance(evidence_list: list[ScoreEvidence]) -> EvidenceProvena
         prov = se.provenance
         if prov is None:
             continue
-        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(
-            strongest, 0
-        ):
+        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(strongest, 0):
             strongest = prov
     return strongest
 
@@ -453,9 +448,7 @@ def _check_breakdown(
     lines: list[str] = []
     for c in checks:
         prov = c.provenance
-        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(
-            strongest, 0
-        ):
+        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(strongest, 0):
             strongest = prov
         parts = [f"  - `{c.check_id}` · {_provenance_label(prov)}"]
         if c.collector:
@@ -480,9 +473,7 @@ def _cost_breakdown(ev: ExecutionEvidence) -> tuple[EvidenceProvenance | None, l
     lines: list[str] = []
     for name, metric in metrics:
         prov = metric.provenance if metric is not None else EvidenceProvenance.MISSING
-        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(
-            strongest, 0
-        ):
+        if strongest is None or _PROVENANCE_STRENGTH[prov] > _PROVENANCE_STRENGTH.get(strongest, 0):
             strongest = prov
         parts = [f"  - `{name}` · {_provenance_label(prov)}"]
         if metric is not None and metric.value is not None:
@@ -573,7 +564,7 @@ def render_from_trace(run: RunTrace) -> str:
         f"- Score / threshold: `S = {run.evaluation.score:.4f}` "
         f"{'≥' if run.evaluation.score >= run.evaluation.threshold else '<'} "
         f"`T = {run.evaluation.threshold:.4f}` "
-        f"(distance `{run.evaluation.distance_to_threshold:+.4f}`)"
+        f"(distance `{run.evaluation.distance_to_threshold:+.4f}`)",
     )
     out.append(f"- Run id: `{run.run_id}`")
     out.append(f"- Timestamp: `{run.timestamp}`")
@@ -589,7 +580,7 @@ def render_from_trace(run: RunTrace) -> str:
     if c_total:
         out.append(
             f"- Critical evidence coverage: `{c_pct}% independently verified` "
-            f"({c_verified}/{c_total} decision-critical checks)"
+            f"({c_verified}/{c_total} decision-critical checks)",
         )
     else:
         out.append("- Critical evidence coverage: `no decision-critical checks declared`")
@@ -619,9 +610,7 @@ def render_from_trace(run: RunTrace) -> str:
                 detail = f"exit `{record.returncode}`"
             else:
                 detail = f"exit `{record.returncode}`"
-            out.append(
-                f"| `{record.command}` | exit `{record.returncode}` — {detail} |"
-            )
+            out.append(f"| `{record.command}` | exit `{record.returncode}` — {detail} |")
         out.append("")
     else:
         out.append("_No raw command output was recorded for this run._")
@@ -651,7 +640,7 @@ def render_from_trace(run: RunTrace) -> str:
     out.append(
         "Per-dimension trust provenance (strongest backing evidence). Agent "
         "self-report is always CLAIMED; only an independent collector grants "
-        "OBSERVED/VERIFIED/ATTESTED."
+        "OBSERVED/VERIFIED/ATTESTED.",
     )
     out.append("")
     out.extend(_provenance_breakdown(run))
@@ -661,8 +650,7 @@ def render_from_trace(run: RunTrace) -> str:
     out.append("### Unavailable evidence")
     out.append("")
     out.append(
-        "Signals not instrumented by this integration are recorded as null and "
-        "never fabricated:"
+        "Signals not instrumented by this integration are recorded as null and never fabricated:",
     )
     out.append("")
     out.append(f"- {_telemetry_line('token_usage', run.token_usage)}")
@@ -728,7 +716,7 @@ def render_from_trace(run: RunTrace) -> str:
         "ROLLBACK and other control actions are executed by the agent / "
         "integration, not by BOUND. BOUND is a thin harness: it emits the "
         "decision and may independently verify the resulting state; it never "
-        "performs a workspace rollback itself."
+        "performs a workspace rollback itself.",
     )
     out.append("")
 
@@ -742,7 +730,7 @@ def render_from_trace(run: RunTrace) -> str:
             note = entry.note or ""
             out.append(
                 f"| `{entry.step_id}` | {entry.attempt} | `{entry.decision}` | "
-                f"`{entry.next_action}` | {note} |"
+                f"`{entry.next_action}` | {note} |",
             )
         out.append("")
     else:
@@ -751,7 +739,7 @@ def render_from_trace(run: RunTrace) -> str:
 
     out.append(
         f"{len(run.replans)} replan(s), {len(run.retries)} retry/retries "
-        "recorded — history preserved, never rewritten."
+        "recorded — history preserved, never rewritten.",
     )
     out.append("")
 
@@ -761,12 +749,12 @@ def render_from_trace(run: RunTrace) -> str:
     if not run.replans and not run.retries:
         out.append(
             "None. The step was evaluated with no replan or retry; the contract "
-            f"id `{contract.id}` is preserved unchanged from the plan."
+            f"id `{contract.id}` is preserved unchanged from the plan.",
         )
     else:
         out.append(
             "Replan/retry history was preserved (see decision history above); "
-            f"the root id `{contract.id}` was never replaced."
+            f"the root id `{contract.id}` was never replaced.",
         )
     out.append("")
 
@@ -803,12 +791,8 @@ def render_from_trace(run: RunTrace) -> str:
         out.append("")
     out.append(
         "Re-running the trace produces a fresh `run_id` / `timestamp` (a new "
-        "run) while the deterministic evaluation outcome is stable."
+        "run) while the deterministic evaluation outcome is stable.",
     )
     out.append("")
 
     return "\n".join(out)
-
-
-
-

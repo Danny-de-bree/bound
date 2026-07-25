@@ -506,9 +506,7 @@ class TestCriticalDataLossFixes:
     # C1: scope-filtered worktree_diff
     # ------------------------------------------------------------------
 
-    def test_c1_out_of_scope_files_not_modified_during_rollback(
-        self, worktree: Path
-    ) -> None:
+    def test_c1_out_of_scope_files_not_modified_during_rollback(self, worktree: Path) -> None:
         """Out-of-scope files are never modified by rollback (C1).
 
         The worktree_diff must be scope-filtered at capture time so that
@@ -521,9 +519,7 @@ class TestCriticalDataLossFixes:
         (worktree / "README.md").write_text("# captured out-of-scope\n")
 
         # Capture a checkpoint scoped to src/ only.
-        cp = capture_checkpoint(
-            run_id="run-c1", step_id="step-1", scope=["src"], cwd=worktree
-        )
+        cp = capture_checkpoint(run_id="run-c1", step_id="step-1", scope=["src"], cwd=worktree)
         # The diff must NOT contain README.md changes.
         assert "README.md" not in cp.worktree_diff, (
             "worktree_diff must be scope-filtered (C1): should not include "
@@ -610,9 +606,7 @@ class TestCriticalDataLossFixes:
     # C3: store untracked file content
     # ------------------------------------------------------------------
 
-    def test_c3_deleted_untracked_in_scope_file_is_restored(
-        self, worktree: Path
-    ) -> None:
+    def test_c3_deleted_untracked_in_scope_file_is_restored(self, worktree: Path) -> None:
         """Deleted untracked in-scope files ARE restored (C3).
 
         Untracked files cannot be restored from git, so their content must
@@ -623,9 +617,7 @@ class TestCriticalDataLossFixes:
         untracked_content = "# untracked new file\nprint('hello')\n"
         (worktree / "src" / "new_untracked.py").write_text(untracked_content)
 
-        cp = capture_checkpoint(
-            run_id="run-c3", step_id="step-1", scope=["src"], cwd=worktree
-        )
+        cp = capture_checkpoint(run_id="run-c3", step_id="step-1", scope=["src"], cwd=worktree)
 
         # The checkpoint must store the untracked file's content.
         assert "src/new_untracked.py" in cp.untracked_files
@@ -641,8 +633,7 @@ class TestCriticalDataLossFixes:
         restored, failed = restore_checkpoint_files(cp, cwd=worktree)
 
         assert "src/new_untracked.py" in restored, (
-            "Deleted untracked in-scope file must be restored from stored "
-            "content (C3)"
+            "Deleted untracked in-scope file must be restored from stored content (C3)"
         )
         assert (worktree / "src" / "new_untracked.py").read_text() == untracked_content
 
@@ -664,9 +655,7 @@ class TestCriticalDataLossFixes:
         monkeypatch.setattr(cp_module, "_git_head", lambda cwd: None)
 
         with pytest.raises(RuntimeError, match="git HEAD unavailable"):
-            capture_checkpoint(
-                run_id="run-c4", step_id="step-1", cwd=worktree
-            )
+            capture_checkpoint(run_id="run-c4", step_id="step-1", cwd=worktree)
 
     def test_c4_verify_flags_none_head_commit(self, worktree: Path) -> None:
         """verify_checkpoint_integrity flags a None head_commit as invalid (C4).
@@ -685,26 +674,20 @@ class TestCriticalDataLossFixes:
             timestamp=datetime.now(UTC).isoformat(),
         )
         is_valid, issues = verify_checkpoint_integrity(cp, cwd=worktree)
-        assert not is_valid, (
-            "Checkpoint with head_commit=None must not pass integrity (C4)"
-        )
+        assert not is_valid, "Checkpoint with head_commit=None must not pass integrity (C4)"
         assert any("head_commit" in issue for issue in issues)
 
     # ------------------------------------------------------------------
     # C5: HMAC signature on checkpoint JSON
     # ------------------------------------------------------------------
 
-    def test_c5_tampered_checkpoint_json_is_rejected(
-        self, worktree: Path, bare_repo: Path
-    ) -> None:
+    def test_c5_tampered_checkpoint_json_is_rejected(self, worktree: Path, bare_repo: Path) -> None:
         """A tampered checkpoint JSON is rejected by load_checkpoint (C5).
 
         The HMAC-SHA256 signature must detect any modification of the
         stored checkpoint data.
         """
-        cp = capture_checkpoint(
-            run_id="run-c5", step_id="step-1", cwd=worktree
-        )
+        cp = capture_checkpoint(run_id="run-c5", step_id="step-1", cwd=worktree)
         save_checkpoint(cp, base_dir=bare_repo)
 
         # Locate the checkpoint file on disk.
@@ -720,13 +703,9 @@ class TestCriticalDataLossFixes:
         with pytest.raises(RuntimeError, match="signature verification failed"):
             load_checkpoint(cp.run_id, cp.checkpoint_id, base_dir=bare_repo)
 
-    def test_c5_valid_signature_loads_cleanly(
-        self, worktree: Path, bare_repo: Path
-    ) -> None:
+    def test_c5_valid_signature_loads_cleanly(self, worktree: Path, bare_repo: Path) -> None:
         """A properly signed checkpoint loads without error (C5 happy path)."""
-        cp = capture_checkpoint(
-            run_id="run-c5b", step_id="step-1", cwd=worktree
-        )
+        cp = capture_checkpoint(run_id="run-c5b", step_id="step-1", cwd=worktree)
         save_checkpoint(cp, base_dir=bare_repo)
 
         loaded = load_checkpoint(cp.run_id, cp.checkpoint_id, base_dir=bare_repo)

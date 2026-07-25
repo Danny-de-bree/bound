@@ -44,6 +44,7 @@ DECISION_TO_CONTROL: dict[Decision, NextAction] = {
 # Zero-scope helpers
 # ---------------------------------------------------------------------------
 
+
 def _ZERO_SCORES() -> EvaluationScores:
     """Pre-built ``EvaluationScores`` with all dimensions at ``0.0``."""
     return EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
@@ -52,6 +53,7 @@ def _ZERO_SCORES() -> EvaluationScores:
 # ---------------------------------------------------------------------------
 # Evidence builders
 # ---------------------------------------------------------------------------
+
 
 def _passed(check_id: str, *, provenance: EvidenceProvenance | None = None) -> ScoreEvidence:
     """A ``ScoreEvidence`` with ``passed=True``, optionally with a provenance."""
@@ -72,6 +74,7 @@ def _failed(check_id: str, *, provenance: EvidenceProvenance | None = None) -> S
 # ---------------------------------------------------------------------------
 # Contract builders
 # ---------------------------------------------------------------------------
+
 
 def _simple_contract(*, risk_checks: list[RiskCheck] | None = None) -> StepContract:
     """A minimal ``StepContract`` with one acceptance check and optional risk checks."""
@@ -100,6 +103,7 @@ def _simple_contract(*, risk_checks: list[RiskCheck] | None = None) -> StepContr
 # ---------------------------------------------------------------------------
 # Criteria builders
 # ---------------------------------------------------------------------------
+
 
 def _criteria(
     *,

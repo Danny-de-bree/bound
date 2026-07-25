@@ -268,6 +268,7 @@ def main() -> int:
     except Exception as exc:
         print(f"Conformance test FAILED: {exc}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         return 1
 

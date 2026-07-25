@@ -176,9 +176,7 @@ class TestAcceptance:
         evaluator = ContractEvaluator()
         scores = evaluator.evaluate(contract, evidence)
         assert scores.acceptance == 0.5
-        b_record = next(
-            ev for ev in evaluator.provenance["acceptance"] if ev.source == "b"
-        )
+        b_record = next(ev for ev in evaluator.provenance["acceptance"] if ev.source == "b")
         assert "missing required evidence counts as failed" in b_record.description
 
     def test_optional_checks_are_advisory_only(self) -> None:
@@ -202,9 +200,7 @@ class TestAcceptance:
         evaluator = ContractEvaluator()
         scores = evaluator.evaluate(contract, evidence)
         assert scores.acceptance == 1.0
-        opt_record = next(
-            ev for ev in evaluator.provenance["acceptance"] if ev.source == "opt"
-        )
+        opt_record = next(ev for ev in evaluator.provenance["acceptance"] if ev.source == "opt")
         assert opt_record.contribution == 0.0
         assert "advisory" in opt_record.description
 
@@ -262,7 +258,6 @@ class TestAcceptance:
         assert "d" in summary.description
 
 
-
 # ---------------------------------------------------------------------------
 # Cost
 # ---------------------------------------------------------------------------
@@ -308,9 +303,7 @@ class TestCost:
         assert scores.cost == 1.0
         # Each of the four available dimensions saturates at normalized=1.0, so
         # each contributes exactly 1/4 to the mean (cost == 1.0).
-        dim_records = [
-            r for r in evaluator.provenance["cost"] if r.source != "summary"
-        ]
+        dim_records = [r for r in evaluator.provenance["cost"] if r.source != "summary"]
         assert len(dim_records) == 4
         for record in dim_records:
             assert record.contribution == pytest.approx(0.25)
@@ -332,6 +325,7 @@ class TestCost:
         )
         scores = ContractEvaluator().evaluate(contract, evidence)
         assert scores.cost == pytest.approx(0.25)
+
     def test_unmeasured_telemetry_is_conservatively_saturated(self) -> None:
         """A declared budget dimension with unmeured telemetry saturates to 1.0.
 
@@ -351,18 +345,14 @@ class TestCost:
         scores = evaluator.evaluate(contract, evidence)
         # retry + tool = 0; token + runtime = 2 saturated -> mean(0,0,1,1) = 0.5
         assert scores.cost == pytest.approx(0.5)
-        token_record = next(
-            ev for ev in evaluator.provenance["cost"] if ev.source == "token_cost"
-        )
+        token_record = next(ev for ev in evaluator.provenance["cost"] if ev.source == "token_cost")
         assert "unmeasured" in token_record.description
         assert token_record.contribution == pytest.approx(0.25)
         # v0.7: an unmeasured dimension records MISSING provenance (never a
         # silent OBSERVED zero); a measured dimension carries its metric's
         # provenance verbatim.
         assert token_record.provenance is EvidenceProvenance.MISSING
-        retry_record = next(
-            ev for ev in evaluator.provenance["cost"] if ev.source == "retry_cost"
-        )
+        retry_record = next(ev for ev in evaluator.provenance["cost"] if ev.source == "retry_cost")
         assert retry_record.provenance is EvidenceProvenance.MISSING
 
     def test_measured_cost_carries_observed_provenance(self) -> None:
@@ -383,11 +373,8 @@ class TestCost:
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
-        retry_record = next(
-            ev for ev in evaluator.provenance["cost"] if ev.source == "retry_cost"
-        )
+        retry_record = next(ev for ev in evaluator.provenance["cost"] if ev.source == "retry_cost")
         assert retry_record.provenance is EvidenceProvenance.OBSERVED
-
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +414,8 @@ class TestRisk:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         ev_ok = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
 
         def risk_for(severity: float) -> float:
@@ -459,10 +447,12 @@ class TestRisk:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         available = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         unavailable = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=False,
+            acceptance=[_passed("a")],
+            rollback_available=False,
         )
         r_available = ContractEvaluator().evaluate(contract, available).risk
         r_unavailable = ContractEvaluator().evaluate(contract, unavailable).risk
@@ -483,14 +473,13 @@ class TestRisk:
         )
         # No risk evidence at all for the declared check "r".
         evidence = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         scores = evaluator.evaluate(contract, evidence)
         assert scores.risk == pytest.approx(0.5)
-        r_record = next(
-            ev for ev in evaluator.provenance["risk"] if ev.source == "r"
-        )
+        r_record = next(ev for ev in evaluator.provenance["risk"] if ev.source == "r")
         assert "conservatively as violated" in r_record.description
 
     def test_unmeasured_rollback_does_not_inflate_baseline_risk(self) -> None:
@@ -525,7 +514,6 @@ class TestRisk:
         assert scores.risk == 1.0  # full surprise indicator
 
 
-
 # ---------------------------------------------------------------------------
 # Influence & determinism
 # ---------------------------------------------------------------------------
@@ -548,7 +536,8 @@ class TestInfluenceAndDeterminism:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         evidence = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         scores = evaluator.evaluate(contract, evidence)
@@ -574,7 +563,8 @@ class TestInfluenceAndDeterminism:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         evidence = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator(influence=0.3)
         scores = evaluator.evaluate(contract, evidence)
@@ -661,7 +651,8 @@ class TestInfluenceAndDeterminism:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         evidence = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         scores = ContractEvaluator().evaluate(contract, evidence)
         assert isinstance(scores, EvaluationScores)
@@ -678,7 +669,9 @@ class TestInfluenceAndDeterminism:
 def _verified(check_id: str, source: str = "bound.junit") -> CheckEvidence:
     """Build a passing check backed by VERIFIED provenance."""
     return CheckEvidence(
-        check_id=check_id, passed=True, source=source,
+        check_id=check_id,
+        passed=True,
+        source=source,
         provenance=EvidenceProvenance.VERIFIED,
     )
 
@@ -686,7 +679,9 @@ def _verified(check_id: str, source: str = "bound.junit") -> CheckEvidence:
 def _observed(check_id: str, source: str = "harness") -> CheckEvidence:
     """Build a passing check backed by OBSERVED provenance."""
     return CheckEvidence(
-        check_id=check_id, passed=True, source=source,
+        check_id=check_id,
+        passed=True,
+        source=source,
         provenance=EvidenceProvenance.OBSERVED,
     )
 
@@ -694,7 +689,9 @@ def _observed(check_id: str, source: str = "harness") -> CheckEvidence:
 def _claimed(check_id: str, source: str = "agent") -> CheckEvidence:
     """Build a passing check backed by CLAIMED (agent self-report) provenance."""
     return CheckEvidence(
-        check_id=check_id, passed=True, source=source,
+        check_id=check_id,
+        passed=True,
+        source=source,
         provenance=EvidenceProvenance.CLAIMED,
     )
 
@@ -702,7 +699,9 @@ def _claimed(check_id: str, source: str = "agent") -> CheckEvidence:
 def _evaluated(check_id: str, source: str = "bound.eval") -> CheckEvidence:
     """Build a passing check backed by EVALUATED provenance."""
     return CheckEvidence(
-        check_id=check_id, passed=True, source=source,
+        check_id=check_id,
+        passed=True,
+        source=source,
         provenance=EvidenceProvenance.EVALUATED,
     )
 
@@ -710,8 +709,11 @@ def _evaluated(check_id: str, source: str = "bound.eval") -> CheckEvidence:
 def _invalid(check_id: str, source: str = "bound.junit") -> CheckEvidence:
     """Build a check with INVALID status (collector/parser failure)."""
     return CheckEvidence(
-        check_id=check_id, passed=None, source=source,
-        provenance=EvidenceProvenance.MISSING, status=EvidenceStatus.INVALID,
+        check_id=check_id,
+        passed=None,
+        source=source,
+        provenance=EvidenceProvenance.MISSING,
+        status=EvidenceStatus.INVALID,
     )
 
 
@@ -728,7 +730,8 @@ class TestDecisionAssurance:
             acceptance_checks=[AcceptanceCheck(id="a", description="a")],
         )
         evidence = ExecutionEvidence(
-            acceptance=[_passed("a")], rollback_available=True,
+            acceptance=[_passed("a")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -747,14 +750,17 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="no-secrets", description="No secrets", severity=1.0,
+                    id="no-secrets",
+                    description="No secrets",
+                    severity=1.0,
                     decision_critical=True,
                     accepted_provenance=[EvidenceProvenance.VERIFIED],
                 ),
             ],
         )
         evidence = ExecutionEvidence(
-            risks=[_verified("no-secrets")], rollback_available=True,
+            risks=[_verified("no-secrets")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -767,13 +773,16 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="no-secrets", description="No secrets", severity=1.0,
+                    id="no-secrets",
+                    description="No secrets",
+                    severity=1.0,
                     decision_critical=True,
                 ),
             ],
         )
         evidence = ExecutionEvidence(
-            risks=[_observed("no-secrets")], rollback_available=True,
+            risks=[_observed("no-secrets")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -788,7 +797,9 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="no-secrets", description="No secrets", severity=1.0,
+                    id="no-secrets",
+                    description="No secrets",
+                    severity=1.0,
                     decision_critical=True,
                     on_missing=EvidencePolicyAction.ROLLBACK,
                 ),
@@ -811,7 +822,9 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="tests-pass", description="Tests pass", severity=0.9,
+                    id="tests-pass",
+                    description="Tests pass",
+                    severity=0.9,
                     decision_critical=True,
                     accepted_provenance=[EvidenceProvenance.VERIFIED],
                     on_missing=EvidencePolicyAction.RETRY,
@@ -819,7 +832,8 @@ class TestDecisionAssurance:
             ],
         )
         evidence = ExecutionEvidence(
-            risks=[_invalid("tests-pass")], rollback_available=True,
+            risks=[_invalid("tests-pass")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -838,14 +852,17 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="no-secrets", description="No secrets", severity=1.0,
+                    id="no-secrets",
+                    description="No secrets",
+                    severity=1.0,
                     decision_critical=True,
                     on_claimed=EvidencePolicyAction.RETRY,
                 ),
             ],
         )
         evidence = ExecutionEvidence(
-            risks=[_claimed("no-secrets")], rollback_available=True,
+            risks=[_claimed("no-secrets")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -864,7 +881,8 @@ class TestDecisionAssurance:
         contract = _contract(
             acceptance_checks=[
                 AcceptanceCheck(
-                    id="ux", description="UX quality",
+                    id="ux",
+                    description="UX quality",
                     accepted_provenance=[
                         EvidenceProvenance.VERIFIED,
                         EvidenceProvenance.EVALUATED,
@@ -873,7 +891,8 @@ class TestDecisionAssurance:
             ],
         )
         evidence = ExecutionEvidence(
-            acceptance=[_evaluated("ux")], rollback_available=True,
+            acceptance=[_evaluated("ux")],
+            rollback_available=True,
         )
         evaluator = ContractEvaluator()
         evaluator.evaluate(contract, evidence)
@@ -886,11 +905,13 @@ class TestDecisionAssurance:
         contract = _contract(
             acceptance_checks=[
                 AcceptanceCheck(
-                    id="tests-pass", description="Tests pass",
+                    id="tests-pass",
+                    description="Tests pass",
                     accepted_provenance=[EvidenceProvenance.VERIFIED],
                 ),
                 AcceptanceCheck(
-                    id="ux", description="UX quality",
+                    id="ux",
+                    description="UX quality",
                     accepted_provenance=[
                         EvidenceProvenance.VERIFIED,
                         EvidenceProvenance.EVALUATED,
@@ -937,12 +958,16 @@ class TestDecisionAssurance:
         contract = _contract(
             risk_checks=[
                 RiskCheck(
-                    id="soft", description="soft", severity=0.1,
+                    id="soft",
+                    description="soft",
+                    severity=0.1,
                     accepted_provenance=[EvidenceProvenance.VERIFIED],
                     on_missing=EvidencePolicyAction.RETRY,
                 ),
                 RiskCheck(
-                    id="hard", description="hard", severity=1.0,
+                    id="hard",
+                    description="hard",
+                    severity=1.0,
                     decision_critical=True,
                     accepted_provenance=[EvidenceProvenance.VERIFIED],
                     on_missing=EvidencePolicyAction.ROLLBACK,
@@ -980,7 +1005,8 @@ def _policy(**overrides: object) -> BoundPolicyConfig:
 
 
 def _metric(
-    value: int | float, prov: EvidenceProvenance = EvidenceProvenance.OBSERVED,
+    value: int | float,
+    prov: EvidenceProvenance = EvidenceProvenance.OBSERVED,
 ) -> EvidenceMetric:
     """Build a measured :class:`EvidenceMetric`."""
     return EvidenceMetric(value=value, provenance=prov)
@@ -1085,7 +1111,9 @@ class TestPolicyGateBlockers:
             acceptance=[
                 _passed("a"),
                 CheckEvidence(
-                    check_id="must", passed=False, provenance=EvidenceProvenance.VERIFIED,
+                    check_id="must",
+                    passed=False,
+                    provenance=EvidenceProvenance.VERIFIED,
                 ),
             ],
             rollback_available=True,
@@ -1122,7 +1150,8 @@ class TestPolicyGateBlockers:
         evidence = ExecutionEvidence(
             risks=[
                 CheckEvidence(
-                    check_id="no-secrets", passed=False,
+                    check_id="no-secrets",
+                    passed=False,
                     provenance=EvidenceProvenance.VERIFIED,
                 )
             ],
@@ -1131,7 +1160,8 @@ class TestPolicyGateBlockers:
         policy = _policy(
             risk_checks=[
                 HardGate(
-                    id="no-secrets", description="ns",
+                    id="no-secrets",
+                    description="ns",
                     on_failure=EvidencePolicyAction.ROLLBACK,
                 ),
             ],
@@ -1159,10 +1189,14 @@ class TestPolicyGateBlockers:
         evidence = ExecutionEvidence(
             acceptance=[
                 CheckEvidence(
-                    check_id="soft", passed=False, provenance=EvidenceProvenance.VERIFIED,
+                    check_id="soft",
+                    passed=False,
+                    provenance=EvidenceProvenance.VERIFIED,
                 ),
                 CheckEvidence(
-                    check_id="hard", passed=False, provenance=EvidenceProvenance.VERIFIED,
+                    check_id="hard",
+                    passed=False,
+                    provenance=EvidenceProvenance.VERIFIED,
                 ),
             ],
             rollback_available=True,
@@ -1188,7 +1222,9 @@ class TestPolicyGateBlockers:
         policy = _policy(
             acceptance_checks=[
                 HardGate(
-                    id="must", description="must", on_missing=EvidencePolicyAction.RETRY,
+                    id="must",
+                    description="must",
+                    on_missing=EvidencePolicyAction.RETRY,
                 ),
             ],
         )
@@ -1218,7 +1254,8 @@ class TestPolicyGateMinimumAssurance:
         policy = _policy(
             acceptance_checks=[
                 HardGate(
-                    id="gate", description="gate",
+                    id="gate",
+                    description="gate",
                     minimum_assurance=DecisionAssurance.VERIFIED,
                     accepted_provenance=[EvidenceProvenance.VERIFIED, EvidenceProvenance.OBSERVED],
                     on_claimed=EvidencePolicyAction.REPLAN,
@@ -1243,7 +1280,8 @@ class TestPolicyGateMinimumAssurance:
         policy = _policy(
             acceptance_checks=[
                 HardGate(
-                    id="gate", description="gate",
+                    id="gate",
+                    description="gate",
                     minimum_assurance=DecisionAssurance.VERIFIED,
                 ),
             ],
@@ -1259,7 +1297,8 @@ class TestPolicyGateMinimumAssurance:
         policy = _policy(
             acceptance_checks=[
                 HardGate(
-                    id="gate", description="gate",
+                    id="gate",
+                    description="gate",
                     minimum_assurance=DecisionAssurance.MIXED,
                     on_missing=EvidencePolicyAction.RETRY,
                 ),
@@ -1297,8 +1336,10 @@ class TestPolicyGateBudgets:
         policy = _policy(
             budgets={
                 "tool_calls": BudgetDimension(
-                    soft_limit=10, hard_limit=20,
-                    on_soft=EvidencePolicyAction.RETRY, on_hard=EvidencePolicyAction.REPLAN,
+                    soft_limit=10,
+                    hard_limit=20,
+                    on_soft=EvidencePolicyAction.RETRY,
+                    on_hard=EvidencePolicyAction.REPLAN,
                 )
             },
         )
@@ -1345,8 +1386,10 @@ class TestPolicyGateBudgets:
         policy = _policy(
             budgets={
                 "tool_calls": BudgetDimension(
-                    soft_limit=10, hard_limit=20,
-                    on_soft=EvidencePolicyAction.RETRY, on_hard=EvidencePolicyAction.REPLAN,
+                    soft_limit=10,
+                    hard_limit=20,
+                    on_soft=EvidencePolicyAction.RETRY,
+                    on_hard=EvidencePolicyAction.REPLAN,
                 )
             },
         )
@@ -1364,7 +1407,8 @@ class TestPolicyGateBudgets:
         policy = _policy(
             budgets={
                 "financial_cost": BudgetDimension(
-                    hard_limit=1.0, on_hard=EvidencePolicyAction.REPLAN,
+                    hard_limit=1.0,
+                    on_hard=EvidencePolicyAction.REPLAN,
                 ),
             },
         )
@@ -1430,8 +1474,13 @@ class TestBudgetStatus:
     def test_budget_status_is_dataclass(self) -> None:
         """``BudgetStatus`` is a plain dataclass with the documented fields."""
         status = BudgetStatus(
-            dimension="attempts", measured_value=3.0, soft_limit=2.0, hard_limit=3.0,
-            state="hard", action=EvidencePolicyAction.REPLAN, reason="over",
+            dimension="attempts",
+            measured_value=3.0,
+            soft_limit=2.0,
+            hard_limit=3.0,
+            state="hard",
+            action=EvidencePolicyAction.REPLAN,
+            reason="over",
         )
         assert status.dimension == "attempts"
         assert status.state == "hard"
@@ -1440,8 +1489,10 @@ class TestBudgetStatus:
     def test_policy_gate_outcome_forced_action_picks_most_severe(self) -> None:
         """``forced_action`` returns the most severe of blocker/budget actions."""
         gate = PolicyGateOutcome(
-            blocker_failed=True, blocker_action=EvidencePolicyAction.RETRY,
-            budget_breached=True, budget_action=EvidencePolicyAction.ROLLBACK,
+            blocker_failed=True,
+            blocker_action=EvidencePolicyAction.RETRY,
+            budget_breached=True,
+            budget_action=EvidencePolicyAction.ROLLBACK,
         )
         assert gate.forced_action is EvidencePolicyAction.ROLLBACK
 

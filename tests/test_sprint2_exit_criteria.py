@@ -66,25 +66,30 @@ def worktree(tmp_path: Path, bare_repo: Path) -> Path:
     subprocess.run(["git", "init", str(wd)], check=True, capture_output=True)
     subprocess.run(
         ["git", "-C", str(wd), "remote", "add", "origin", str(bare_repo)],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(wd), "config", "user.email", "test@bound.dev"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(wd), "config", "user.name", "BOUND Test"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     (wd / "main.py").write_text("x = 1\n")
     (wd / "README.md").write_text("# Test\n")
     subprocess.run(
         ["git", "-C", str(wd), "add", "."],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "-C", str(wd), "commit", "-m", "initial"],
-        check=True, capture_output=True,
+        check=True,
+        capture_output=True,
     )
     return wd
 
@@ -146,9 +151,13 @@ class TestCollectorFailuresNeverPass:
     def test_ruff_empty_input_is_not_pass(self) -> None:
         """RuffEvidence with status='missing' is not passed."""
         evidence = RuffEvidence(
-            total_violations=0, file_count=0, error_count=0,
-            warning_count=0, fixable_count=0,
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            total_violations=0,
+            file_count=0,
+            error_count=0,
+            warning_count=0,
+            fixable_count=0,
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.MISSING,
         )
@@ -157,9 +166,13 @@ class TestCollectorFailuresNeverPass:
     def test_ruff_error_status_is_not_pass(self) -> None:
         """RuffEvidence with status='INVALID' is not passed."""
         evidence = RuffEvidence(
-            total_violations=0, file_count=0, error_count=0,
-            warning_count=0, fixable_count=0,
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            total_violations=0,
+            file_count=0,
+            error_count=0,
+            warning_count=0,
+            fixable_count=0,
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.INVALID,
         )
@@ -168,8 +181,11 @@ class TestCollectorFailuresNeverPass:
     def test_mypy_empty_input_is_not_pass(self) -> None:
         """MypyEvidence with status='missing' is not passed."""
         evidence = MypyEvidence(
-            total_errors=0, file_count=0, error_codes={},
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            total_errors=0,
+            file_count=0,
+            error_codes={},
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.MISSING,
         )
@@ -178,8 +194,11 @@ class TestCollectorFailuresNeverPass:
     def test_mypy_error_status_is_not_pass(self) -> None:
         """MypyEvidence with status='INVALID' is not passed."""
         evidence = MypyEvidence(
-            total_errors=0, file_count=0, error_codes={},
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            total_errors=0,
+            file_count=0,
+            error_codes={},
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.INVALID,
         )
@@ -188,9 +207,12 @@ class TestCollectorFailuresNeverPass:
     def test_coverage_empty_input_is_not_pass(self) -> None:
         """CoverageEvidence with status='missing' is not passed."""
         evidence = CoverageEvidence(
-            line_coverage_pct=0.0, branch_coverage_pct=0.0,
-            file_count=0, files={},
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            line_coverage_pct=0.0,
+            branch_coverage_pct=0.0,
+            file_count=0,
+            files={},
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.MISSING,
         )
@@ -199,9 +221,12 @@ class TestCollectorFailuresNeverPass:
     def test_coverage_error_status_is_not_pass(self) -> None:
         """CoverageEvidence with status='INVALID' is not passed."""
         evidence = CoverageEvidence(
-            line_coverage_pct=0.0, branch_coverage_pct=0.0,
-            file_count=0, files={},
-            tool_version="0.0", timestamp="2026-07-21T00:00:00Z",
+            line_coverage_pct=0.0,
+            branch_coverage_pct=0.0,
+            file_count=0,
+            files={},
+            tool_version="0.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.MISSING,
             status=EvidenceStatus.INVALID,
         )
@@ -210,9 +235,13 @@ class TestCollectorFailuresNeverPass:
     def test_ruff_violations_make_not_pass(self) -> None:
         """RuffEvidence with active violations is not passed."""
         evidence = RuffEvidence(
-            total_violations=5, file_count=2, error_count=1,
-            warning_count=4, fixable_count=2,
-            tool_version="0.8.0", timestamp="2026-07-21T00:00:00Z",
+            total_violations=5,
+            file_count=2,
+            error_count=1,
+            warning_count=4,
+            fixable_count=2,
+            tool_version="0.8.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.VERIFIED,
             status=EvidenceStatus.FAILED,
         )
@@ -221,9 +250,11 @@ class TestCollectorFailuresNeverPass:
     def test_mypy_errors_make_not_pass(self) -> None:
         """MypyEvidence with active errors is not passed."""
         evidence = MypyEvidence(
-            total_errors=3, file_count=1,
+            total_errors=3,
+            file_count=1,
             error_codes={"arg-type": 2, "return-value": 1},
-            tool_version="1.12.0", timestamp="2026-07-21T00:00:00Z",
+            tool_version="1.12.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.VERIFIED,
             status=EvidenceStatus.FAILED,
         )
@@ -232,13 +263,17 @@ class TestCollectorFailuresNeverPass:
     def test_low_coverage_makes_not_pass(self) -> None:
         """CoverageEvidence below threshold is not passed."""
         evidence = CoverageEvidence(
-            line_coverage_pct=45.0, branch_coverage_pct=30.0,
-            file_count=10, files={"main.py": {"line_coverage": 45.0}},
-            tool_version="7.6.0", timestamp="2026-07-21T00:00:00Z",
+            line_coverage_pct=45.0,
+            branch_coverage_pct=30.0,
+            file_count=10,
+            files={"main.py": {"line_coverage": 45.0}},
+            tool_version="7.6.0",
+            timestamp="2026-07-21T00:00:00Z",
             provenance=EvidenceProvenance.VERIFIED,
             status=EvidenceStatus.FAILED,
         )
         assert not evidence.passed
+
 
 # =========================================================================
 # Exit 3 — Rollback preserves unrelated user work
@@ -253,17 +288,20 @@ class TestRollbackPreservesUnrelatedWork:
         # Make all files dirty *before* capture so they're in artifact_hashes
         (worktree / "main.py").write_text("x = checkpoint_state\n")
         (worktree / "README.md").write_text("# checkpoint state\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "-A"],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(worktree), "commit", "-m", "checkpoint state"],
-                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "commit", "-m", "checkpoint state"],
+            check=True,
+            capture_output=True,
+        )
 
         # Now create dirty state for checkpoint
         (worktree / "main.py").write_text("x = dirty_capture\n")
         (worktree / "README.md").write_text("# dirty capture\n")
 
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit3", step_id="step-1",
-                                 scope=["main.py", "README.md"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit3", step_id="step-1", scope=["main.py", "README.md"]
+        )
         assert cp is not None
 
         # Now modify further
@@ -279,14 +317,15 @@ class TestRollbackPreservesUnrelatedWork:
         """Untracked files survive rollback when scope is broad enough."""
         # Make files dirty *before* capture so they're in artifact_hashes
         (worktree / "main.py").write_text("x = 42\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "-A"],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(worktree), "commit", "-m", "state"],
-                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "commit", "-m", "state"], check=True, capture_output=True
+        )
         (worktree / "main.py").write_text("x = dirty_capture\n")
 
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit3b", step_id="step-1",
-                                 scope=["main.py", "README.md"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit3b", step_id="step-1", scope=["main.py", "README.md"]
+        )
         assert cp is not None
 
         (worktree / "new_untracked.md").write_text("# I am new\n")
@@ -301,8 +340,9 @@ class TestRollbackPreservesUnrelatedWork:
 
     def test_refuse_rollback_with_diverged_outside_scope(self, worktree: Path) -> None:
         """Rollback is refused when changes exist outside the recorded scope."""
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit3d", step_id="step-1",
-                                 scope=["main.py"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit3d", step_id="step-1", scope=["main.py"]
+        )
         assert cp is not None
 
         (worktree / "README.md").write_text("# changed outside scope\n")
@@ -318,25 +358,31 @@ class TestRollbackPreservesUnrelatedWork:
         """Multiple files within scope are restored correctly."""
         (worktree / "dir").mkdir()
         (worktree / "dir" / "sub.py").write_text("# sub\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True,
-                       capture_output=True)
-        subprocess.run(["git", "-C", str(worktree), "commit", "-m", "add dir"],
-                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "commit", "-m", "add dir"], check=True, capture_output=True
+        )
 
         # Make files dirty *before* capture so they appear in artifact_hashes
         (worktree / "main.py").write_text("x = 7\n")
         (worktree / "README.md").write_text("# changed\n")
         (worktree / "dir" / "sub.py").write_text("# sub changed\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True,
-                       capture_output=True)
-        subprocess.run(["git", "-C", str(worktree), "commit", "-m", "dirty base"],
-                       check=True, capture_output=True)
+        subprocess.run(["git", "-C", str(worktree), "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "commit", "-m", "dirty base"],
+            check=True,
+            capture_output=True,
+        )
         (worktree / "main.py").write_text("x = cp_dirty\n")
         (worktree / "README.md").write_text("# cp dirty\n")
         (worktree / "dir" / "sub.py").write_text("# cp dirty\n")
 
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit3c", step_id="step-1",
-                                 scope=["main.py", "README.md", "dir"])
+        cp = capture_checkpoint(
+            cwd=worktree,
+            run_id="run-exit3c",
+            step_id="step-1",
+            scope=["main.py", "README.md", "dir"],
+        )
         assert cp is not None
 
         # Modify further
@@ -360,8 +406,9 @@ class TestPostRollbackStateVerification:
 
     def test_basic_restore_verifies(self, worktree: Path) -> None:
         """After restoring a modified file, the checkpoint verifies cleanly."""
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit4a", step_id="step-1",
-                                 scope=["main.py", "README.md"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit4a", step_id="step-1", scope=["main.py", "README.md"]
+        )
         assert cp is not None
 
         (worktree / "main.py").write_text("x = changed\n")
@@ -372,13 +419,15 @@ class TestPostRollbackStateVerification:
 
     def test_restore_with_worktree_diff(self, worktree: Path) -> None:
         """Restoring with staged and unstaged changes still verifies."""
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit4b", step_id="step-1",
-                                 scope=["main.py", "README.md"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit4b", step_id="step-1", scope=["main.py", "README.md"]
+        )
         assert cp is not None
 
         (worktree / "main.py").write_text("x = staged\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "main.py"],
-                       check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "add", "main.py"], check=True, capture_output=True
+        )
         (worktree / "README.md").write_text("# unstaged change\n")
 
         restore_checkpoint_files(cp, cwd=worktree)
@@ -388,8 +437,9 @@ class TestPostRollbackStateVerification:
 
     def test_no_changes_still_verifies(self, worktree: Path) -> None:
         """Restoring when no changes were made still verifies."""
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit4c", step_id="step-1",
-                                 scope=["main.py"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit4c", step_id="step-1", scope=["main.py"]
+        )
         assert cp is not None
 
         restore_checkpoint_files(cp, cwd=worktree)
@@ -401,14 +451,19 @@ class TestPostRollbackStateVerification:
         """Rollback preview accurately describes what will change."""
         # Make main.py dirty *before* capture so it appears in artifact_hashes
         (worktree / "main.py").write_text("x = dirty_state\n")
-        subprocess.run(["git", "-C", str(worktree), "add", "main.py"],
-                       check=True, capture_output=True)
-        subprocess.run(["git", "-C", str(worktree), "commit", "-m", "dirty state"],
-                       check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(worktree), "add", "main.py"], check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", str(worktree), "commit", "-m", "dirty state"],
+            check=True,
+            capture_output=True,
+        )
         (worktree / "main.py").write_text("x = checkpoint_state\n")
 
-        cp = capture_checkpoint(cwd=worktree, run_id="run-exit4d", step_id="step-1",
-                                 scope=["main.py", "README.md"])
+        cp = capture_checkpoint(
+            cwd=worktree, run_id="run-exit4d", step_id="step-1", scope=["main.py", "README.md"]
+        )
         assert cp is not None
 
         # Now modify again so preview shows a change

@@ -45,12 +45,18 @@ def cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureF
 #   attempt 1 (A=0.4): S=0.35 -> gap 0.35 > retry_margin 0.1 -> REPLAN
 #   attempt 2 (A=0.95): S=0.9  -> S >= T -> ACCEPT
 _EVAL_COMMON = [
-    "--action", "Ship the CSV exporter",
-    "--goal", "Add lineage to BOUND",
-    "--influence", "0.1",
-    "--risk", "0.05",
-    "--cost", "0.1",
-    "--threshold", "0.7",
+    "--action",
+    "Ship the CSV exporter",
+    "--goal",
+    "Add lineage to BOUND",
+    "--influence",
+    "0.1",
+    "--risk",
+    "0.05",
+    "--cost",
+    "0.1",
+    "--threshold",
+    "0.7",
 ]
 
 
@@ -65,33 +71,72 @@ def _build_full_run(cli, *, task: str = "Implement CSV exporter") -> str:
 
     # Attempt 1: weak evidence -> REPLAN.
     rc, out, _ = cli(
-        ["evaluate", "--run", run_id, "--step", "PHASE-001", "--attempt", "1",
-         "--acceptance", "0.4", *_EVAL_COMMON]
+        [
+            "evaluate",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001",
+            "--attempt",
+            "1",
+            "--acceptance",
+            "0.4",
+            *_EVAL_COMMON,
+        ]
     )
     assert rc == 0
     assert json.loads(out)["decision"] == "REPLAN"
 
     rc, _, _ = cli(
-        ["outcome", "--run", run_id, "--step", "PHASE-001", "--attempt", "1",
-         "--decision", "REPLAN", "--note", "switched to csv.DictWriter"]
+        [
+            "outcome",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001",
+            "--attempt",
+            "1",
+            "--decision",
+            "REPLAN",
+            "--note",
+            "switched to csv.DictWriter",
+        ]
     )
     assert rc == 0
 
     # Attempt 2 (replan, -R1 contract id): strong evidence -> ACCEPT.
     rc, out, _ = cli(
-        ["evaluate", "--run", run_id, "--step", "PHASE-001-R1", "--attempt", "1",
-         "--acceptance", "0.95", *_EVAL_COMMON]
+        [
+            "evaluate",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001-R1",
+            "--attempt",
+            "1",
+            "--acceptance",
+            "0.95",
+            *_EVAL_COMMON,
+        ]
     )
     assert rc == 0
     assert json.loads(out)["decision"] == "ACCEPT"
 
     rc, _, _ = cli(
-        ["outcome", "--run", run_id, "--step", "PHASE-001-R1", "--attempt", "1",
-         "--decision", "ACCEPT"]
+        [
+            "outcome",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001-R1",
+            "--attempt",
+            "1",
+            "--decision",
+            "ACCEPT",
+        ]
     )
     assert rc == 0
     return run_id
-
 
 
 # ---------------------------------------------------------------------------
@@ -228,8 +273,18 @@ def test_evaluate_with_run_records_lineage_block(cli) -> None:
     rc, out, _ = cli(["run", "start", "task", "--json"])
     run_id = json.loads(out)["run_id"]
     rc, out, _ = cli(
-        ["evaluate", "--run", run_id, "--step", "PHASE-001", "--attempt", "1",
-         "--acceptance", "0.95", *_EVAL_COMMON]
+        [
+            "evaluate",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001",
+            "--attempt",
+            "1",
+            "--acceptance",
+            "0.95",
+            *_EVAL_COMMON,
+        ]
     )
     assert rc == 0
     payload = json.loads(out)
@@ -302,8 +357,18 @@ def _run_with_audit_events(cli) -> tuple[str, str]:
     assert rc == 0
     run_id = json.loads(out)["run_id"]
     rc, out, _ = cli(
-        ["evaluate", "--run", run_id, "--step", "PHASE-001", "--attempt", "1",
-         "--acceptance", "0.95", *_EVAL_COMMON]
+        [
+            "evaluate",
+            "--run",
+            run_id,
+            "--step",
+            "PHASE-001",
+            "--attempt",
+            "1",
+            "--acceptance",
+            "0.95",
+            *_EVAL_COMMON,
+        ]
     )
     assert rc == 0
     lineage = json.loads(out)["lineage"]
@@ -350,8 +415,15 @@ def test_inspect_json_includes_coverage_provenance_and_gates(cli) -> None:
     rc, out, _ = cli(["inspect", run_id, "--json"])
     assert rc == 0
     payload = json.loads(out)
-    for key in ("run", "steps", "evaluations", "outcomes", "evidence",
-                "decision_gates", "coverage"):
+    for key in (
+        "run",
+        "steps",
+        "evaluations",
+        "outcomes",
+        "evidence",
+        "decision_gates",
+        "coverage",
+    ):
         assert key in payload
     coverage = payload["coverage"]
     assert coverage["total"] == 3
@@ -377,9 +449,7 @@ def test_inspect_json_includes_coverage_provenance_and_gates(cli) -> None:
 # Inspect policy display (Phase 9.1) + HTML timeline (Phase 9.3)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_POLICY = (
-    Path(__file__).resolve().parent.parent / "src" / "bound" / "default_policy.yaml"
-)
+_DEFAULT_POLICY = Path(__file__).resolve().parent.parent / "src" / "bound" / "default_policy.yaml"
 
 
 def _start_run_with_policy(cli, task: str = "policy-governed task") -> tuple[str, str]:
@@ -455,6 +525,3 @@ def test_inspect_html_renders_replan_to_accept_trajectory(cli, tmp_path) -> None
     assert "class='badge'" in text
     # The two step ids from the trajectory are present.
     assert "PHASE-001" in text
-
-
-

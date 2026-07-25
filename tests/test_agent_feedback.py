@@ -55,9 +55,7 @@ def _evaluate(
     Returns:
         The deterministic feedback string.
     """
-    return evaluate_agent_step(
-        contract=contract, evidence=evidence, criteria=criteria
-    ).feedback
+    return evaluate_agent_step(contract=contract, evidence=evidence, criteria=criteria).feedback
 
 
 _ACCEPT_GOLDEN = (
@@ -86,7 +84,6 @@ _ROLLBACK_GOLDEN = (
 )
 
 
-
 def test_accept_feedback_golden() -> None:
     """ACCEPT feedback is frozen and discourages further optimisation.
 
@@ -96,9 +93,7 @@ def test_accept_feedback_golden() -> None:
     """
     feedback = _evaluate(
         _contract(),
-        ExecutionEvidence(
-            acceptance=[_passed("a"), _passed("b")], rollback_available=True
-        ),
+        ExecutionEvidence(acceptance=[_passed("a"), _passed("b")], rollback_available=True),
         BoundCriteria(threshold=0.6),
     )
 
@@ -117,9 +112,7 @@ def test_retry_feedback_golden() -> None:
     """
     feedback = _evaluate(
         _contract(),
-        ExecutionEvidence(
-            acceptance=[_passed("a"), _failed("b")], rollback_available=True
-        ),
+        ExecutionEvidence(acceptance=[_passed("a"), _failed("b")], rollback_available=True),
         BoundCriteria(threshold=0.6, retry_margin=0.2),
     )
 
@@ -138,16 +131,13 @@ def test_replan_feedback_golden() -> None:
     """
     feedback = _evaluate(
         _contract(),
-        ExecutionEvidence(
-            acceptance=[_failed("a"), _failed("b")], rollback_available=True
-        ),
+        ExecutionEvidence(acceptance=[_failed("a"), _failed("b")], rollback_available=True),
         BoundCriteria(threshold=0.6, retry_margin=0.1),
     )
 
     assert feedback == _REPLAN_GOLDEN
     assert word_count(feedback) < _MAX_WORDS
     assert "materially different" in feedback
-
 
 
 def test_rollback_feedback_golden() -> None:
@@ -157,9 +147,7 @@ def test_rollback_feedback_golden() -> None:
     The feedback must identify the hard risk boundary and tell the agent to return
     to a safe state before continuing.
     """
-    contract = _contract(
-        risk_checks=[RiskCheck(id="r", description="hard boundary", severity=0.9)]
-    )
+    contract = _contract(risk_checks=[RiskCheck(id="r", description="hard boundary", severity=0.9)])
     feedback = _evaluate(
         contract,
         ExecutionEvidence(
@@ -180,7 +168,6 @@ def test_rollback_feedback_golden() -> None:
     assert "safe state" in feedback
 
 
-
 def test_all_feedback_under_150_words() -> None:
     """Every decision's feedback stays under 150 words for agent re-injection.
 
@@ -189,29 +176,21 @@ def test_all_feedback_under_150_words() -> None:
     cases = [
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _passed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _passed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6),
         ),
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.2),
         ),
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_failed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_failed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.1),
         ),
         (
-            _contract(
-                risk_checks=[RiskCheck(id="r", description="b", severity=0.9)]
-            ),
+            _contract(risk_checks=[RiskCheck(id="r", description="b", severity=0.9)]),
             ExecutionEvidence(
                 acceptance=[_passed("a"), _passed("b")],
                 risks=[_failed("r")],
@@ -227,6 +206,3 @@ def test_all_feedback_under_150_words() -> None:
     for contract, evidence, criteria in cases:
         feedback = _evaluate(contract, evidence, criteria)
         assert word_count(feedback) < _MAX_WORDS, feedback
-
-
-

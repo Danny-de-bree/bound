@@ -115,4 +115,3 @@ class StaticEvaluator:
                 f"expected={self._expected_action!r} actual={action!r}",
             )
         return self._scores
-

@@ -237,7 +237,6 @@ def test_evidence_status_passed_and_stale_members() -> None:
     assert EvidenceStatus.PASSED is not EvidenceStatus.FAILED
 
 
-
 # ---------------------------------------------------------------------------
 # ExecutionEvidence — valid / empty / faithful recording
 # ---------------------------------------------------------------------------
@@ -401,9 +400,7 @@ def test_measured_zero_is_recorded_not_silently_dropped(field: str, value: float
         ("runtime_seconds", -0.5),
     ],
 )
-def test_legacy_bare_number_is_coerced_to_missing_metric(
-    field: str, value: float
-) -> None:
+def test_legacy_bare_number_is_coerced_to_missing_metric(field: str, value: float) -> None:
     """Legacy bare-number telemetry coerces into an EvidenceMetric (provenance MISSING).
 
     Old (schema < 2.0) traces supplied telemetry as bare ints/floats. v0.7 wraps
@@ -453,9 +450,7 @@ def test_migrate_legacy_execution_evidence_wraps_bare_numbers() -> None:
     migrated = migrate_legacy_execution_evidence(
         {
             "retry_count": 3,
-            "tool_call_count": EvidenceMetric(
-                value=9, provenance=EvidenceProvenance.OBSERVED
-            ),
+            "tool_call_count": EvidenceMetric(value=9, provenance=EvidenceProvenance.OBSERVED),
             "token_usage": None,
             "runtime_seconds": {"value": 5.0, "provenance": "observed"},
             "rollback_available": True,
@@ -534,7 +529,6 @@ def test_ad_hoc_collector_collect_returns_evidence() -> None:
     evidence = collector.collect(contract=object(), execution="some-handle")
     assert isinstance(evidence, ExecutionEvidence)
     assert evidence.acceptance == []
-
 
 
 def test_execution_evidence_rejects_unknown_fields() -> None:

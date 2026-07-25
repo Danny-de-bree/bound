@@ -58,7 +58,6 @@ THRESHOLD = 0.7
 RETRY_MARGIN = 0.1
 
 
-
 def _sys_argv(*args: str) -> list[str]:
     """A portable argv using the current interpreter (works on any platform)."""
     return [sys.executable, *args]
@@ -121,31 +120,40 @@ def _runners(repo: Path) -> CommandCollector:
         {
             "test-a": CommandSpec(
                 argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "-p",
+                    "no:cacheprovider",
                     str(suite / "test_a.py"),
                 ),
                 timeout=60.0,
             ),
             "test-b": CommandSpec(
                 argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "-p",
+                    "no:cacheprovider",
                     str(suite / "test_b.py"),
                 ),
                 timeout=60.0,
             ),
             "test-c": CommandSpec(
                 argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "-p",
+                    "no:cacheprovider",
                     str(suite / "test_c.py"),
                 ),
                 timeout=60.0,
             ),
-            "git-status": CommandSpec(
-                argv=["git", "status", "--porcelain"], timeout=30.0
-            ),
+            "git-status": CommandSpec(argv=["git", "status", "--porcelain"], timeout=30.0),
         }
     )
-
 
 
 def _init_repo(repo: Path) -> None:
@@ -155,9 +163,7 @@ def _init_repo(repo: Path) -> None:
         ["git", "-C", str(repo), "config", "user.email", "bound@example.com"],
         check=True,
     )
-    subprocess.run(
-        ["git", "-C", str(repo), "config", "user.name", "BOUND demo"], check=True
-    )
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "BOUND demo"], check=True)
 
 
 def _write_tests(repo: Path, *, b_pass: bool, c_pass: bool) -> None:
@@ -172,9 +178,7 @@ def _write_tests(repo: Path, *, b_pass: bool, c_pass: bool) -> None:
     # Commit so attempt 1 has a clean tree and attempt 2 shows tracked "safe"
     # modifications (within the allowed ``suite`` prefix).
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
-    subprocess.run(
-        ["git", "-C", str(repo), "commit", "-q", "-m", "tests"], check=True
-    )
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "tests"], check=True)
 
 
 def _collect(runner: CommandCollector, repo: Path) -> ExecutionEvidence:
@@ -183,7 +187,9 @@ def _collect(runner: CommandCollector, repo: Path) -> ExecutionEvidence:
     py_b = PytestCollector(runner, command_name="test-b", check_id="tests-b")
     py_c = PytestCollector(runner, command_name="test-c", check_id="tests-c")
     git = GitCollector(
-        runner, command_name="git-status", check_id="no-unsafe-changes",
+        runner,
+        command_name="git-status",
+        check_id="no-unsafe-changes",
         allowed_prefixes=("suite",),
     )
     return ExecutionEvidence(
@@ -214,10 +220,18 @@ def _record_collected(run, step_id: str, evidence: ExecutionEvidence) -> None:
         )
 
 
-
 def _attempt(
-    run, runner, repo, contract, criteria, *, attempt: int, contract_id: str,
-    b_pass: bool, c_pass: bool, note: str,
+    run,
+    runner,
+    repo,
+    contract,
+    criteria,
+    *,
+    attempt: int,
+    contract_id: str,
+    b_pass: bool,
+    c_pass: bool,
+    note: str,
 ):
     """Run one collected attempt, record its lineage, and return the result."""
     step = run.start_step(
@@ -227,9 +241,7 @@ def _attempt(
     evidence = _collect(runner, repo)
     _record_collected(run, step.step_id, evidence)
 
-    result = BoundWorkflow().evaluate_step(
-        contract=contract, evidence=evidence, criteria=criteria
-    )
+    result = BoundWorkflow().evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
     evaluation = run.record_evaluation(
         step_id=step.step_id,
         attempt=attempt,
@@ -305,8 +317,15 @@ def main() -> int:
 
             print("attempt 1: agent says 'all tests pass'")
             r1, ev1 = _attempt(
-                run, runner, repo, contract, criteria, attempt=1,
-                contract_id="PHASE-001", b_pass=False, c_pass=False,
+                run,
+                runner,
+                repo,
+                contract,
+                criteria,
+                attempt=1,
+                contract_id="PHASE-001",
+                b_pass=False,
+                c_pass=False,
                 note="switched strategy to validator + parametrized tests",
             )
             _print_attempt("1", r1, ev1)
@@ -315,16 +334,21 @@ def main() -> int:
             print("agent changes strategy.")
             print("attempt 2:")
             r2, ev2 = _attempt(
-                run, runner, repo, contract, criteria, attempt=2,
-                contract_id="PHASE-001-R1", b_pass=True, c_pass=True,
+                run,
+                runner,
+                repo,
+                contract,
+                criteria,
+                attempt=2,
+                contract_id="PHASE-001-R1",
+                b_pass=True,
+                c_pass=True,
                 note="continued to next step",
             )
             _print_attempt("2", r2, ev2)
             assert r2.final_decision == "ACCEPT"
 
-            run.finish_run(
-                status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED
-            )
+            run.finish_run(status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED)
 
         print("=" * 78)
         _print_proof(store, run_id)
@@ -354,10 +378,11 @@ def _print_proof(store: LineageStore, run_id: str) -> None:
             f"final={e.final_decision} assurance={e.assurance.value} "
             f"depended_on_claimed={depended_on_claimed}"
         )
-    print("the final decision did NOT depend on CLAIMED evidence: "
-          f"{all(e.provenance is not EvidenceProvenance.CLAIMED for e in collected)}")
+    print(
+        "the final decision did NOT depend on CLAIMED evidence: "
+        f"{all(e.provenance is not EvidenceProvenance.CLAIMED for e in collected)}"
+    )
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -142,12 +142,8 @@ def test_decide_matches_evaluate_for_same_scores() -> None:
 
     assert via_decide.decision == via_evaluate.decision == "RETRY"
     assert via_decide.score == pytest.approx(via_evaluate.score)
-    assert via_decide.acceptance_component == pytest.approx(
-        via_evaluate.acceptance_component
-    )
-    assert via_decide.distance_to_threshold == pytest.approx(
-        via_evaluate.distance_to_threshold
-    )
+    assert via_decide.acceptance_component == pytest.approx(via_evaluate.acceptance_component)
+    assert via_decide.distance_to_threshold == pytest.approx(via_evaluate.distance_to_threshold)
 
 
 def test_prepare_without_contract_generator_raises() -> None:
@@ -175,9 +171,7 @@ def test_workflow_backward_compat_positional_construction() -> None:
 
     contract = _accepting_contract()
     plan = BoundPlan(goal="Ship the parser", steps=[contract])
-    placeholder_scores = EvaluationScores(
-        acceptance=0.0, influence=0.0, risk=0.0, cost=0.0
-    )
+    placeholder_scores = EvaluationScores(acceptance=0.0, influence=0.0, risk=0.0, cost=0.0)
     workflow = BoundWorkflow(
         StaticContractGenerator(plan),
         ContractEvaluator(),
@@ -193,4 +187,3 @@ def test_workflow_backward_compat_positional_construction() -> None:
         criteria=BoundCriteria(threshold=0.6),
     )
     assert result.decision == "ACCEPT"
-

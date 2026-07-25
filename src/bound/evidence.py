@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 #: redaction) to mask credential values before they reach a trace.
 SECRET_PATTERN: re.Pattern[str] = re.compile(
     r"(?i)(password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|"
-    r"private[_-]?key|client[_-]?secret)\s*[:=]\s*(\S+)"
+    r"private[_-]?key|client[_-]?secret)\s*[:=]\s*(\S+)",
 )
 
 if TYPE_CHECKING:
@@ -218,9 +218,7 @@ class CheckEvidence(BaseModel):
 
     @field_validator("observed_at")
     @classmethod
-    def _observed_at_must_be_timezone_aware(
-        cls, value: datetime | None
-    ) -> datetime | None:
+    def _observed_at_must_be_timezone_aware(cls, value: datetime | None) -> datetime | None:
         """Reject naive (timezone-unaware) timestamps.
 
         A timestamp without a timezone is ambiguous and therefore unsafe as
@@ -239,10 +237,9 @@ class CheckEvidence(BaseModel):
         if value is not None and value.tzinfo is None:
             raise ValueError(
                 "observed_at must be timezone-aware (tzinfo is None); "
-                "use a timezone-aware datetime such as datetime.now(timezone.utc)."
+                "use a timezone-aware datetime such as datetime.now(timezone.utc).",
             )
         return value
-
 
 
 # Telemetry fields on :class:`ExecutionEvidence` that are migrated from legacy
@@ -297,9 +294,7 @@ def migrate_legacy_execution_evidence(data: dict[str, Any]) -> dict[str, Any]:
             # Already a metric-shaped mapping; let Pydantic validate it.
             continue
         if isinstance(value, (int, float, bool)):
-            migrated[key] = EvidenceMetric(
-                value=value, provenance=EvidenceProvenance.MISSING
-            )
+            migrated[key] = EvidenceMetric(value=value, provenance=EvidenceProvenance.MISSING)
     return migrated
 
 

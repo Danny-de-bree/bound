@@ -348,9 +348,7 @@ def test_acceptance_check_accepts_provenance_allowlist() -> None:
 def test_acceptance_check_rejects_empty_accepted_provenance() -> None:
     """An empty allow-list rejects all evidence — almost certainly a mistake."""
     with pytest.raises(ValidationError):
-        AcceptanceCheck(
-            id="x", description="y", accepted_provenance=[]
-        )
+        AcceptanceCheck(id="x", description="y", accepted_provenance=[])
 
 
 def test_acceptance_check_coerces_string_provenance_and_action() -> None:

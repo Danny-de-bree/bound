@@ -109,4 +109,3 @@ def calculate_components(
         cost=cost,
         total=total,
     )
-

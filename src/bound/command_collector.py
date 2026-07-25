@@ -66,8 +66,6 @@ DEFAULT_MAX_OUTPUT_BYTES: int = 65_536
 Redactor = Callable[[str], str]
 
 
-
-
 def default_redactor(text: str) -> str:
     """Mask secret-looking ``key=value`` tokens in *text*.
 
@@ -134,7 +132,6 @@ def _now_utc() -> datetime:
 def _command_source(argv: list[str]) -> str:
     """A shell-quoted, human-readable rendering of *argv* for the ``source``."""
     return " ".join(shlex.quote(part) for part in argv)
-
 
 
 def _bound_check(
@@ -221,8 +218,6 @@ class CommandSpec(BaseModel):
     env: dict[str, str] | None = None
 
 
-
-
 class CommandResult(BaseModel):
     """The outcome of executing one preconfigured command.
 
@@ -278,8 +273,6 @@ class CommandResult(BaseModel):
     error: str | None = None
 
 
-
-
 class CommandCollector:
     """Executes preconfigured commands and captures fail-safe evidence.
 
@@ -318,9 +311,7 @@ class CommandCollector:
             default_max_output_bytes: Default summary byte cap.
         """
         self._commands: dict[str, CommandSpec] = dict(commands)
-        self._redactor: Redactor = (
-            redactor if redactor is not None else default_redactor
-        )
+        self._redactor: Redactor = redactor if redactor is not None else default_redactor
         self._store_raw = store_raw
         self._default_timeout = default_timeout
         self._default_max_output_bytes = default_max_output_bytes
@@ -329,7 +320,6 @@ class CommandCollector:
     def known_commands(self) -> tuple[str, ...]:
         """The command names this collector is permitted to run (frozen tuple)."""
         return tuple(self._commands)
-
 
     def run(
         self,
@@ -368,7 +358,7 @@ class CommandCollector:
         if name not in self._commands:
             raise ValueError(
                 f"unknown command {name!r}; only preconfigured commands may run "
-                f"(known: {sorted(self._commands)})"
+                f"(known: {sorted(self._commands)})",
             )
         spec = self._commands[name]
         argv = list(spec.argv)
@@ -437,7 +427,6 @@ class CommandCollector:
             error=error,
         )
 
-
     def _build_result(
         self,
         *,
@@ -499,8 +488,6 @@ class CommandCollector:
             stderr_raw=stderr_text if retain_raw else None,
             error=error,
         )
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -579,7 +566,6 @@ class PytestCollector:
             )
         return self._evidence_from_result(result)
 
-
     def _evidence_from_result(self, result: CommandResult) -> CheckEvidence:
         """Turn a pytest :class:`CommandResult` into :class:`CheckEvidence`.
 
@@ -599,9 +585,7 @@ class PytestCollector:
 
         # Item 8: timeout / crash / no exit code -> never a verified pass.
         if result.error is not None or result.timed_out or result.exit_code is None:
-            reason = result.error or (
-                "timeout" if result.timed_out else "no exit code"
-            )
+            reason = result.error or ("timeout" if result.timed_out else "no exit code")
             return _bound_check(
                 self._check_id,
                 passed=None,
@@ -613,11 +597,7 @@ class PytestCollector:
                 artifact_hash=result.stdout_hash,
             )
 
-        text = (
-            result.stdout_raw
-            if result.stdout_raw is not None
-            else result.stdout_summary
-        )
+        text = result.stdout_raw if result.stdout_raw is not None else result.stdout_summary
         try:
             summary = parse_pytest_summary(text)
         except Exception as exc:
@@ -666,8 +646,6 @@ class PytestCollector:
         )
 
 
-
-
 class JUnitCollector:
     """Parses a trusted JUnit XML artefact directly and emits VERIFIED evidence.
 
@@ -702,9 +680,7 @@ class JUnitCollector:
         self._max_file_bytes = max_file_bytes
         self._max_age_seconds = max_age_seconds
 
-    def collect(
-        self, path: str | Path, *, now: datetime | None = None
-    ) -> CheckEvidence:
+    def collect(self, path: str | Path, *, now: datetime | None = None) -> CheckEvidence:
         """Hash, freshness-check, and parse the JUnit XML at *path*.
 
         Args:
@@ -755,8 +731,7 @@ class JUnitCollector:
                 collector=self.COLLECTOR_NAME,
                 status=EvidenceStatus.INVALID,
                 details=(
-                    f"junit artefact exceeds size limit: {len(raw)} > "
-                    f"{self._max_file_bytes} bytes"
+                    f"junit artefact exceeds size limit: {len(raw)} > {self._max_file_bytes} bytes"
                 ),
                 source=source,
             )
@@ -769,7 +744,6 @@ class JUnitCollector:
             artifact_hash=artifact_hash,
             now_utc=now_utc,
         )
-
 
     def _finish(
         self,
@@ -795,9 +769,7 @@ class JUnitCollector:
         # Item 8: stale artefact -> no current verification.
         if self._max_age_seconds is not None:
             try:
-                mtime = datetime.fromtimestamp(
-                    artefact.stat().st_mtime, tz=UTC
-                )
+                mtime = datetime.fromtimestamp(artefact.stat().st_mtime, tz=UTC)
             except OSError as exc:
                 return _bound_check(
                     self._check_id,
@@ -818,8 +790,7 @@ class JUnitCollector:
                     collector=self.COLLECTOR_NAME,
                     status=EvidenceStatus.INVALID,
                     details=(
-                        f"junit artefact stale: age={age:.0f}s > "
-                        f"{self._max_age_seconds:.0f}s"
+                        f"junit artefact stale: age={age:.0f}s > {self._max_age_seconds:.0f}s"
                     ),
                     source=source,
                     artifact_hash=artifact_hash,
@@ -891,8 +862,6 @@ class JUnitCollector:
             artifact_hash=artifact_hash,
             raw_artifact_ref=source,
         )
-
-
 
 
 class GitCollector:
@@ -968,7 +937,6 @@ class GitCollector:
             )
         return self._evidence_from_result(result)
 
-
     def _evidence_from_result(self, result: CommandResult) -> CheckEvidence:
         """Turn a git-status :class:`CommandResult` into :class:`CheckEvidence`.
 
@@ -988,9 +956,7 @@ class GitCollector:
 
         # Item 8: timeout / crash / no exit code -> never a proven clean tree.
         if result.error is not None or result.timed_out or result.exit_code is None:
-            reason = result.error or (
-                "timeout" if result.timed_out else "no exit code"
-            )
+            reason = result.error or ("timeout" if result.timed_out else "no exit code")
             return _bound_check(
                 self._check_id,
                 passed=None,
@@ -1019,11 +985,7 @@ class GitCollector:
                 artifact_hash=result.stdout_hash,
             )
 
-        text = (
-            result.stdout_raw
-            if result.stdout_raw is not None
-            else result.stdout_summary
-        )
+        text = result.stdout_raw if result.stdout_raw is not None else result.stdout_summary
         inspection = parse_git_status_porcelain(text, self._allowed_prefixes)
         passed = inspection.is_clean_proven()
         status = None if passed else EvidenceStatus.FAILED
@@ -1042,8 +1004,6 @@ class GitCollector:
             source=source,
             artifact_hash=result.stdout_hash,
         )
-
-
 
 
 class BudgetMetrics(BaseModel):
@@ -1095,10 +1055,10 @@ class BudgetCollector:
     def metrics(
         self,
         *,
-        token_usage: int | float | bool | None = None,
-        runtime_seconds: int | float | bool | None = None,
-        tool_call_count: int | float | bool | None = None,
-        retry_count: int | float | bool | None = None,
+        token_usage: float | bool | None = None,
+        runtime_seconds: float | bool | None = None,
+        tool_call_count: float | bool | None = None,
+        retry_count: float | bool | None = None,
         source: str | None = None,
     ) -> BudgetMetrics:
         """Build provenance-stamped :class:`EvidenceMetric` telemetry.
@@ -1119,13 +1079,11 @@ class BudgetCollector:
         """
         src = source if source is not None else self._source
 
-        def _metric(value: int | float | bool | None) -> EvidenceMetric:
+        def _metric(value: float | bool | None) -> EvidenceMetric:
             return EvidenceMetric(
                 value=value,
                 provenance=(
-                    EvidenceProvenance.OBSERVED
-                    if value is not None
-                    else EvidenceProvenance.MISSING
+                    EvidenceProvenance.OBSERVED if value is not None else EvidenceProvenance.MISSING
                 ),
                 source=src,
                 collector=self.COLLECTOR_NAME,
@@ -1137,8 +1095,6 @@ class BudgetCollector:
             tool_call_count=_metric(tool_call_count),
             retry_count=_metric(retry_count),
         )
-
-
 
 
 class ProcessRuntimeCollector:
@@ -1181,9 +1137,7 @@ class ProcessRuntimeCollector:
         hashes = f"stdout={result.stdout_hash}"
 
         if result.exit_code is None:
-            reason = result.error or (
-                "timeout" if result.timed_out else "no exit code"
-            )
+            reason = result.error or ("timeout" if result.timed_out else "no exit code")
             return _bound_check(
                 cid,
                 passed=None,
@@ -1207,8 +1161,7 @@ class ProcessRuntimeCollector:
             collector=self.COLLECTOR_NAME,
             status=status,
             details=(
-                f"process exit={result.exit_code}; "
-                f"runtime={result.runtime_seconds:.3f}s; {hashes}"
+                f"process exit={result.exit_code}; runtime={result.runtime_seconds:.3f}s; {hashes}"
             ),
             source=source,
             artifact_hash=result.stdout_hash,
@@ -1239,4 +1192,3 @@ class ProcessRuntimeCollector:
             source=source if source is not None else self.COLLECTOR_NAME,
             collector=self.COLLECTOR_NAME,
         )
-

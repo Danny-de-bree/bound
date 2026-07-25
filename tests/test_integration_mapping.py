@@ -82,35 +82,27 @@ def test_runtime_source_and_spec_agree() -> None:
         pytest.param(
             "ACCEPT",
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _passed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _passed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6),
             id="accept",
         ),
         pytest.param(
             "RETRY",
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.2),
             id="retry",
         ),
         pytest.param(
             "REPLAN",
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_failed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_failed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.1),
             id="replan",
         ),
         pytest.param(
             "ROLLBACK",
-            _contract(
-                risk_checks=[RiskCheck(id="r", description="boundary", severity=0.9)]
-            ),
+            _contract(risk_checks=[RiskCheck(id="r", description="boundary", severity=0.9)]),
             ExecutionEvidence(
                 acceptance=[_passed("a"), _passed("b")],
                 risks=[_failed("r")],
@@ -151,9 +143,7 @@ def test_evaluate_agent_step_maps_each_decision_to_expected_action(
 
 def _example_source() -> str:
     """Return the source text of ``examples/agent_control_loop.py``."""
-    path = (
-        pathlib.Path(__file__).resolve().parent.parent / "examples" / "agent_control_loop.py"
-    )
+    path = pathlib.Path(__file__).resolve().parent.parent / "examples" / "agent_control_loop.py"
     assert path.exists(), f"example not found at {path}"
     return path.read_text(encoding="utf-8")
 
@@ -277,14 +267,14 @@ def test_is_valid_phase_id_accepts_documented_forms(phase_id: str) -> None:
 @pytest.mark.parametrize(
     "phase_id",
     [
-        "phase-001",        # lowercase
-        "PHASE-ABC",        # non-numeric
-        "PHASE001",         # missing dash
-        "PHASE-001-",       # trailing dash
-        "PHASE-001-A-B",    # two letter suffixes
+        "phase-001",  # lowercase
+        "PHASE-ABC",  # non-numeric
+        "PHASE001",  # missing dash
+        "PHASE-001-",  # trailing dash
+        "PHASE-001-A-B",  # two letter suffixes
         "PHASE-001-R1-R2",  # two replan suffixes
-        "write-tests",      # unrelated slug
-        "",                 # empty
+        "write-tests",  # unrelated slug
+        "",  # empty
     ],
 )
 def test_is_valid_phase_id_rejects_undocumented_forms(phase_id: str) -> None:

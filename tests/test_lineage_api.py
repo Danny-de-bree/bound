@@ -98,8 +98,6 @@ def store(tmp_path: Path) -> LineageStore:
     return LineageStore(base_dir=tmp_path / "runs", enabled=True)
 
 
-
-
 def test_start_run_returns_run_context_writing_run_json(store: LineageStore) -> None:
     """start_run returns a RunContext owning a fresh run_id and writes run.json."""
     ctx = start_run("CSV export", metadata={"repo": "bound"}, store=store)
@@ -194,7 +192,6 @@ def test_module_level_record_outcome_manual_flow(store: LineageStore) -> None:
     assert log.outcomes[0].reason_code == ReasonCode.REPLANNED
 
 
-
 def test_disabled_store_writes_nothing(tmp_path: Path) -> None:
     """A disabled store persists nothing while the evaluation still works."""
     disabled = LineageStore(base_dir=tmp_path / "disabled", enabled=False)
@@ -287,8 +284,6 @@ def test_decision_maps_to_next_action_and_reason(
     assert log.outcomes[0].next_action == next_action
     assert log.outcomes[0].next_action == _DECISION_TO_ACTION[decision]
     assert log.outcomes[0].reason_code == outcome_reason_for(next_action)
-
-
 
 
 def test_evaluator_lineage_run_fallback(store: LineageStore) -> None:
@@ -425,8 +420,12 @@ def test_run_context_record_action_reported(store: LineageStore) -> None:
     ctx = start_run("task", store=store)
     s = ctx.start_step(contract_id="PHASE-001", attempt=1)
     ev = ctx.record_evaluation(
-        step_id=s.step_id, attempt=1, scores=_ZERO_SCORES, score=0.4,
-        threshold=0.6, decision="REPLAN",
+        step_id=s.step_id,
+        attempt=1,
+        scores=_ZERO_SCORES,
+        score=0.4,
+        threshold=0.6,
+        decision="REPLAN",
     )
     evt = ctx.record_action_reported(
         step_id=s.step_id,
@@ -478,8 +477,12 @@ def test_run_context_record_evaluation_completed(store: LineageStore) -> None:
     ctx = start_run("task", store=store)
     s = ctx.start_step(contract_id="PHASE-001", attempt=1)
     ev = ctx.record_evaluation(
-        step_id=s.step_id, attempt=1, scores=_ZERO_SCORES, score=0.4,
-        threshold=0.6, decision="REPLAN",
+        step_id=s.step_id,
+        attempt=1,
+        scores=_ZERO_SCORES,
+        score=0.4,
+        threshold=0.6,
+        decision="REPLAN",
     )
     ec = ctx.record_evaluation_completed(
         step_id=s.step_id,
@@ -501,8 +504,12 @@ def test_run_context_record_action_observed(store: LineageStore) -> None:
     ctx = start_run("task", store=store)
     s = ctx.start_step(contract_id="PHASE-001", attempt=1)
     ev = ctx.record_evaluation(
-        step_id=s.step_id, attempt=1, scores=_ZERO_SCORES, score=0.4,
-        threshold=0.6, decision="ROLLBACK",
+        step_id=s.step_id,
+        attempt=1,
+        scores=_ZERO_SCORES,
+        score=0.4,
+        threshold=0.6,
+        decision="ROLLBACK",
     )
     ao = ctx.record_action_observed(
         step_id=s.step_id,
@@ -523,8 +530,12 @@ def test_run_context_record_action_observed_mismatch(store: LineageStore) -> Non
     ctx = start_run("task", store=store)
     s = ctx.start_step(contract_id="PHASE-001", attempt=1)
     ev = ctx.record_evaluation(
-        step_id=s.step_id, attempt=1, scores=_ZERO_SCORES, score=0.4,
-        threshold=0.6, decision="ROLLBACK",
+        step_id=s.step_id,
+        attempt=1,
+        scores=_ZERO_SCORES,
+        score=0.4,
+        threshold=0.6,
+        decision="ROLLBACK",
     )
     ao = ctx.record_action_observed(
         step_id=s.step_id,
@@ -554,10 +565,17 @@ def test_run_context_record_evaluation_with_policy_fields(store: LineageStore) -
     ctx = start_run("task", store=store)
     s = ctx.start_step(contract_id="PHASE-001", attempt=1)
     ev = ctx.record_evaluation(
-        step_id=s.step_id, attempt=1, scores=_ZERO_SCORES, score=1.0,
-        threshold=0.6, decision="ACCEPT",
-        policy_id="coding-default", policy_version="1.0", policy_hash="sha256:abc",
-        assurance="verified", collector_versions={"bound.pytest": "0.7.0"},
+        step_id=s.step_id,
+        attempt=1,
+        scores=_ZERO_SCORES,
+        score=1.0,
+        threshold=0.6,
+        decision="ACCEPT",
+        policy_id="coding-default",
+        policy_version="1.0",
+        policy_hash="sha256:abc",
+        assurance="verified",
+        collector_versions={"bound.pytest": "0.7.0"},
     )
     assert ev.policy_id == "coding-default"
     assert ev.policy_hash == "sha256:abc"
@@ -574,4 +592,3 @@ def test_start_run_with_config(store: LineageStore) -> None:
     assert log.run.config is not None
     assert log.run.config.bound_version == "0.7.0"
     assert log.run.config.threshold == 0.6
-

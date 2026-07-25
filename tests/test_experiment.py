@@ -45,7 +45,6 @@ def _run_fixture(name: str) -> ExperimentResult:
     return run_experiment(trajectory, _CRITERIA, _NORMALIZATION)
 
 
-
 # ---------------------------------------------------------------------------
 # Correct first ACCEPT step
 # ---------------------------------------------------------------------------
@@ -239,9 +238,6 @@ def test_pre_supplied_scores_are_used() -> None:
     assert result.steps_saved == 0
 
 
-
-
-
 def test_per_step_length_matches_trajectory() -> None:
     """Every trajectory step produces exactly one ``StepRecord``.
 
@@ -290,8 +286,7 @@ def test_load_trajectories_loads_all_fixtures() -> None:
     assert expected.issubset(trajs.keys())
 
     accepted_flags = {
-        name: run_experiment(t, _CRITERIA, _NORMALIZATION).accepted
-        for name, t in trajs.items()
+        name: run_experiment(t, _CRITERIA, _NORMALIZATION).accepted for name, t in trajs.items()
     }
     assert accepted_flags["clean_accept"] is True
     assert accepted_flags["retry_then_accept"] is True
@@ -316,4 +311,3 @@ def test_summarize_reports_key_evidence() -> None:
     assert "steps_saved=2" in report
     assert "regressions_after_accept=2" in report
     assert "tests_pass_at_bound_stop=yes" in report
-

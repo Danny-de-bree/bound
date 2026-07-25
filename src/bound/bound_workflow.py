@@ -128,7 +128,7 @@ class BoundWorkflow:
             raise RuntimeError(
                 "BoundWorkflow.prepare requires a contract_generator; construct "
                 "one with BoundWorkflow(contract_generator=...), or call "
-                "evaluate_step directly when you already hold a StepContract."
+                "evaluate_step directly when you already hold a StepContract.",
             )
         return self._contract_generator.generate(
             goal=goal,

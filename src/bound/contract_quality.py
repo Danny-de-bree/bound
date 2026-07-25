@@ -9,11 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from bound.contracts import AcceptanceCheck, BoundPlan, StepBudget, StepContract
 
 __all__ = [
-    "ContractQualityReport",
-    "ContractQualityFinding",
     "ContractQualityExperimentSummary",
-    "assess_step",
+    "ContractQualityFinding",
+    "ContractQualityReport",
     "assess_contract",
+    "assess_step",
     "load_contract_corpus",
     "run_contract_quality_experiment",
     "summarize_contract_quality_experiment",
@@ -71,7 +71,7 @@ _GENERIC_DESCRIPTIONS: frozenset[str] = frozenset(
         "ready",
         "complete",
         "completed",
-    }
+    },
 )
 
 #: Tokens (lowercase, alphanumeric) that strongly imply an *observable, binary*
@@ -170,7 +170,7 @@ _VERIFICATION_TOKENS: frozenset[str] = frozenset(
         "none",
         "true",
         "false",
-    }
+    },
 )
 
 #: Compiled splitter used to turn an id or description into lowercase alphanumeric
@@ -356,7 +356,7 @@ def _evaluate_step(step: StepContract) -> _StepAssessment:
         warnings.append(
             f"step '{step.id}' has {vague} vague acceptance check(s) "
             f"(description shorter than {_VAGUE_DESCRIPTION_MIN_LENGTH} chars "
-            "or generic)"
+            "or generic)",
         )
 
     seen: set[str] = set()
@@ -368,20 +368,19 @@ def _evaluate_step(step: StepContract) -> _StepAssessment:
             seen.add(check.id)
     if duplicates:
         warnings.append(
-            f"step '{step.id}' has duplicate acceptance check id(s): "
-            f"{sorted(duplicates)}"
+            f"step '{step.id}' has duplicate acceptance check id(s): {sorted(duplicates)}",
         )
 
     if measurable == 0:
         warnings.append(
             f"step '{step.id}' has no acceptance check whose id or description "
-            "suggests an observable verification method"
+            "suggests an observable verification method",
         )
 
     if total > _LARGE_STEP_CHECK_THRESHOLD:
         warnings.append(
             f"step '{step.id}' is extremely large ({total} acceptance checks > "
-            f"{_LARGE_STEP_CHECK_THRESHOLD})"
+            f"{_LARGE_STEP_CHECK_THRESHOLD})",
         )
 
     return _StepAssessment(
@@ -581,13 +580,12 @@ def _finding_note(report: ContractQualityReport) -> str:
     if report.acceptance_check_count == 0:
         parts.append(
             "No acceptance checks declared; the contract defines no success "
-            "criteria (structurally this is rejected upstream by StepContract)."
+            "criteria (structurally this is rejected upstream by StepContract).",
         )
     else:
         if not report.warnings:
             parts.append(
-                "No structural warnings; checks appear measurable and "
-                "reasonably specified."
+                "No structural warnings; checks appear measurable and reasonably specified.",
             )
         else:
             parts.append(f"Structural warnings: {'; '.join(report.warnings)}.")
@@ -598,7 +596,7 @@ def _finding_note(report: ContractQualityReport) -> str:
         else:
             parts.append(
                 "Few checks read as observable; success criteria may not be "
-                "evaluable by deterministic evidence."
+                "evaluable by deterministic evidence.",
             )
         if not report.has_budget:
             parts.append("No explicit execution budget declared.")
@@ -651,7 +649,7 @@ def run_contract_quality_experiment(
                 step_count=len(plan.steps),
                 report=report,
                 note=_finding_note(report),
-            )
+            ),
         )
 
     aggregate_ratio = total_measurable / total_acceptance if total_acceptance else 0.0
@@ -690,7 +688,7 @@ def summarize_contract_quality_experiment(
             f"- {finding.name} (goal={finding.goal!r}, steps={finding.step_count}, "
             f"checks={r.acceptance_check_count}, risks={r.risk_check_count}, "
             f"measurable_ratio={r.measurable_ratio:.3f}, has_budget={r.has_budget}, "
-            f"warnings={len(r.warnings)})"
+            f"warnings={len(r.warnings)})",
         )
         lines.append(f"    note: {finding.note}")
     lines.append("")

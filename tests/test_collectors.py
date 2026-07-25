@@ -110,12 +110,13 @@ class TestParsePytestSummary:
     def test_no_summary_line_is_zero(self) -> None:
         """No summary line (empty, or only progress output) yields zero tests."""
         assert parse_pytest_summary("").executed_test_count == 0
-        assert parse_pytest_summary(
-            "....s....s....                              [100%]\n"
-        ).executed_test_count == 0
-        assert parse_pytest_summary(
-            "collection error: no tests collected"
-        ).executed_test_count == 0
+        assert (
+            parse_pytest_summary(
+                "....s....s....                              [100%]\n"
+            ).executed_test_count
+            == 0
+        )
+        assert parse_pytest_summary("collection error: no tests collected").executed_test_count == 0
 
     def test_warnings_summary_block_ignored(self) -> None:
         """A trailing warnings-summary detail block does not affect the count."""
@@ -184,11 +185,7 @@ class TestGitInspection:
 
     def test_unexpected_changed_files(self) -> None:
         """A path outside the allowed set lands in unexpected_paths."""
-        output = (
-            " M src/todo_app/service.py\n"
-            "?? secrets.env\n"
-            " M README.md\n"
-        )
+        output = " M src/todo_app/service.py\n?? secrets.env\n M README.md\n"
         inspection = parse_git_status_porcelain(output, _ALLOWED_PREFIXES)
         assert inspection.command_succeeded is True
         assert "src/todo_app/service.py" in inspection.changed_paths
@@ -226,6 +223,8 @@ class TestGitInspection:
         """The model is auditable: stray fields are rejected (extra=forbid)."""
         with pytest.raises(ValidationError):
             GitInspection(command_succeeded=True, returncode=0)
+
+
 # ---------------------------------------------------------------------------
 # Phase 5 — service-specific test evidence
 # ---------------------------------------------------------------------------
@@ -282,11 +281,7 @@ class TestServiceTestEvidence:
     def test_extra_fields_forbidden(self) -> None:
         """The model is auditable: stray fields are rejected (extra=forbid)."""
         with pytest.raises(ValidationError):
-            ServiceTestEvidence(
-                command_succeeded=True, executed_test_count=1, failed=0
-            )
-
-
+            ServiceTestEvidence(command_succeeded=True, executed_test_count=1, failed=0)
 
 
 # ---------------------------------------------------------------------------
@@ -328,9 +323,6 @@ class TestSha256AndRedaction:
         assert default_redactor("all good, nothing here") == "all good, nothing here"
 
 
-
-
-
 class TestCommandCollector:
     """Item 6: execute preconfigured commands; no agent injection."""
 
@@ -341,13 +333,9 @@ class TestCommandCollector:
                 "true": CommandSpec(argv=_sys_argv("-c", "pass")),
                 "false": CommandSpec(argv=_sys_argv("-c", "raise SystemExit(1)")),
                 "echo": CommandSpec(argv=_sys_argv("-c", "print('hello world')")),
-                "secret": CommandSpec(
-                    argv=_sys_argv("-c", "print('token=s3cr3t-value data')")
-                ),
+                "secret": CommandSpec(argv=_sys_argv("-c", "print('token=s3cr3t-value data')")),
                 "big": CommandSpec(argv=_sys_argv("-c", "print('x' * 1000)")),
-                "sleep": CommandSpec(
-                    argv=_sys_argv("-c", "import time; time.sleep(5)")
-                ),
+                "sleep": CommandSpec(argv=_sys_argv("-c", "import time; time.sleep(5)")),
                 "missing": CommandSpec(argv=["this-binary-does-not-exist-xyz"]),
             }
         )
@@ -355,7 +343,13 @@ class TestCommandCollector:
     def test_known_commands_frozen(self, runner: CommandCollector) -> None:
         """The runnable command set is exactly what was preconfigured."""
         assert set(runner.known_commands) == {
-            "true", "false", "echo", "secret", "big", "sleep", "missing"
+            "true",
+            "false",
+            "echo",
+            "secret",
+            "big",
+            "sleep",
+            "missing",
         }
 
     def test_unknown_command_rejected(self, runner: CommandCollector) -> None:
@@ -435,11 +429,13 @@ class TestCommandCollector:
         """CommandResult is auditable: stray fields are rejected."""
         with pytest.raises(ValidationError):
             CommandResult(
-                name="x", argv=["x"], cwd=None, exit_code=0, runtime_seconds=0.0,
+                name="x",
+                argv=["x"],
+                cwd=None,
+                exit_code=0,
+                runtime_seconds=0.0,
                 bogus=True,  # type: ignore[call-arg]
             )
-
-
 
 
 class TestPytestCollector:
@@ -450,9 +446,7 @@ class TestPytestCollector:
         return CommandCollector(
             {
                 "pytest": CommandSpec(
-                    argv=_sys_argv(
-                        "-m", "pytest", "-q", "-p", "no:cacheprovider", test_dir
-                    ),
+                    argv=_sys_argv("-m", "pytest", "-q", "-p", "no:cacheprovider", test_dir),
                     timeout=60.0,
                 )
             }
@@ -464,12 +458,15 @@ class TestPytestCollector:
 
     def test_passing_tests_verified(self, tmp_path) -> None:
         """A real green run yields VERIFIED pass with >0 executed tests."""
-        self._write_test(tmp_path / "test_pass.py", """
+        self._write_test(
+            tmp_path / "test_pass.py",
+            """
             def test_one():
                 assert 1 + 1 == 2
             def test_two():
                 assert True
-        """)
+        """,
+        )
         collector = PytestCollector(self._runner(str(tmp_path)))
         evidence = collector.collect()
         assert evidence.passed is True
@@ -483,10 +480,13 @@ class TestPytestCollector:
 
     def test_failing_tests_verified_failure(self, tmp_path) -> None:
         """A failing run yields passed=False with FAILED status, VERIFIED."""
-        self._write_test(tmp_path / "test_fail.py", """
+        self._write_test(
+            tmp_path / "test_fail.py",
+            """
             def test_fail():
                 assert False, "boom"
-        """)
+        """,
+        )
         collector = PytestCollector(self._runner(str(tmp_path)))
         evidence = collector.collect()
         assert evidence.passed is False
@@ -505,16 +505,23 @@ class TestPytestCollector:
 
     def test_timeout_invalid_not_pass(self, tmp_path) -> None:
         """Item 8: a timed-out pytest run is INVALID/MISSING, never a pass."""
-        self._write_test(tmp_path / "test_slow.py", """
+        self._write_test(
+            tmp_path / "test_slow.py",
+            """
             import time
             def test_slow():
                 time.sleep(5)
-        """)
+        """,
+        )
         runner = CommandCollector(
             {
                 "pytest": CommandSpec(
                     argv=_sys_argv(
-                        "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "-p",
+                        "no:cacheprovider",
                         str(tmp_path / "test_slow.py"),
                     ),
                     timeout=0.3,
@@ -529,9 +536,7 @@ class TestPytestCollector:
 
     def test_collector_crash_invalid(self, tmp_path) -> None:
         """A collector whose command cannot start yields INVALID, not a pass."""
-        runner = CommandCollector(
-            {"pytest": CommandSpec(argv=["this-pytest-does-not-exist-xyz"])}
-        )
+        runner = CommandCollector({"pytest": CommandSpec(argv=["this-pytest-does-not-exist-xyz"])})
         collector = PytestCollector(runner)
         evidence = collector.collect()
         assert evidence.passed is None
@@ -539,15 +544,11 @@ class TestPytestCollector:
         assert evidence.provenance is EvidenceProvenance.MISSING
 
 
-
-
 class TestJUnitCollector:
     """Item 7 + 8: JUnitCollector parses a trusted artefact directly (VERIFIED)."""
 
     @staticmethod
-    def _junit(
-        tests: int, failures: int = 0, errors: int = 0, skipped: int = 0
-    ) -> str:
+    def _junit(tests: int, failures: int = 0, errors: int = 0, skipped: int = 0) -> str:
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<testsuite name="suite" tests="{tests}" failures="{failures}" '
@@ -651,8 +652,6 @@ class TestJUnitCollector:
         assert "tests=5" in (evidence.details or "")
 
 
-
-
 def _git(repo: Path, *args: str) -> str:
     """Run a git command in *repo*, returning stdout; raises on failure."""
     import subprocess
@@ -687,9 +686,7 @@ class TestGitCollector:
         runner = CommandCollector(
             {"git-status": CommandSpec(argv=["git", "status", "--porcelain"])}
         )
-        return GitCollector(
-            runner, allowed_prefixes=allowed, check_id="no-unexpected-files"
-        )
+        return GitCollector(runner, allowed_prefixes=allowed, check_id="no-unexpected-files")
 
     def test_clean_tree_verified(self, tmp_path) -> None:
         """A clean working tree yields VERIFIED pass."""
@@ -704,9 +701,7 @@ class TestGitCollector:
         """A change outside allowed prefixes yields passed=False, FAILED."""
         repo = _make_repo(tmp_path)
         (repo / "README.md").write_text("changed\n")
-        evidence = self._collector(repo, allowed=("src/todo_app",)).collect(
-            cwd=str(repo)
-        )
+        evidence = self._collector(repo, allowed=("src/todo_app",)).collect(cwd=str(repo))
         assert evidence.passed is False
         assert evidence.status is EvidenceStatus.FAILED
         assert evidence.provenance is EvidenceProvenance.VERIFIED
@@ -715,9 +710,7 @@ class TestGitCollector:
         """A change inside allowed prefixes keeps a proven clean tree."""
         repo = _make_repo(tmp_path)
         (repo / "src" / "todo_app" / "service.py").write_text("x = 2\n")
-        evidence = self._collector(repo, allowed=("src/todo_app",)).collect(
-            cwd=str(repo)
-        )
+        evidence = self._collector(repo, allowed=("src/todo_app",)).collect(cwd=str(repo))
         assert evidence.passed is True
         assert evidence.provenance is EvidenceProvenance.VERIFIED
 
@@ -743,8 +736,6 @@ class TestGitCollector:
         assert evidence.passed is None
         assert evidence.status is EvidenceStatus.INVALID
         assert evidence.provenance is EvidenceProvenance.MISSING
-
-
 
 
 class TestBudgetCollector:
@@ -845,10 +836,9 @@ class TestProcessRuntimeCollector:
 
     def test_check_id_override(self) -> None:
         """A per-call check-id override is honoured."""
-        evidence = ProcessRuntimeCollector().collect(
-            self._result(0), check_id="build-ok"
-        )
+        evidence = ProcessRuntimeCollector().collect(self._result(0), check_id="build-ok")
         assert evidence.check_id == "build-ok"
+
 
 # ---------------------------------------------------------------------------
 # Sprint 2 — RuffEvidence
@@ -872,15 +862,17 @@ class TestParseRuffOutput:
 
     def test_single_violation(self) -> None:
         """A single error violation is counted correctly."""
-        raw = json.dumps([
-            {
-                "code": "F401",
-                "filename": "src/mod.py",
-                "severity": "error",
-                "fix": None,
-                "message": "`os` imported but unused",
-            }
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "code": "F401",
+                    "filename": "src/mod.py",
+                    "severity": "error",
+                    "fix": None,
+                    "message": "`os` imported but unused",
+                }
+            ]
+        )
         ev = parse_ruff_output(raw, tool_version="0.15.0")
         assert ev.total_violations == 1
         assert ev.file_count == 1
@@ -894,11 +886,13 @@ class TestParseRuffOutput:
 
     def test_mixed_severity(self) -> None:
         """Error and warning violations are counted separately."""
-        raw = json.dumps([
-            {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
-            {"code": "W001", "filename": "b.py", "severity": "warning", "fix": None},
-            {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
-        ])
+        raw = json.dumps(
+            [
+                {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
+                {"code": "W001", "filename": "b.py", "severity": "warning", "fix": None},
+                {"code": "F401", "filename": "a.py", "severity": "error", "fix": None},
+            ]
+        )
         ev = parse_ruff_output(raw, tool_version="0.15.0")
         assert ev.total_violations == 3
         assert ev.file_count == 2
@@ -908,20 +902,22 @@ class TestParseRuffOutput:
 
     def test_fixable_count(self) -> None:
         """Violations with a ``fix`` key are counted as fixable."""
-        raw = json.dumps([
-            {
-                "code": "F401",
-                "filename": "a.py",
-                "severity": "error",
-                "fix": {"applicability": "safe", "edits": []},
-            },
-            {
-                "code": "W001",
-                "filename": "b.py",
-                "severity": "warning",
-                "fix": None,
-            },
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "code": "F401",
+                    "filename": "a.py",
+                    "severity": "error",
+                    "fix": {"applicability": "safe", "edits": []},
+                },
+                {
+                    "code": "W001",
+                    "filename": "b.py",
+                    "severity": "warning",
+                    "fix": None,
+                },
+            ]
+        )
         ev = parse_ruff_output(raw)
         assert ev.fixable_count == 1
         assert ev.total_violations == 2
@@ -956,6 +952,8 @@ class TestParseRuffOutput:
         assert ev.passed is False
         ev = RuffEvidence(status=EvidenceStatus.MISSING)
         assert ev.passed is False
+
+
 # ---------------------------------------------------------------------------
 # Sprint 2 — MypyEvidence
 # ---------------------------------------------------------------------------
@@ -1040,6 +1038,8 @@ class TestParseMypyOutput:
         assert ev.passed is True
         ev = MypyEvidence(status=EvidenceStatus.FAILED)
         assert ev.passed is False
+
+
 # ---------------------------------------------------------------------------
 # Sprint 2 — CoverageEvidence
 # ---------------------------------------------------------------------------
@@ -1049,50 +1049,52 @@ class TestParseCoverageOutput:
     """``parse_coverage_output`` builds CoverageEvidence from coverage JSON."""
 
     #: A minimal coverage.json fixture with three files.
-    _FIXTURE_JSON = json.dumps({
-        "meta": {
-            "format": 3,
-            "version": "7.15.2",
-            "timestamp": "2026-07-21T12:27:31",
-            "branch_coverage": True,
-            "show_contexts": False,
-        },
-        "files": {
-            "src/bound/__init__.py": {
-                "summary": {
-                    "covered_lines": 16,
-                    "num_statements": 16,
-                    "percent_covered": 100.0,
-                    "missing_lines": 0,
-                    "excluded_lines": 0,
-                    "covered_branches": 0,
-                    "num_branches": 0,
-                }
+    _FIXTURE_JSON = json.dumps(
+        {
+            "meta": {
+                "format": 3,
+                "version": "7.15.2",
+                "timestamp": "2026-07-21T12:27:31",
+                "branch_coverage": True,
+                "show_contexts": False,
             },
-            "src/bound/models.py": {
-                "summary": {
-                    "covered_lines": 40,
-                    "num_statements": 50,
-                    "percent_covered": 80.0,
-                    "missing_lines": 10,
-                    "excluded_lines": 0,
-                    "covered_branches": 5,
-                    "num_branches": 10,
-                }
+            "files": {
+                "src/bound/__init__.py": {
+                    "summary": {
+                        "covered_lines": 16,
+                        "num_statements": 16,
+                        "percent_covered": 100.0,
+                        "missing_lines": 0,
+                        "excluded_lines": 0,
+                        "covered_branches": 0,
+                        "num_branches": 0,
+                    }
+                },
+                "src/bound/models.py": {
+                    "summary": {
+                        "covered_lines": 40,
+                        "num_statements": 50,
+                        "percent_covered": 80.0,
+                        "missing_lines": 10,
+                        "excluded_lines": 0,
+                        "covered_branches": 5,
+                        "num_branches": 10,
+                    }
+                },
+                "src/bound/collectors.py": {
+                    "summary": {
+                        "covered_lines": 30,
+                        "num_statements": 60,
+                        "percent_covered": 50.0,
+                        "missing_lines": 30,
+                        "excluded_lines": 0,
+                        "covered_branches": 3,
+                        "num_branches": 6,
+                    }
+                },
             },
-            "src/bound/collectors.py": {
-                "summary": {
-                    "covered_lines": 30,
-                    "num_statements": 60,
-                    "percent_covered": 50.0,
-                    "missing_lines": 30,
-                    "excluded_lines": 0,
-                    "covered_branches": 3,
-                    "num_branches": 6,
-                }
-            },
-        },
-    })
+        }
+    )
 
     def test_parses_full_report(self) -> None:
         """A full coverage JSON report is parsed correctly."""
@@ -1124,20 +1126,22 @@ class TestParseCoverageOutput:
 
     def test_branch_coverage_none_when_no_branches(self) -> None:
         """When no branch data exists, branch_coverage_pct is None."""
-        no_branch_json = json.dumps({
-            "meta": {"branch_coverage": False},
-            "files": {
-                "a.py": {
-                    "summary": {
-                        "covered_lines": 5,
-                        "num_statements": 10,
-                        "percent_covered": 50.0,
-                        "missing_lines": 5,
-                        "excluded_lines": 0,
-                    }
+        no_branch_json = json.dumps(
+            {
+                "meta": {"branch_coverage": False},
+                "files": {
+                    "a.py": {
+                        "summary": {
+                            "covered_lines": 5,
+                            "num_statements": 10,
+                            "percent_covered": 50.0,
+                            "missing_lines": 5,
+                            "excluded_lines": 0,
+                        }
+                    },
                 },
-            },
-        })
+            }
+        )
         ev = parse_coverage_output(no_branch_json)
         assert ev.branch_coverage_pct is None
         assert ev.line_coverage_pct == 50.0
@@ -1146,20 +1150,22 @@ class TestParseCoverageOutput:
 
     def test_no_statements_is_full_coverage(self) -> None:
         """Zero statements across all files is treated as 100 % coverage."""
-        empty_json = json.dumps({
-            "meta": {},
-            "files": {
-                "empty.py": {
-                    "summary": {
-                        "covered_lines": 0,
-                        "num_statements": 0,
-                        "percent_covered": 100.0,
-                        "missing_lines": 0,
-                        "excluded_lines": 0,
-                    }
+        empty_json = json.dumps(
+            {
+                "meta": {},
+                "files": {
+                    "empty.py": {
+                        "summary": {
+                            "covered_lines": 0,
+                            "num_statements": 0,
+                            "percent_covered": 100.0,
+                            "missing_lines": 0,
+                            "excluded_lines": 0,
+                        }
+                    },
                 },
-            },
-        })
+            }
+        )
         ev = parse_coverage_output(empty_json)
         assert ev.line_coverage_pct == 100.0
         assert ev.passed is True
@@ -1198,20 +1204,22 @@ class TestParseCoverageOutput:
 
     def test_high_coverage_passes(self) -> None:
         """Coverage above 80 % yields PASSED status."""
-        high_json = json.dumps({
-            "meta": {},
-            "files": {
-                "a.py": {
-                    "summary": {
-                        "covered_lines": 90,
-                        "num_statements": 100,
-                        "percent_covered": 90.0,
-                        "missing_lines": 10,
-                        "excluded_lines": 0,
-                    }
+        high_json = json.dumps(
+            {
+                "meta": {},
+                "files": {
+                    "a.py": {
+                        "summary": {
+                            "covered_lines": 90,
+                            "num_statements": 100,
+                            "percent_covered": 90.0,
+                            "missing_lines": 10,
+                            "excluded_lines": 0,
+                        }
+                    },
                 },
-            },
-        })
+            }
+        )
         ev = parse_coverage_output(high_json)
         assert ev.line_coverage_pct == 90.0
         assert ev.passed is True

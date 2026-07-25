@@ -36,9 +36,7 @@ def _green_contract() -> StepContract:
         goal="A green evaluation for the v0.6 DoD report test.",
         acceptance_checks=[
             AcceptanceCheck(id="tests-pass", description="suite green", required=True),
-            AcceptanceCheck(
-                id="service-tests-pass", description="service green", required=True
-            ),
+            AcceptanceCheck(id="service-tests-pass", description="service green", required=True),
         ],
     )
 
@@ -47,9 +45,7 @@ def _green_evidence() -> ExecutionEvidence:
     """Green evidence: both acceptance checks pass."""
     return ExecutionEvidence(
         acceptance=[
-            CheckEvidence(
-                check_id="tests-pass", passed=True, source="uv run pytest -q"
-            ),
+            CheckEvidence(check_id="tests-pass", passed=True, source="uv run pytest -q"),
             CheckEvidence(
                 check_id="service-tests-pass",
                 passed=True,
@@ -96,20 +92,11 @@ def test_pytest_warnings_not_counted_as_tests() -> None:
 def test_service_test_evidence_is_service_specific() -> None:
     """``service-tests-pass`` passes only when the service run executed >=1 test."""
     # A green command whose service module ran 0 tests is NOT a pass.
-    assert (
-        ServiceTestEvidence(command_succeeded=True, executed_test_count=0).passed
-        is False
-    )
+    assert ServiceTestEvidence(command_succeeded=True, executed_test_count=0).passed is False
     # A failed command that did run tests is NOT a pass either.
-    assert (
-        ServiceTestEvidence(command_succeeded=False, executed_test_count=5).passed
-        is False
-    )
+    assert ServiceTestEvidence(command_succeeded=False, executed_test_count=5).passed is False
     # Only command OK AND >=1 executed test satisfies the service-specific check.
-    assert (
-        ServiceTestEvidence(command_succeeded=True, executed_test_count=1).passed
-        is True
-    )
+    assert ServiceTestEvidence(command_succeeded=True, executed_test_count=1).passed is True
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +131,9 @@ def test_decision_mapping_not_duplicated_in_runtime() -> None:
     assert integration_spec()["decision_to_control"] == _DECISION_TO_ACTION
     # The runtime module carries exactly one decision->action mapping literal:
     # no duplicated/competing table making decisions independently of BOUND.
-    integration_source = (
-        REPO_ROOT / "src" / "bound" / "integration.py"
-    ).read_text(encoding="utf-8")
+    integration_source = (REPO_ROOT / "src" / "bound" / "integration.py").read_text(
+        encoding="utf-8"
+    )
     assert integration_source.count('"ROLLBACK": "rollback"') == 1
     # evaluate_agent_step is the single public runtime path that consumes it.
     assert "evaluate_agent_step" in integration_source

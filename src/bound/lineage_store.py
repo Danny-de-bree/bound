@@ -54,8 +54,8 @@ __all__ = [
     "DEFAULT_MAX_EVENT_BYTES",
     "DEFAULT_MAX_FILE_BYTES",
     "DEFAULT_MAX_RUNS",
-    "DEFAULT_RUNS_DIR",
     "DEFAULT_RETENTION_DAYS",
+    "DEFAULT_RUNS_DIR",
     "LineageCorruptEvent",
     "LineageEventTooLarge",
     "LineageFileTooLarge",
@@ -316,13 +316,12 @@ class LineageStore:
         encoded = (json.dumps(data) + "\n").encode("utf-8")
         if len(encoded) > self.max_event_bytes:
             raise LineageEventTooLarge(
-                f"event ({len(encoded)} bytes) exceeds max_event_bytes "
-                f"({self.max_event_bytes})"
+                f"event ({len(encoded)} bytes) exceeds max_event_bytes ({self.max_event_bytes})",
             )
         size = events_path.stat().st_size if events_path.exists() else 0
         if size + len(encoded) > self.max_file_bytes:
             raise LineageFileTooLarge(
-                f"appending would exceed max_file_bytes ({self.max_file_bytes})"
+                f"appending would exceed max_file_bytes ({self.max_file_bytes})",
             )
         with events_path.open("ab") as fh:
             fh.write(encoded)
@@ -416,9 +415,7 @@ class LineageStore:
         started_at: datetime | None = None,
     ) -> StepStartedEvent:
         """Append a ``step_started`` event for one attempt of a step."""
-        sid = step_id or generate_step_id(
-            run_id=run_id, contract_id=contract_id, attempt=attempt
-        )
+        sid = step_id or generate_step_id(run_id=run_id, contract_id=contract_id, attempt=attempt)
         return self._emit(  # type: ignore[return-value]
             StepStartedEvent,
             run_id,
@@ -462,7 +459,9 @@ class LineageStore:
         are forwarded to the event so every evaluation records the policy hash.
         """
         eid = evaluation_id or generate_evaluation_id(
-            run_id=run_id, step_id=step_id, attempt=attempt
+            run_id=run_id,
+            step_id=step_id,
+            attempt=attempt,
         )
         return self._emit(  # type: ignore[return-value]
             EvaluationRecordedEvent,
@@ -915,7 +914,7 @@ class LineageStore:
                 continue
             try:
                 events.append(parse_lineage_event(line))
-            except Exception as exc:  # noqa: BLE001 - any parse/validation error
+            except Exception as exc:
                 if strict:
                     raise LineageCorruptEvent(f"unparseable event line: {line!r}") from exc
                 corrupt += 1
@@ -923,9 +922,7 @@ class LineageStore:
         return self._replay(run_id, events, corrupt=corrupt, truncated=truncated)
 
     @staticmethod
-    def _replay(
-        run_id: str, events: list[object], *, corrupt: int, truncated: bool
-    ) -> RunLog:
+    def _replay(run_id: str, events: list[object], *, corrupt: int, truncated: bool) -> RunLog:
         run: Run | None = None
         steps: dict[str, Step] = {}
         step_order: list[str] = []
@@ -963,7 +960,7 @@ class LineageStore:
                         attempt=ev.attempt,  # type: ignore[attr-defined]
                         started_at=ev.timestamp,  # type: ignore[attr-defined]
                         evaluation_id=None,
-                    )
+                    ),
                 )
             elif name == "evaluation_recorded":
                 eid = ev.evaluation_id  # type: ignore[attr-defined]
@@ -997,7 +994,7 @@ class LineageStore:
                         reason_code=ev.reason_code,  # type: ignore[attr-defined]
                         recorded_at=ev.timestamp,  # type: ignore[attr-defined]
                         note=ev.note,  # type: ignore[attr-defined]
-                    )
+                    ),
                 )
                 step_outcomes[ev.step_id] = ev.decision  # type: ignore[attr-defined]
             elif name == "run_finished" and run is not None:
@@ -1051,7 +1048,7 @@ class LineageStore:
                     event_count=event_count,
                     incomplete=(log is None) or log.incomplete,
                     path=str(meta_path.parent.resolve()),
-                )
+                ),
             )
         summaries.sort(
             key=lambda s: s.started_at or datetime.fromtimestamp(0, tz=UTC),
@@ -1102,7 +1099,8 @@ class LineageStore:
         if self.max_runs is not None:
             remaining = [s for s in self.list_runs() if s.run_id not in set(pruned)]
             remaining.sort(
-                key=lambda s: s.started_at or datetime.fromtimestamp(0, tz=UTC), reverse=True
+                key=lambda s: s.started_at or datetime.fromtimestamp(0, tz=UTC),
+                reverse=True,
             )
             for s in remaining[self.max_runs :]:
                 try:
@@ -1157,7 +1155,7 @@ def _redact_for_export(data: dict[str, object]) -> None:
     data.pop("raw_artifact_ref", None)
     # Full raw command output is never exported — only the hash remains.
     for key in ("stdout", "stderr", "raw_output"):
-        if key in data and data[key]:
+        if data.get(key):
             data.pop(key, None)
 
 
@@ -1191,7 +1189,7 @@ def configure(
     ``enabled`` is ``None`` it is derived from the ``BOUND_LINEAGE_DISABLED``
     environment variable.
     """
-    global _default_store  # noqa: PLW0603
+    global _default_store
     if enabled is None:
         enabled = not _env_disabled()
     _default_store = LineageStore(
@@ -1213,7 +1211,7 @@ def get_default_store() -> LineageStore:
     Respects :data:`_ENV_DISABLED` (``BOUND_LINEAGE_DISABLED``) on first
     construction.
     """
-    global _default_store  # noqa: PLW0603
+    global _default_store
     if _default_store is None:
         _default_store = LineageStore(enabled=not _env_disabled())
     return _default_store

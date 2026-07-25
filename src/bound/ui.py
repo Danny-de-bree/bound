@@ -74,11 +74,11 @@ _ASSURANCE_COLORS: dict[str, str] = {
 
 __all__ = [
     "DEFAULT_PORT",
-    "serve",
-    "_render_overview_page",
-    "_render_run_detail",
     "_decision_badge",
     "_get_overview_decisions",
+    "_render_overview_page",
+    "_render_run_detail",
+    "serve",
 ]
 
 # =========================================================================
@@ -146,7 +146,7 @@ def _iter_latest_decisions(
                     "final": "—",
                     "outcome": "—",
                     "next_action": "—",
-                }
+                },
             )
             continue
         latest = evals[-1]
@@ -172,7 +172,7 @@ def _iter_latest_decisions(
                 "final": gate.final_decision if gate else latest.decision or "—",
                 "outcome": outcome.decision if outcome else "—",
                 "next_action": outcome.next_action if outcome else "—",
-            }
+            },
         )
     return rows
 
@@ -337,6 +337,7 @@ def _evidence_row(
         f"</div>"
     )
 
+
 # =========================================================================
 # Page templates
 # =========================================================================
@@ -401,13 +402,13 @@ def _render_overview_page(
             "<p>Start a BOUND-controlled agent session to see runs appear here.</p>"
             "<p style='margin-top:12px'><code>bound run start</code> &mdash; "
             "or let your agent integration create one automatically.</p>"
-            "</div>"
+            "</div>",
         )
     else:
         parts.append(
             f"<div style='margin-bottom:12px;color:#757575;font-size:0.85rem'>"
             f"{len(summaries)} run(s) &middot; "
-            f"newest first</div>"
+            f"newest first</div>",
         )
         parts.append("<div class='run-grid'>")
         for s in summaries:
@@ -420,27 +421,23 @@ def _render_overview_page(
             decision = d.get("decision", "—") if d else "—"
             assurance = d.get("assurance") if d else None
 
-            parts.append(
-                f"<a href='/run/{_html_escape(s.run_id)}' class='run-card'>"
-            )
+            parts.append(f"<a href='/run/{_html_escape(s.run_id)}' class='run-card'>")
             parts.append(
                 f"<div class='tags'>"
                 f"{_status_badge(status_human, _RUN_STATUS_COLORS)}"
                 f"{_decision_badge(decision)}"
                 f"{_assurance_badge(assurance)}"
-                f"</div>"
+                f"</div>",
             )
             task_display = s.task or "(untitled)"
             if len(task_display) > 80:
                 task_display = task_display[:80] + "…"
-            parts.append(
-                f"<h3 title='{_html_escape(s.task)}'>{_html_escape(task_display)}</h3>"
-            )
+            parts.append(f"<h3 title='{_html_escape(s.task)}'>{_html_escape(task_display)}</h3>")
             parts.append(
                 f"<div class='meta'>{_short_id(s.run_id, 16)}"
                 f" &middot; {_fmt_dt(s.started_at)}"
                 f" &middot; {s.step_count} step(s)"
-                f"</div>"
+                f"</div>",
             )
             parts.append("</a>")
         parts.append("</div>")
@@ -452,7 +449,7 @@ def _render_overview_page(
             "<th>Run</th><th>Task</th><th>Status</th>"
             "<th>Decision</th><th>Assurance</th>"
             "<th>Steps</th><th>Started</th><th>Finished</th>"
-            "</tr></thead><tbody>"
+            "</tr></thead><tbody>",
         )
         for s in summaries:
             status_human = (
@@ -475,7 +472,7 @@ def _render_overview_page(
                 f"<td>{s.step_count}</td>"
                 f"<td>{_fmt_dt(s.started_at)}</td>"
                 f"<td>{finished}</td>"
-                "</tr>"
+                "</tr>",
             )
         parts.append("</tbody></table>")
 
@@ -483,10 +480,11 @@ def _render_overview_page(
         "<p style='margin-top:24px;font-size:0.78rem;color:#9e9e9e;"
         "text-align:center'>"
         "BOUND dashboard &mdash; local read-only view. "
-        "No data leaves your machine.</p>"
+        "No data leaves your machine.</p>",
     )
     parts.append("</div></body></html>")
     return "\n".join(parts)
+
 
 def _render_run_detail(log: RunLog) -> str:
     """Render a single-run detail page with full decision tree."""
@@ -515,52 +513,40 @@ def _render_run_detail(log: RunLog) -> str:
     # --- Run metadata header ---
     status_str = "incomplete" if log.incomplete else _sv(run.status)
     parts.append("<div class='run-detail-header'>")
-    parts.append(
-        f"<h2>{_html_escape(run.task or '(untitled)')}</h2>"
-    )
+    parts.append(f"<h2>{_html_escape(run.task or '(untitled)')}</h2>")
     parts.append("<div class='meta-grid'>")
     parts.append(
-        f"<div><span class='label'>Run ID:</span>"
-        f"<code>{_html_escape(run.run_id)}</code></div>"
+        f"<div><span class='label'>Run ID:</span><code>{_html_escape(run.run_id)}</code></div>",
     )
     parts.append(
         f"<div><span class='label'>Status:</span>"
-        f"{_status_badge(status_str, _RUN_STATUS_COLORS)}</div>"
+        f"{_status_badge(status_str, _RUN_STATUS_COLORS)}</div>",
     )
-    parts.append(
-        f"<div><span class='label'>Started:</span>"
-        f"{_fmt_dt(run.started_at)}</div>"
-    )
+    parts.append(f"<div><span class='label'>Started:</span>{_fmt_dt(run.started_at)}</div>")
     if run.finished_at:
-        parts.append(
-            f"<div><span class='label'>Finished:</span>"
-            f"{_fmt_dt(run.finished_at)}</div>"
-        )
+        parts.append(f"<div><span class='label'>Finished:</span>{_fmt_dt(run.finished_at)}</div>")
     # Policy info
     cfg = run.config
     if cfg is not None and cfg.policy_id is not None:
         parts.append(
             f"<div><span class='label'>Policy:</span>"
-            f"{_html_escape(cfg.policy_id)}@{_html_escape(cfg.policy_version or '?')}</div>"
+            f"{_html_escape(cfg.policy_id)}@{_html_escape(cfg.policy_version or '?')}</div>",
         )
         if cfg.policy_hash is not None:
             parts.append(
                 f"<div><span class='label'>Policy hash:</span>"
-                f"<code>{_html_escape(cfg.policy_hash[:16])}…</code></div>"
+                f"<code>{_html_escape(cfg.policy_hash[:16])}…</code></div>",
             )
     # Evidence coverage summary
     all_collected = [e for evs in audit.collected.values() for e in evs]
-    verified_count = sum(
-        1 for e in all_collected
-        if e.provenance in _INDEPENDENTLY_VERIFIED
-    )
+    verified_count = sum(1 for e in all_collected if e.provenance in _INDEPENDENTLY_VERIFIED)
     total_count = len(all_collected)
     failures_count = sum(len(evs) for evs in audit.failures.values())
     parts.append(
         f"<div><span class='label'>Evidence:</span>"
         f"{verified_count}/{total_count} independently verified"
         + (f" &middot; {failures_count} failure(s)" if failures_count else "")
-        + "</div>"
+        + "</div>",
     )
     parts.append("</div></div>")
 
@@ -571,7 +557,7 @@ def _render_run_detail(log: RunLog) -> str:
             f"<div class='legend-item'>"
             f"<span class='badge' style='background:{color};font-size:0.6rem'>"
             f"{_html_escape(prov)}</span>"
-            f"<span>{_html_escape(prov)}</span></div>"
+            f"<span>{_html_escape(prov)}</span></div>",
         )
     parts.append("</div>")
 
@@ -588,16 +574,12 @@ def _render_run_detail(log: RunLog) -> str:
         parts.append("<div class='step-card'>")
         # Step header
         parts.append("<div class='step-header'>")
-        parts.append(
-            f"<div class='step-title'>"
-            f"{_html_escape(step.contract_id)}"
-            f"</div>"
-        )
+        parts.append(f"<div class='step-title'>{_html_escape(step.contract_id)}</div>")
         parts.append(
             f"<div><span class='kv'>step_id={_html_escape(step.step_id)}</span>"
             f" &middot; <span class='kv'>{_sv(step.status)}</span>"
             f" &middot; {len(evals)} attempt(s)"
-            f"</div>"
+            f"</div>",
         )
         parts.append("</div>")
 
@@ -620,21 +602,17 @@ def _render_run_detail(log: RunLog) -> str:
                 parts.append("<div class='attempt-title'>")
                 parts.append(
                     f"<span class='badge' style='background:{dcolor}'>"
-                    f"{_html_escape(decision)}</span>"
+                    f"{_html_escape(decision)}</span>",
                 )
                 if ev.attempt is not None:
-                    parts.append(
-                        f" <span class='attempt-num'>attempt {ev.attempt}</span>"
-                    )
+                    parts.append(f" <span class='attempt-num'>attempt {ev.attempt}</span>")
                 if ev.score is not None:
                     parts.append(
                         f" <span class='kv'>score {ev.score:.4f}"
-                        f" (threshold {ev.threshold:.4f})</span>"
+                        f" (threshold {ev.threshold:.4f})</span>",
                     )
                 if ev.reason_code:
-                    parts.append(
-                        f" <span class='kv'>{_html_escape(str(ev.reason_code))}</span>"
-                    )
+                    parts.append(f" <span class='kv'>{_html_escape(str(ev.reason_code))}</span>")
                 parts.append("</div>")
 
                 # Evidence rows for this attempt
@@ -655,7 +633,7 @@ def _render_run_detail(log: RunLog) -> str:
                                 prov,
                                 status,
                                 is_trigger=is_trigger,
-                            )
+                            ),
                         )
 
                 # Collector failures
@@ -664,7 +642,7 @@ def _render_run_detail(log: RunLog) -> str:
                     parts.append(
                         f"<div class='collector-fail'>"
                         f"&#9888; collector {_html_escape(fail.collector or '?')}: "
-                        f"{_html_escape(fail.error or 'unknown error')}</div>"
+                        f"{_html_escape(fail.error or 'unknown error')}</div>",
                     )
 
                 # Decision gate (candidate vs final)
@@ -689,14 +667,14 @@ def _render_run_detail(log: RunLog) -> str:
                         f" <span class='gate-label'>&rarr; final</span> "
                         f"<span class='badge' style='background:{fd_color}'>"
                         f"{_html_escape(fd)}</span>"
-                        f" {_assurance_badge(_sv(gate.assurance))}"
+                        f" {_assurance_badge(_sv(gate.assurance))}",
                     )
                     if gate.assurance_reasons:
                         parts.append(
                             f"<div style='margin-top:4px;font-size:0.75rem;"
                             f"color:#757575'>"
                             f"{' &middot; '.join(_html_escape(r) for r in gate.assurance_reasons)}"
-                            f"</div>"
+                            f"</div>",
                         )
                     parts.append("</div>")
 
@@ -713,9 +691,16 @@ def _render_run_detail(log: RunLog) -> str:
                         parts.append(
                             f"<div class='trigger-highlight'>"
                             f"<strong>&#9654; {trigger_note}</strong>"
-                            + (f"<br><em>{' &middot; '.join(_html_escape(r) for r in reasons)}</em>"
-                               if reasons else "")
-                            + "</div>"
+                            + (
+                                (
+                                    f"<br><em>"
+                                    f"{' &middot; '.join(_html_escape(r) for r in reasons)}"
+                                    f"</em>"
+                                )
+                                if reasons
+                                else ""
+                            )
+                            + "</div>",
                         )
 
                 # Outcome
@@ -726,7 +711,7 @@ def _render_run_detail(log: RunLog) -> str:
                             f"outcome: {_html_escape(oc.decision)}"
                             f" &rarr; {_html_escape(oc.next_action)}"
                             + (f" ({_html_escape(oc.note)})" if oc.note else "")
-                            + "</div>"
+                            + "</div>",
                         )
 
                 parts.append("</div>")  # end attempt-box
@@ -746,7 +731,7 @@ def _render_run_detail(log: RunLog) -> str:
         "</summary>"
         "<pre style='margin-top:8px;padding:12px;background:#263238;"
         "color:#eceff1;border-radius:4px;overflow:auto;"
-        "font-size:0.7rem;max-height:400px'>"
+        "font-size:0.7rem;max-height:400px'>",
     )
     for ev in log.events:
         try:
@@ -760,10 +745,11 @@ def _render_run_detail(log: RunLog) -> str:
         "<p style='margin-top:24px;font-size:0.78rem;color:#9e9e9e;"
         "text-align:center'>"
         "BOUND dashboard &mdash; local read-only view. "
-        "No data leaves your machine.</p>"
+        "No data leaves your machine.</p>",
     )
     parts.append("</div></body></html>")
     return "\n".join(parts)
+
 
 # =========================================================================
 # HTTP Server
@@ -823,7 +809,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             status=status,
         )
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         """Dispatch GET requests."""
         path = self.path.split("?", 1)[0].rstrip("/")
         # Handle startup redirect: if a run_id was requested on the CLI, the
@@ -839,12 +825,12 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             if path == "" or path == "/":
                 self._handle_overview()
             elif path.startswith("/run/"):
-                run_id = path[len("/run/"):]
+                run_id = path[len("/run/") :]
                 self._handle_run_detail(run_id)
             elif path == "/api/runs":
                 self._handle_api_runs()
             elif path.startswith("/api/run/"):
-                run_id = path[len("/api/run/"):]
+                run_id = path[len("/api/run/") :]
                 self._handle_api_run(run_id)
             elif path == "/api/events":
                 self._handle_api_events()
@@ -961,16 +947,12 @@ class _DashboardHandler(BaseHTTPRequestHandler):
                     count = last_count
                 now = datetime.now(UTC).isoformat()
                 if count != last_count:
-                    self.wfile.write(
-                        f"event: run_count\ndata: {count}\n\n".encode()
-                    )
+                    self.wfile.write(f"event: run_count\ndata: {count}\n\n".encode())
                     self.wfile.flush()
                     last_count = count
                 else:
                     # Heartbeat every 5 seconds to keep the connection alive
-                    self.wfile.write(
-                        f": heartbeat {now}\n\n".encode()
-                    )
+                    self.wfile.write(f": heartbeat {now}\n\n".encode())
                     self.wfile.flush()
                 time.sleep(5)
         except (BrokenPipeError, ConnectionResetError, OSError):

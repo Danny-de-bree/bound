@@ -404,6 +404,7 @@ def test_result_carries_original_scores() -> None:
 
     assert result.scores == scores
 
+
 # ---------------------------------------------------------------------------
 # distance_to_threshold (Phase 4)
 # ---------------------------------------------------------------------------
@@ -453,7 +454,6 @@ def test_distance_to_threshold_below_threshold() -> None:
     # S = 0.3; distance = 0.3 - 0.6 = -0.3
     assert result.distance_to_threshold == pytest.approx(-0.3, abs=1e-12)
     assert result.distance_to_threshold < 0
-
 
 
 # ---------------------------------------------------------------------------
@@ -609,9 +609,11 @@ def test_claimed_assurance_blocks_accept_to_on_claimed() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         assurance_assessment=_assessed(
-            DecisionAssurance.CLAIMED, block_action=EvidencePolicyAction.RETRY,
+            DecisionAssurance.CLAIMED,
+            block_action=EvidencePolicyAction.RETRY,
         ),
     )
 
@@ -632,9 +634,11 @@ def test_insufficient_assurance_blocks_accept_to_on_missing() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         assurance_assessment=_assessed(
-            DecisionAssurance.INSUFFICIENT, block_action=EvidencePolicyAction.ROLLBACK,
+            DecisionAssurance.INSUFFICIENT,
+            block_action=EvidencePolicyAction.ROLLBACK,
         ),
     )
 
@@ -654,9 +658,11 @@ def test_assurance_does_not_block_non_accept() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         assurance_assessment=_assessed(
-            DecisionAssurance.INSUFFICIENT, block_action=EvidencePolicyAction.ROLLBACK,
+            DecisionAssurance.INSUFFICIENT,
+            block_action=EvidencePolicyAction.ROLLBACK,
         ),
     )
 
@@ -673,7 +679,8 @@ def test_assurance_reasons_are_carried_through() -> None:
     reasons = ["critical check 'no-secrets' had MISSING evidence"]
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         assurance_assessment=_assessed(
             DecisionAssurance.INSUFFICIENT,
             block_action=EvidencePolicyAction.RETRY,
@@ -726,7 +733,9 @@ def test_policy_gate_blocker_cannot_be_compensated() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria, policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
+        scores,
+        criteria,
+        policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
     )
 
     assert result.decision == "ACCEPT"
@@ -741,7 +750,9 @@ def test_policy_gate_budget_breach_forces_downgrade() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria, policy_gate=_gate(budget_action=EvidencePolicyAction.REPLAN),
+        scores,
+        criteria,
+        policy_gate=_gate(budget_action=EvidencePolicyAction.REPLAN),
     )
 
     assert result.candidate_decision == "ACCEPT"
@@ -759,7 +770,9 @@ def test_policy_gate_never_weakens_a_conservative_candidate() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria, policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
+        scores,
+        criteria,
+        policy_gate=_gate(blocker_action=EvidencePolicyAction.RETRY),
     )
 
     assert result.candidate_decision == "ROLLBACK"
@@ -772,10 +785,12 @@ def test_policy_gate_records_effective_weights_and_policy_identity() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         policy_gate=_gate(
             effective_weights={"lint": 0.5, "a": 1.0},
-            policy_id="coding-default", policy_version="1.0",
+            policy_id="coding-default",
+            policy_version="1.0",
             policy_hash="sha256:deadbeef",
         ),
     )
@@ -792,7 +807,9 @@ def test_policy_gate_passing_gate_keeps_candidate() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria, policy_gate=_gate(),  # no blocker/budget action
+        scores,
+        criteria,
+        policy_gate=_gate(),  # no blocker/budget action
     )
 
     assert result.candidate_decision == "ACCEPT"
@@ -825,9 +842,11 @@ def test_assurance_gate_and_policy_gate_compose() -> None:
     criteria = _criteria(weight=1.0, threshold=0.6)
 
     result = BoundPolicy().decide(
-        scores, criteria,
+        scores,
+        criteria,
         assurance_assessment=_assessed(
-            DecisionAssurance.CLAIMED, block_action=EvidencePolicyAction.RETRY,
+            DecisionAssurance.CLAIMED,
+            block_action=EvidencePolicyAction.RETRY,
         ),
         policy_gate=_gate(budget_action=EvidencePolicyAction.REPLAN),
     )

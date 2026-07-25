@@ -5,7 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] - 2026-07-25
+
+### Added
+
+- **`bound setup`** — one-command project setup: detects tooling (test framework,
+  linter, type checker, build system, Git), generates/updates `bound-policy.yaml`,
+  installs the selected agent integration, creates `.bound/` directories, validates
+  the policy, and performs a smoke evaluation. Supports `--agent` (codex,
+  claude-code, cline, generic), `--dry-run`, `--verify`, `--force`, and `--json`.
+- **Integration installer abstraction** (`bound.setup`) — `IntegrationInstaller`
+  Protocol with `detect`, `plan`, and `install` methods. Concrete installers for
+  generic (prompt-based), Codex, Claude Code, and Cline, each reusing existing
+  integration prompts from `integrations/`. Every installer is idempotent,
+  supports dry-run, and works without network access.
+- **`bound doctor`** — read-only project health check reporting on BOUND version,
+  Python runtime, policy presence and validity, configured collectors, Git state,
+  checkpoint support, integration installation, writable lineage directories,
+  and stale/incompatible configuration. Supports `--json` and `--project-dir`.
+  Never mutates the project.
+
+### Changed
+
+- Version bumped to `0.8.1`.
+- Added `__main__.py` enabling `python -m bound` invocation.
+- Updated README quickstart to reference `bound setup --agent generic`.
 
 ## [0.8.0] - 2026-07-21
 
@@ -637,7 +661,8 @@ corpus (`benchmarks/contracts/`, `benchmarks/trajectories/`) and the
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Danny-de-bree/bound/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.8.0
 [0.7.1]: https://github.com/Danny-de-bree/bound/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Danny-de-bree/bound/releases/tag/v0.7.0

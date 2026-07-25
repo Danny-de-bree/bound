@@ -125,6 +125,7 @@ bound inspect <run_id> --json           # machine-readable: provenance + assuran
 
    ```python
    import bound, inspect
+
    print(inspect.signature(bound.BoundWorkflow.evaluate_step))
    ```
 
@@ -335,7 +336,10 @@ Only after this report is produced may you begin implementation.
 
    ```python
    from bound import (
-       AcceptanceCheck, RiskCheck, StepBudget, StepContract,
+       AcceptanceCheck,
+       RiskCheck,
+       StepBudget,
+       StepContract,
    )
 
    contract = StepContract(
@@ -345,13 +349,12 @@ Only after this report is produced may you begin implementation.
        acceptance_checks=[
            AcceptanceCheck(id="tests-pass", description="pytest is green"),
            AcceptanceCheck(id="lint-clean", description="ruff is clean"),
-           AcceptanceCheck(id="rejects-invalid",
-                           description="invalid input returns 400"),
+           AcceptanceCheck(id="rejects-invalid", description="invalid input returns 400"),
        ],
        risk_checks=[
-           RiskCheck(id="no-tests-removed",
-                      description="No existing tests were deleted",
-                      severity=0.8),
+           RiskCheck(
+               id="no-tests-removed", description="No existing tests were deleted", severity=0.8
+           ),
        ],
        expected_artifacts=["src/app/items.py", "tests/test_items_validation.py"],
        budget=StepBudget(max_retries=3, max_tool_calls=40),
@@ -369,23 +372,31 @@ Only after this report is produced may you begin implementation.
    # For VERIFIED evidence use the BOUND collectors (bound.PytestCollector,
    # bound.GitCollector, ...), which run verification BOUND controls.
 
+
    def collect_evidence(contract, *, subprocess_results) -> ExecutionEvidence:
        # Read real observations: test exit code, lint exit code, git status, etc.
        ...
        return ExecutionEvidence(
            acceptance=[
-               CheckEvidence(check_id="tests-pass", passed=tests_ok,
-                             provenance=EvidenceProvenance.CLAIMED),
-               CheckEvidence(check_id="lint-clean", passed=lint_ok,
-                             provenance=EvidenceProvenance.CLAIMED),
-               CheckEvidence(check_id="rejects-invalid",
-                             passed=invalid_rejected, detail=detail,
-                             provenance=EvidenceProvenance.CLAIMED),
+               CheckEvidence(
+                   check_id="tests-pass", passed=tests_ok, provenance=EvidenceProvenance.CLAIMED
+               ),
+               CheckEvidence(
+                   check_id="lint-clean", passed=lint_ok, provenance=EvidenceProvenance.CLAIMED
+               ),
+               CheckEvidence(
+                   check_id="rejects-invalid",
+                   passed=invalid_rejected,
+                   detail=detail,
+                   provenance=EvidenceProvenance.CLAIMED,
+               ),
            ],
            risks=[
-               CheckEvidence(check_id="no-tests-removed",
-                             passed=no_tests_removed,
-                             provenance=EvidenceProvenance.CLAIMED),
+               CheckEvidence(
+                   check_id="no-tests-removed",
+                   passed=no_tests_removed,
+                   provenance=EvidenceProvenance.CLAIMED,
+               ),
            ],
            produced_artifacts=produced,
            unexpected_artifacts=unexpected,

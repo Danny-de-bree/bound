@@ -173,4 +173,3 @@ def policy_changed_since(
     hash_a = a if isinstance(a, str) else compute_policy_hash(a)
     hash_b = b if isinstance(b, str) else compute_policy_hash(b)
     return hash_a != hash_b
-

@@ -112,6 +112,3 @@ def test_readme_example_attempt2_is_accept() -> None:
     assert result.evaluation.score == pytest.approx(0.60, abs=1e-12)
     assert result.evaluation.threshold == pytest.approx(0.6)
     assert result.feedback  # deterministic, non-empty
-
-
-

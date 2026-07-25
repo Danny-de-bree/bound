@@ -139,7 +139,7 @@ def _type_to_schema(tp: type) -> dict[str, Any]:
 class McpToolDef:
     """Definition of one MCP tool, binding a name to a service method."""
 
-    __slots__ = ("name", "description", "request_model", "handler")
+    __slots__ = ("description", "handler", "name", "request_model")
 
     def __init__(
         self,
@@ -451,7 +451,7 @@ def _validation_error_data(exc: ValidationError) -> list[dict[str, Any]]:
                 "loc": list(err.get("loc", ())),
                 "msg": err.get("msg", ""),
                 "type": err.get("type", ""),
-            }
+            },
         )
     return details
 
@@ -477,13 +477,13 @@ def _handle_rpc_batch(requests: list[Any]) -> list[dict[str, Any]] | None:
                 _make_response(
                     None,
                     error=_make_error(INVALID_REQUEST, "Batch element must be a JSON object"),
-                )
+                ),
             )
             continue
         resp = _handle_rpc_request(req)
         if resp is not None:
             responses.append(resp)
-    return responses if responses else None
+    return responses or None
 
 
 def run_mcp_server(*, once: bool = False, json_log: bool = False) -> int:

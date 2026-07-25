@@ -135,9 +135,7 @@ def _evaluate(
     evidence: ExecutionEvidence,
 ) -> object:
     """Run the full contract -> policy pipeline and return the result."""
-    return BoundWorkflow().evaluate_step(
-        contract=contract, evidence=evidence, criteria=_CRITERIA
-    )
+    return BoundWorkflow().evaluate_step(contract=contract, evidence=evidence, criteria=_CRITERIA)
 
 
 # ---------------------------------------------------------------------------
@@ -151,9 +149,7 @@ def _failing_pytest_evidence(tmp_path: Path) -> CheckEvidence:
     runner = CommandCollector(
         {
             "pytest": CommandSpec(
-                argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)
-                ),
+                argv=_sys_argv("-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)),
                 timeout=60.0,
             )
         }
@@ -256,7 +252,6 @@ class TestObservedToolCallsOverrideClaimedZero:
         assert tool_cost.provenance is EvidenceProvenance.OBSERVED
 
 
-
 # ---------------------------------------------------------------------------
 # (c) No token meter -> token_usage is MISSING (value None), never 0
 # ---------------------------------------------------------------------------
@@ -336,7 +331,6 @@ class TestInfluenceDefaultsHonestly:
         assert "no evidence source" in (influence.reason or "")
 
 
-
 # ---------------------------------------------------------------------------
 # (e) PytestCollector finds ZERO tests -> no proven PASS
 # ---------------------------------------------------------------------------
@@ -348,9 +342,7 @@ def _zero_test_pytest_evidence(tmp_path: Path) -> CheckEvidence:
     runner = CommandCollector(
         {
             "pytest": CommandSpec(
-                argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)
-                ),
+                argv=_sys_argv("-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)),
                 timeout=60.0,
             )
         }
@@ -460,7 +452,6 @@ class TestCollectorCrashIsInsufficient:
         assert assessment.assurance is not DecisionAssurance.VERIFIED
 
 
-
 # ---------------------------------------------------------------------------
 # (h) Risk evidence only CLAIMED -> minimal assurance blocks ACCEPT
 # ---------------------------------------------------------------------------
@@ -521,7 +512,6 @@ class TestClaimedRiskBlocksAccept:
         # The ACCEPT was blocked and downgraded to the on_claimed action.
         assert result.final_decision == "REPLAN"
         assert result.final_decision != result.candidate_decision
-
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +619,6 @@ class TestAllVerifiedIsVerified:
         assert result.final_decision == "ACCEPT"
 
 
-
 # ---------------------------------------------------------------------------
 # (k) An old schema-1.0 trace can still be read
 # ---------------------------------------------------------------------------
@@ -714,7 +703,6 @@ class TestTraceCarriesConfigHash:
         assert round_tripped.config.collector_versions == snapshot.collector_versions
 
 
-
 # ---------------------------------------------------------------------------
 # (m) Raw command output is REDACTED by default (not stored; hash + summary only)
 # ---------------------------------------------------------------------------
@@ -725,9 +713,7 @@ def _secret_runner(*, store_raw: bool = False) -> CommandCollector:
     return CommandCollector(
         {
             "leak": CommandSpec(
-                argv=_sys_argv(
-                    "-c", "print('api_key=supersecret42 and password=hunter2')"
-                ),
+                argv=_sys_argv("-c", "print('api_key=supersecret42 and password=hunter2')"),
                 timeout=30.0,
             )
         },
@@ -767,7 +753,6 @@ class TestRawOutputRedactedByDefault:
         assert "supersecret42" not in result.stdout_raw
         assert "hunter2" not in result.stdout_raw
         assert "***REDACTED***" in result.stdout_raw
-
 
 
 # ---------------------------------------------------------------------------
@@ -877,7 +862,6 @@ class TestDeterminismAndReplay:
         assert compute_policy_config_hash(cfg) == compute_policy_config_hash(cfg)
 
 
-
 # ---------------------------------------------------------------------------
 # Definition of Done (todo §16): the REPLAN -> ACCEPT flow, proven by the trace
 # ---------------------------------------------------------------------------
@@ -952,7 +936,6 @@ def _record_collected(run, step_id: str, evidence: ExecutionEvidence) -> None:
         )
 
 
-
 class TestDefinitionOfDoneReplanToAccept:
     """The canonical v0.8 DoD: 1/3 -> REPLAN, then 3/3 -> ACCEPT, proven by trace."""
 
@@ -980,14 +963,10 @@ class TestDefinitionOfDoneReplanToAccept:
             run_id = run.run_id
 
             # Attempt 1 -> 1/3 VERIFIED -> REPLAN.
-            step1 = run.start_step(
-                contract_id="PHASE-001", attempt=1, description="implement"
-            )
+            step1 = run.start_step(contract_id="PHASE-001", attempt=1, description="implement")
             evidence1 = _dod_evidence(a=True, b=False, c=False)
             _record_collected(run, step1.step_id, evidence1)
-            result1 = wf.evaluate_step(
-                contract=contract, evidence=evidence1, criteria=_CRITERIA
-            )
+            result1 = wf.evaluate_step(contract=contract, evidence=evidence1, criteria=_CRITERIA)
             eval1 = run.record_evaluation(
                 step_id=step1.step_id,
                 attempt=1,
@@ -1020,9 +999,7 @@ class TestDefinitionOfDoneReplanToAccept:
             )
             evidence2 = _dod_evidence(a=True, b=True, c=True)
             _record_collected(run, step2.step_id, evidence2)
-            result2 = wf.evaluate_step(
-                contract=contract, evidence=evidence2, criteria=_CRITERIA
-            )
+            result2 = wf.evaluate_step(contract=contract, evidence=evidence2, criteria=_CRITERIA)
             eval2 = run.record_evaluation(
                 step_id=step2.step_id,
                 attempt=2,
@@ -1049,12 +1026,9 @@ class TestDefinitionOfDoneReplanToAccept:
             assert result2.assurance is DecisionAssurance.VERIFIED
             assert result2.final_decision == "ACCEPT"
 
-            run.finish_run(
-                status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED
-            )
+            run.finish_run(status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED)
 
         self._assert_trace_proves_every_number(store, run_id)
-
 
     @staticmethod
     def _assert_trace_proves_every_number(store: LineageStore, run_id: str) -> None:
@@ -1073,9 +1047,7 @@ class TestDefinitionOfDoneReplanToAccept:
         assert all(e.provenance is EvidenceProvenance.VERIFIED for e in collected)
         assert all(e.collector_version == "0.7.0" for e in collected)
         assert {e.collector for e in collected} == {"bound.pytest", "bound.git"}
-        assert all(
-            e.artifact_hash and e.artifact_hash.startswith("sha256:") for e in collected
-        )
+        assert all(e.artifact_hash and e.artifact_hash.startswith("sha256:") for e in collected)
         # The candidate vs final decision and the assurance level (item 12).
         gated = [e for e in log.events if e.event == "decision.gated"]
         assert len(gated) == 2
@@ -1090,7 +1062,6 @@ class TestDefinitionOfDoneReplanToAccept:
         # Whether the final decision depended on CLAIMED evidence: it did not.
         assert gated[1].assurance is DecisionAssurance.VERIFIED
         assert all(e.provenance is not EvidenceProvenance.CLAIMED for e in collected)
-
 
 
 # ---------------------------------------------------------------------------
@@ -1133,5 +1104,3 @@ class TestVerifiedEvidenceDemoScript:
         assert "policy config hash:" in out
         assert "depended_on_claimed=False" in out
         assert "did NOT depend on CLAIMED evidence: True" in out
-
-

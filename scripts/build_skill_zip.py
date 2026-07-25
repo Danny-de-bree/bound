@@ -112,8 +112,7 @@ def build_skill_zip(*, out_dir: str | Path) -> Path:
             info = zf.getinfo(name)
             if info.date_time != DETERMINISTIC_TIMESTAMP:
                 print(
-                    f"❌ ZIP entry {name} has non-deterministic timestamp "
-                    f"{info.date_time}",
+                    f"❌ ZIP entry {name} has non-deterministic timestamp {info.date_time}",
                     file=sys.stderr,
                 )
                 sys.exit(1)
@@ -124,9 +123,7 @@ def build_skill_zip(*, out_dir: str | Path) -> Path:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Build deterministic BOUND-agent-skill.zip"
-    )
+    parser = argparse.ArgumentParser(description="Build deterministic BOUND-agent-skill.zip")
     parser.add_argument(
         "--out-dir",
         default="release/skills",

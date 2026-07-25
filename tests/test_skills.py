@@ -46,9 +46,7 @@ def test_skill_md_has_frontmatter() -> None:
     text = (SKILLS_DIR / "SKILL.md").read_text(encoding="utf-8")
     assert text.startswith("---\n"), "SKILL.md must start with --- frontmatter"
     assert "name:" in text.split("---")[1], "SKILL.md frontmatter must include name:"
-    assert "description:" in text.split("---")[
-        1
-    ], "SKILL.md frontmatter must include description:"
+    assert "description:" in text.split("---")[1], "SKILL.md frontmatter must include description:"
 
 
 def test_skill_has_no_pycache() -> None:
@@ -69,9 +67,7 @@ def test_openai_agent_yaml_valid() -> None:
     assert isinstance(data, dict), "agents/openai.yaml must be a dict"
     assert "interface" in data, "agents/openai.yaml must contain 'interface' key"
     assert "display_name" in data["interface"], "interface must have display_name"
-    assert "short_description" in data["interface"], (
-        "interface must have short_description"
-    )
+    assert "short_description" in data["interface"], "interface must have short_description"
 
 
 def test_zip_builds_deterministically(tmp_path: Path) -> None:
@@ -123,6 +119,5 @@ def test_zip_has_deterministic_timestamps(tmp_path: Path) -> None:
         for name in zf.namelist():
             info = zf.getinfo(name)
             assert info.date_time == DETERMINISTIC_TIMESTAMP, (
-                f"Entry {name} has timestamp {info.date_time}, "
-                f"expected {DETERMINISTIC_TIMESTAMP}"
+                f"Entry {name} has timestamp {info.date_time}, expected {DETERMINISTIC_TIMESTAMP}"
             )

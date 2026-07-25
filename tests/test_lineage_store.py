@@ -57,9 +57,7 @@ def _full_run(store: LineageStore, *, task: str = "Implement CSV exporter"):
         note="switched to csv.DictWriter",
     )
     # Step 1, attempt 2 -> ACCEPT (3/3 checks)
-    s1a2 = store.start_step(
-        run_id, contract_id="PHASE-001-R1", attempt=1, started_at=started
-    )
+    s1a2 = store.start_step(run_id, contract_id="PHASE-001-R1", attempt=1, started_at=started)
     ev2 = store.record_evaluation(
         run_id,
         step_id=s1a2.step_id,
@@ -163,9 +161,7 @@ class TestReplay:
 class TestPrivacy:
     def test_default_secret_scrubber_masks_metadata(self, tmp_path) -> None:
         store = _store(tmp_path)
-        run_evt = store.start_run(
-            "task", metadata={"auth": "password=hunter2"}
-        )
+        run_evt = store.start_run("task", metadata={"auth": "password=hunter2"})
         events_path = store._events_path(run_evt.run_id)
         raw = events_path.read_text()
         assert "hunter2" not in raw
@@ -186,12 +182,8 @@ class TestPrivacy:
             stored_fields={
                 "run_started": {"task"},
                 "step_started": {"contract_id", "attempt"},
-                "evaluation_recorded": {
-                    "scores", "score", "threshold", "decision", "reason_code"
-                },
-                "outcome_recorded": {
-                    "evaluation_id", "decision", "next_action", "reason_code"
-                },
+                "evaluation_recorded": {"scores", "score", "threshold", "decision", "reason_code"},
+                "outcome_recorded": {"evaluation_id", "decision", "next_action", "reason_code"},
                 "run_finished": {"status", "reason_code"},
             },
         )

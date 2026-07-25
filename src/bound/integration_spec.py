@@ -70,10 +70,7 @@ def integration_spec() -> dict[str, Any]:
             {
                 "step": 5,
                 "name": "apply_control_decision",
-                "action": (
-                    "Apply the returned control decision; the agent owns the "
-                    "control flow."
-                ),
+                "action": ("Apply the returned control decision; the agent owns the control flow."),
             },
         ],
         "evidence_rule": {

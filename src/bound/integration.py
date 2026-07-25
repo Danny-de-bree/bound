@@ -111,9 +111,7 @@ def _violated_risk_checks(contract: StepContract, evidence: ExecutionEvidence) -
         The ids of violated declared risk checks, preserving declaration order.
     """
     passed = {ev.check_id for ev in evidence.risks if ev.passed}
-    return [
-        check.id for check in contract.risk_checks if check.id not in passed
-    ]
+    return [check.id for check in contract.risk_checks if check.id not in passed]
 
 
 def render_feedback(
@@ -158,12 +156,10 @@ def render_feedback(
         failed = _failed_required_checks(contract, evidence)
         lines = [
             f"Decision: RETRY. The step is close to acceptable "
-            f"(S={score:.4f}, T={threshold:.4f}, gap={gap:.4f})."
+            f"(S={score:.4f}, T={threshold:.4f}, gap={gap:.4f}).",
         ]
         if failed:
-            lines.append(
-                f"Remaining failed/missing required check(s): {', '.join(failed)}."
-            )
+            lines.append(f"Remaining failed/missing required check(s): {', '.join(failed)}.")
         lines.append("Stay with the current approach and make one focused correction.")
         return " ".join(lines)
 
@@ -180,7 +176,7 @@ def render_feedback(
     lines = [
         f"Decision: ROLLBACK. The risk boundary is exceeded "
         f"(R={evaluation.scores.risk:.4f} >= "
-        f"rollback threshold={evaluation.rollback_risk_threshold:.4f})."
+        f"rollback threshold={evaluation.rollback_risk_threshold:.4f}).",
     ]
     if violated:
         lines.append(f"Violated risk check(s): {', '.join(violated)}.")
@@ -261,4 +257,3 @@ def evaluate_agent_step(
         next_action=next_action,
         feedback=feedback,
     )
-

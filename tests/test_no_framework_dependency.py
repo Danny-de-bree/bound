@@ -130,8 +130,7 @@ def test_bound_source_imports_no_agent_framework() -> None:
             offenders[str(path.relative_to(_SRC_ROOT))] = forbidden
 
     assert not offenders, (
-        "BOUND core must not import any agent/orchestration framework; "
-        f"found: {offenders}"
+        f"BOUND core must not import any agent/orchestration framework; found: {offenders}"
     )
 
 
@@ -150,4 +149,3 @@ def test_agent_framework_not_loaded_after_import(module_root: str) -> None:
     assert module_root not in loaded_roots, (
         f"importing bound loaded agent framework module '{module_root}'"
     )
-

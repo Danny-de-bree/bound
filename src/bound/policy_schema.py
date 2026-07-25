@@ -45,9 +45,9 @@ from bound.evidence import EvidenceProvenance
 from bound.models import DecisionAssurance
 
 __all__ = [
+    "BUDGET_DIMENSIONS",
     "DEFAULT_WEIGHTS",
     "POLICY_SCHEMA_VERSION",
-    "BUDGET_DIMENSIONS",
     "ApprovalsPolicy",
     "BoundPolicyConfig",
     "BudgetDimension",
@@ -162,9 +162,7 @@ class CollectorConfig(BaseModel):
             ValueError: If ``type`` is ``"command"`` but ``command`` is unset.
         """
         if self.type == "command" and not self.command:
-            raise ValueError(
-                "collector of type 'command' requires a non-empty 'command' argv"
-            )
+            raise ValueError("collector of type 'command' requires a non-empty 'command' argv")
         return self
 
 
@@ -233,7 +231,7 @@ class HardGate(BaseModel):
         if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
             raise ValueError(
                 "accepted_provenance must be None (accept any) or a non-empty "
-                "list of EvidenceProvenance values."
+                "list of EvidenceProvenance values.",
             )
         return self
 
@@ -304,9 +302,7 @@ class WeightedSignal(BaseModel):
         else:
             default = DEFAULT_WEIGHTS.get(self.importance)
             if default is None:
-                raise ValueError(
-                    f"importance {self.importance!r} has no default weight"
-                )
+                raise ValueError(f"importance {self.importance!r} has no default weight")
             self.effective_weight = float(default)
         return self
 
@@ -323,7 +319,7 @@ class WeightedSignal(BaseModel):
         if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
             raise ValueError(
                 "accepted_provenance must be None (accept any) or a non-empty "
-                "list of EvidenceProvenance values."
+                "list of EvidenceProvenance values.",
             )
         return self
 
@@ -430,7 +426,7 @@ class ChangeScope(BaseModel):
     forbidden_paths: list[str] = Field(default_factory=list)
     dependency_file_patterns: list[str] = Field(default_factory=list)
     unexpected_artifacts: UnexpectedArtifactsPolicy = Field(
-        default_factory=UnexpectedArtifactsPolicy
+        default_factory=UnexpectedArtifactsPolicy,
     )
 
 
@@ -518,7 +514,7 @@ class BoundPolicyConfig(BaseModel):
                 if check.id in seen:
                     raise ValueError(
                         f"duplicate check id {check.id!r}: already declared in "
-                        f"{seen[check.id]!r} and re-declared in {section_name!r}"
+                        f"{seen[check.id]!r} and re-declared in {section_name!r}",
                     )
                 seen[check.id] = section_name
         return self
@@ -557,7 +553,9 @@ class _NoDuplicateKeysLoader(yaml.SafeLoader):
 
 
 def _construct_mapping_no_duplicates(
-    loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False
+    loader: yaml.SafeLoader,
+    node: yaml.MappingNode,
+    deep: bool = False,
 ) -> dict[Any, Any]:
     """Construct a mapping, raising on the first duplicate key.
 
@@ -607,8 +605,7 @@ def parse_policy_yaml(text: str) -> BoundPolicyConfig:
     raw = yaml.load(text, Loader=_NoDuplicateKeysLoader)  # noqa: S506 (trusted policy text)
     if not isinstance(raw, dict):
         raise ValueError(
-            "policy YAML must be a mapping at the top level, got "
-            f"{type(raw).__name__}"
+            f"policy YAML must be a mapping at the top level, got {type(raw).__name__}",
         )
     return BoundPolicyConfig.model_validate(raw)
 
@@ -631,5 +628,3 @@ def load_policy_yaml(path: str | Path) -> BoundPolicyConfig:
     """
     text = Path(path).read_text(encoding="utf-8")
     return parse_policy_yaml(text)
-
-

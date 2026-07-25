@@ -746,6 +746,8 @@ class CheckpointRollbackResponse(BaseModel):
     is_valid: bool = False
     issues: list[str] = Field(default_factory=list)
     preview: dict[str, Any] | None = None
+
+
 # =========================================================================
 # Internal helpers (used by services, also reusable from adapters)
 # =========================================================================
@@ -788,16 +790,16 @@ _DECISION_SEVERITY: dict[str, int] = {
 }
 
 
-_ACCEPT_BLOCKING_ASSURANCE: frozenset[str] = frozenset(
-    {"CLAIMED", "INSUFFICIENT"}
+_ACCEPT_BLOCKING_ASSURANCE: frozenset[str] = frozenset({"CLAIMED", "INSUFFICIENT"})
+
+
+_INDEPENDENTLY_VERIFIED: frozenset[EvidenceProvenance] = frozenset(
+    {
+        EvidenceProvenance.VERIFIED,
+        EvidenceProvenance.OBSERVED,
+        EvidenceProvenance.ATTESTED,
+    },
 )
-
-
-_INDEPENDENTLY_VERIFIED: frozenset[EvidenceProvenance] = frozenset({
-    EvidenceProvenance.VERIFIED,
-    EvidenceProvenance.OBSERVED,
-    EvidenceProvenance.ATTESTED,
-})
 
 
 _PROVENANCE_STRENGTH: dict[EvidenceProvenance, int] = {
@@ -912,24 +914,24 @@ def _policy_warnings(policy: BoundPolicyConfig) -> list[str]:
             kind = "blocker" if is_blocker else "check"
             warnings.append(
                 f"{kind} '{check_id}' binds no collector \u2014 BOUND cannot "
-                "independently collect this evidence"
+                "independently collect this evidence",
             )
         elif collector not in collector_ids:
             kind = "blocker" if is_blocker else "check"
             warnings.append(
                 f"{kind} '{check_id}' references unknown collector "
-                f"'{collector}' \u2014 this evidence will always be MISSING"
+                f"'{collector}' \u2014 this evidence will always be MISSING",
             )
         acc = _provenance_set(accepted)
         if acc == {EvidenceProvenance.CLAIMED}:
             warnings.append(
                 f"check '{check_id}' accepts only CLAIMED evidence \u2014 "
-                "this is agent self-report with no independent verification"
+                "this is agent self-report with no independent verification",
             )
         if collector is None and (not acc or EvidenceProvenance.EVALUATED in acc):
             warnings.append(
                 f"check '{check_id}' appears subjective/unmeasurable; consider "
-                "evaluating it in a separate human/judge step rather than a gate"
+                "evaluating it in a separate human/judge step rather than a gate",
             )
 
     for gate in policy.acceptance_checks:
@@ -1021,10 +1023,7 @@ def _build_evaluate_payload(result: EvaluationResult) -> dict[str, Any]:
 def _html_escape(text: str) -> str:
     """Escape a string for safe inclusion in HTML text content."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
@@ -1209,23 +1208,11 @@ class PolicyService:
         human_readable = _render_explain(policy)
         return PolicyExplainResponse(
             policy=identity,
-            collectors={
-                name: c.model_dump(mode="json")
-                for name, c in policy.collectors.items()
-            },
-            acceptance_checks=[
-                g.model_dump(mode="json") for g in policy.acceptance_checks
-            ],
-            quality_checks=[
-                s.model_dump(mode="json") for s in policy.quality_checks
-            ],
-            risk_checks=[
-                g.model_dump(mode="json") for g in policy.risk_checks
-            ],
-            budgets={
-                n: d.model_dump(mode="json")
-                for n, d in policy.budgets.items()
-            },
+            collectors={name: c.model_dump(mode="json") for name, c in policy.collectors.items()},
+            acceptance_checks=[g.model_dump(mode="json") for g in policy.acceptance_checks],
+            quality_checks=[s.model_dump(mode="json") for s in policy.quality_checks],
+            risk_checks=[g.model_dump(mode="json") for g in policy.risk_checks],
+            budgets={n: d.model_dump(mode="json") for n, d in policy.budgets.items()},
             change_scope=policy.change_scope.model_dump(mode="json"),
             approvals=policy.approvals.model_dump(mode="json"),
             human_readable=human_readable,
@@ -1277,7 +1264,7 @@ def _render_explain(policy: BoundPolicyConfig) -> str:
     if policy.collectors:
         out.append("Collectors:")
         for name, c in policy.collectors.items():
-            cmd = c.command if c.command else "(none)"
+            cmd = c.command or "(none)"
             interval = f" timeout {c.timeout_seconds}s" if c.timeout_seconds else ""
             out.append(f"  - {name}: {cmd}{interval}")
         out.append("")
@@ -1323,7 +1310,7 @@ def _render_explain(policy: BoundPolicyConfig) -> str:
         out.append(f"  destructive: {', '.join(appr.destructive_actions)}")
     out.append(
         f"  require_rollback_availability={appr.require_rollback_availability} "
-        f"on_missing_rollback={appr.on_missing_rollback}"
+        f"on_missing_rollback={appr.on_missing_rollback}",
     )
 
     return "\n".join(out)
@@ -1370,9 +1357,7 @@ class RunService:
         """
         store = _get_store(request.store)
         try:
-            event = store.finish_run(
-                request.run_id, status=request.status, note=request.note
-            )
+            event = store.finish_run(request.run_id, status=request.status, note=request.note)
         except RunNotFound as exc:
             raise RunNotFoundError(str(exc)) from exc
         return RunFinishResponse(
@@ -1498,9 +1483,7 @@ class EvaluationService:
             EvaluationInputError: If the inputs fail validation.
         """
         try:
-            evaluator = CodingWorkflowEvaluator(
-                request.signals, influence=request.influence
-            )
+            evaluator = CodingWorkflowEvaluator(request.signals, influence=request.influence)
             policy = BoundPolicy(evaluator)
             result = policy.evaluate(request.action, request.criteria)
         except (ValueError, ValidationError) as exc:
@@ -1559,9 +1542,7 @@ class EvaluationService:
         except RunNotFound as exc:
             raise RunNotFoundError(str(exc)) from exc
 
-        step_id = generate_step_id(
-            run_id=run_id, contract_id=step, attempt=attempt
-        )
+        step_id = generate_step_id(run_id=run_id, contract_id=step, attempt=attempt)
         resolved_store.start_step(
             run_id,
             contract_id=step,
@@ -1569,9 +1550,7 @@ class EvaluationService:
             step_id=step_id,
             description=description,
         )
-        evaluation_id = generate_evaluation_id(
-            run_id=run_id, step_id=step_id, attempt=attempt
-        )
+        evaluation_id = generate_evaluation_id(run_id=run_id, step_id=step_id, attempt=attempt)
         resolved_store.record_evaluation(
             run_id,
             step_id=step_id,
@@ -1580,9 +1559,7 @@ class EvaluationService:
             score=result.score,
             threshold=result.threshold,
             decision=result.decision,
-            reason_code=_DECISION_TO_EVAL_REASON.get(
-                result.decision, ReasonCode.ACCEPT
-            ),
+            reason_code=_DECISION_TO_EVAL_REASON.get(result.decision, ReasonCode.ACCEPT),
             evaluation_id=evaluation_id,
         )
         return {
@@ -1618,11 +1595,9 @@ class OutcomeService:
         except RunNotFound as exc:
             raise RunNotFoundError(str(exc)) from exc
 
-        next_action = request.next_action or _DECISION_NEXT_ACTION.get(
-            request.decision, "retry"
-        )
+        next_action = request.next_action or _DECISION_NEXT_ACTION.get(request.decision, "retry")
         reason_code = request.reason_code or str(
-            _NEXT_ACTION_REASON.get(next_action, ReasonCode.RETRIED)
+            _NEXT_ACTION_REASON.get(next_action, ReasonCode.RETRIED),
         )
 
         store.record_outcome(
@@ -1733,9 +1708,7 @@ class BoundaryService:
             raise EvaluationInputError(str(exc)) from exc
 
         next_action = _DECISION_TO_ACTION.get(result.decision, "retry")
-        feedback = render_feedback(
-            result, contract=request.contract, evidence=request.evidence
-        )
+        feedback = render_feedback(result, contract=request.contract, evidence=request.evidence)
 
         return BoundaryEvaluateResponse(
             result=result,
@@ -1889,9 +1862,7 @@ class CheckpointService:
 
         all_issues = list(issues)
         if failed:
-            all_issues.append(
-                f"Failed to restore {len(failed)} file(s): {', '.join(failed[:5])}"
-            )
+            all_issues.append(f"Failed to restore {len(failed)} file(s): {', '.join(failed[:5])}")
 
         return CheckpointRollbackResponse(
             run_id=request.run_id,
@@ -1900,6 +1871,7 @@ class CheckpointService:
             issues=all_issues,
             preview=preview,
         )
+
     @staticmethod
     def inspect(
         request: CheckpointInspectRequest,

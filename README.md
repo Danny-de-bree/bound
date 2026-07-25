@@ -30,7 +30,7 @@ BOUND emits the signal; the agent performs the action.
 
 ## Get started in 3 sentences
 
-Install the CLI with `pip install bound-policy` and add one of the integration prompts to your agent so it knows how and when to call BOUND. Onboard your project with `bound init` — it auto-detects your test, lint, and type-check tooling and generates a reviewable `bound-policy.yaml` without running any tool or touching the network. Then let the agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict BOUND returns — open `bound ui` if you want to watch live.
+Install the CLI with `pip install bound-policy` and add one of the integration prompts to your agent so it knows how and when to call BOUND. Onboard your project with `bound setup --agent generic` — it auto-detects your test, lint, and type-check tooling, generates a reviewable `bound-policy.yaml`, and installs the integration prompt without running any tool or touching the network. Then let the agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict BOUND returns — open `bound ui` if you want to watch live.
 
 ## Install — two parts, one time
 
@@ -69,7 +69,7 @@ A real session looks like this:
 
 ```text
 1. Agent creates a bound-policy.yaml
-   → Python project: bound init (auto-detects pytest, ruff, mypy)
+   → Python project: bound setup --agent generic (auto-detects pytest, ruff, mypy)
    → JavaScript/Go/Rust/anything: write one based on the default policy
      (it's just YAML — test command, lint command, threshold)
 

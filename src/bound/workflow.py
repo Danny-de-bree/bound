@@ -171,7 +171,7 @@ class CodingWorkflowEvaluator:
         """
         return self._provenance
 
-    def evaluate(self, action: Action) -> EvaluationScores:  # noqa: ARG002
+    def evaluate(self, action: Action) -> EvaluationScores:
         """Derive :class:`EvaluationScores` from the stored workflow signals.
 
         The ``action`` is accepted to satisfy the :class:`Evaluator` Protocol but
@@ -261,7 +261,7 @@ class CodingWorkflowEvaluator:
             raise ValueError(
                 "no acceptance evidence available: provide at least one of "
                 "test_pass_rate, required_checks_passed, lint_passed, "
-                "type_check_passed in CodingWorkflowSignals."
+                "type_check_passed in CodingWorkflowSignals.",
             )
 
         count = len(entries)
@@ -294,10 +294,9 @@ class CodingWorkflowEvaluator:
                     f"{acceptance:.4f}. Thin evidence can no longer yield "
                     f"maximum confidence (blind-spot fix)."
                 ),
-            )
+            ),
         )
         return acceptance, evidence
-
 
     def _risk(self, acceptance: float) -> tuple[float, list[ScoreEvidence]]:
         """Mean of the available risk indicators.
@@ -392,7 +391,6 @@ class CodingWorkflowEvaluator:
         ]
         return risk, evidence
 
-
     def _cost(self) -> tuple[float, list[ScoreEvidence]]:
         """Mean of the available normalized resource terms.
 
@@ -416,7 +414,7 @@ class CodingWorkflowEvaluator:
                 float(s.retry_count),
                 float(n.max_expected_retries),
                 _normalize_capped(s.retry_count, n.max_expected_retries),
-            )
+            ),
         )
         terms.append(
             (
@@ -424,7 +422,7 @@ class CodingWorkflowEvaluator:
                 float(s.tool_call_count),
                 float(n.max_expected_tool_calls),
                 _normalize_capped(s.tool_call_count, n.max_expected_tool_calls),
-            )
+            ),
         )
         if s.token_usage is not None:
             terms.append(
@@ -433,7 +431,7 @@ class CodingWorkflowEvaluator:
                     float(s.token_usage),
                     float(n.max_expected_tokens),
                     _normalize_capped(s.token_usage, n.max_expected_tokens),
-                )
+                ),
             )
         if s.execution_time_seconds is not None:
             terms.append(
@@ -441,10 +439,8 @@ class CodingWorkflowEvaluator:
                     "execution_time_seconds",
                     float(s.execution_time_seconds),
                     float(n.max_expected_runtime_seconds),
-                    _normalize_capped(
-                        s.execution_time_seconds, n.max_expected_runtime_seconds
-                    ),
-                )
+                    _normalize_capped(s.execution_time_seconds, n.max_expected_runtime_seconds),
+                ),
             )
 
         count = len(terms)
@@ -485,7 +481,7 @@ class CodingWorkflowEvaluator:
                         "influence supplied externally at construction; v0.2 does "
                         "not derive downstream influence from workflow signals."
                     ),
-                )
+                ),
             ]
             return influence, evidence
 
@@ -499,7 +495,7 @@ class CodingWorkflowEvaluator:
                     "evidence is derivable from workflow signals. Honesty over "
                     "invented sophistication."
                 ),
-            )
+            ),
         ]
         return 0.0, evidence
 
@@ -549,4 +545,3 @@ class CodingWorkflowEvaluator:
             "Per-signal ScoreEvidence provenance is available via "
             "CodingWorkflowEvaluator.provenance."
         )
-

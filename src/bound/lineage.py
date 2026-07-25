@@ -23,17 +23,17 @@ if TYPE_CHECKING:
     from bound.policy_schema import BoundPolicyConfig
 
 __all__ = [
+    "EVENT_NAMES",
+    "LINEAGE_SCHEMA_VERSION",
     "ActionObservedEvent",
     "ActionReportedEvent",
     "Attempt",
     "DecisionGatedEvent",
-    "EVENT_NAMES",
-    "EvaluationCompletedEvent",
     "Evaluation",
+    "EvaluationCompletedEvent",
     "EvaluationRecordedEvent",
     "EvidenceCollectedEvent",
     "EvidenceCollectionFailedEvent",
-    "LINEAGE_SCHEMA_VERSION",
     "LineageEvent",
     "Outcome",
     "OutcomeRecordedEvent",
@@ -44,8 +44,8 @@ __all__ = [
     "ReasonCode",
     "Run",
     "RunConfigSnapshot",
-    "RunFinishedEvent",
     "RunFinishStatus",
+    "RunFinishedEvent",
     "RunStartedEvent",
     "RunStatus",
     "Step",
@@ -56,8 +56,8 @@ __all__ = [
     "build_run_config",
     "compute_contract_hash",
     "compute_policy_config_hash",
-    "generate_event_id",
     "generate_evaluation_id",
+    "generate_event_id",
     "generate_run_id",
     "generate_step_id",
     "parse_lineage_event",
@@ -113,7 +113,6 @@ EVENT_NAMES: tuple[str, ...] = (
     "outcome_recorded",
     "run_finished",
 )
-
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -284,9 +283,7 @@ def generate_step_id(*, run_id: str, contract_id: str, attempt: int) -> str:
     return _hash_id("step", (run_id, contract_id, str(attempt)))
 
 
-def generate_evaluation_id(
-    *, run_id: str, step_id: str, attempt: int, salt: str = ""
-) -> str:
+def generate_evaluation_id(*, run_id: str, step_id: str, attempt: int, salt: str = "") -> str:
     """Return a deterministic, reproducible ``evaluation_id``.
 
     Args:
@@ -609,9 +606,7 @@ def build_run_config(
             policy_hash = compute_policy_hash(policy)
     weights_dict: dict[str, float] | None = None
     if weights is not None:
-        weights_dict = (
-            weights if isinstance(weights, dict) else weights.model_dump(mode="json")
-        )
+        weights_dict = weights if isinstance(weights, dict) else weights.model_dump(mode="json")
     return RunConfigSnapshot(
         bound_version=bound_version,
         policy_id=policy_id,
@@ -661,7 +656,6 @@ class Run(BaseModel):
     step_ids: list[str] = []
     metadata: dict[str, str] = {}
     config: RunConfigSnapshot | None = None
-
 
 
 # ---------------------------------------------------------------------------
@@ -745,8 +739,6 @@ class StepStartedEvent(_LineageEventBase):
     contract_id: str
     attempt: int = Field(ge=1)
     description: str | None = None
-
-
 
 
 class EvaluationRecordedEvent(_LineageEventBase):

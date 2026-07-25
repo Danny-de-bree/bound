@@ -39,7 +39,6 @@ class StepRecord(BaseModel):
     scores: EvaluationScores
 
 
-
 class ExperimentResult(BaseModel):
     """Evidence produced by replaying one trajectory through BOUND.
 
@@ -162,7 +161,6 @@ def _delta(bound_step, actual_step, attr: str) -> int | float | None:
     return max(actual_value - bound_value, 0)
 
 
-
 def run_experiment(
     trajectory: AgentTrajectory,
     criteria: BoundCriteria,
@@ -210,7 +208,7 @@ def run_experiment(
                 decision=decision,
                 score=score,
                 scores=scores,
-            )
+            ),
         )
         if bound_stop_step is None and decision == "ACCEPT":
             bound_stop_step = step.step_index
@@ -279,7 +277,6 @@ def run_experiment(
     )
 
 
-
 def load_trajectory(path: str | Path) -> AgentTrajectory:
     """Load an :class:`AgentTrajectory` from a JSON file.
 
@@ -321,9 +318,7 @@ def load_trajectories(directory: str | Path) -> dict[str, AgentTrajectory]:
     """
     base = Path(directory)
     return {
-        path.stem: AgentTrajectory.model_validate_json(
-            path.read_text(encoding="utf-8")
-        )
+        path.stem: AgentTrajectory.model_validate_json(path.read_text(encoding="utf-8"))
         for path in sorted(base.glob("*.json"))
     }
 
@@ -368,10 +363,9 @@ def summarize(result: ExperimentResult) -> str:
 __all__ = [
     "ExperimentResult",
     "StepRecord",
-    "load_trajectory",
     "load_trajectories",
+    "load_trajectory",
     "run_experiment",
     "save_trajectory",
     "summarize",
 ]
-

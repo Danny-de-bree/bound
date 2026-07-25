@@ -43,7 +43,7 @@ _DECISION_SEVERITY: dict[str, int] = {
 #: ACCEPT; CLAIMED (agent self-report) and INSUFFICIENT (missing/invalid
 #: evidence) do not.
 _ACCEPT_BLOCKING_ASSURANCE: frozenset[DecisionAssurance] = frozenset(
-    {DecisionAssurance.CLAIMED, DecisionAssurance.INSUFFICIENT}
+    {DecisionAssurance.CLAIMED, DecisionAssurance.INSUFFICIENT},
 )
 
 
@@ -220,7 +220,7 @@ class BoundPolicy:
                     assurance_assessment.accept_block_action
                 ]
                 assurance_reasons = assurance_reasons + list(
-                    assurance_assessment.accept_block_reasons
+                    assurance_assessment.accept_block_reasons,
                 )
 
         if policy_gate is not None:
@@ -234,9 +234,7 @@ class BoundPolicy:
                 # The gate may only make the decision more conservative — a
                 # blocker/budget breach can never weaken a candidate decision.
                 assert final_decision is not None  # gated is True here
-                if _DECISION_SEVERITY[forced_decision] > _DECISION_SEVERITY[
-                    final_decision
-                ]:
+                if _DECISION_SEVERITY[forced_decision] > _DECISION_SEVERITY[final_decision]:
                     final_decision = forced_decision
                 assurance_reasons = assurance_reasons + policy_gate.forced_reasons
 
@@ -263,7 +261,6 @@ class BoundPolicy:
             active_policy_version=active_policy_version,
             active_policy_hash=active_policy_hash,
         )
-
 
     def evaluate(
         self,
@@ -302,7 +299,7 @@ class BoundPolicy:
                 "BoundPolicy.evaluate requires an evaluator; construct one with "
                 "BoundPolicy(evaluator), or use BoundPolicy.decide(scores, "
                 "criteria) for pre-computed scores (e.g. from a "
-                "ContractEvaluator)."
+                "ContractEvaluator).",
             )
         scores = self._evaluator.evaluate(action)
 
@@ -359,4 +356,3 @@ class BoundPolicy:
         if gap <= criteria.retry_margin:
             return "RETRY"
         return "REPLAN"
-

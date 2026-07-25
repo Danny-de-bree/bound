@@ -184,9 +184,7 @@ build-backend = "hatchling.build"
 
     def test_setuptools_from_setup_py(self, tmp_path: Path) -> None:
         """Detect setuptools when setup.py exists."""
-        (tmp_path / "setup.py").write_text(
-            "from setuptools import setup\nsetup(name='test')\n"
-        )
+        (tmp_path / "setup.py").write_text("from setuptools import setup\nsetup(name='test')\n")
         detections = detect_tooling(tmp_path)
         assert detections.build_system.name == "setuptools"
         assert detections.build_system.confidence == Confidence.DETECTED
@@ -231,9 +229,7 @@ name = "test"
         git_dir = tmp_path / ".git"
         git_dir.mkdir()
         (git_dir / "HEAD").write_text("ref: refs/heads/main\n")
-        (git_dir / "config").write_text(
-            '[remote "origin"]\n\turl = git@github.com:user/repo.git\n'
-        )
+        (git_dir / "config").write_text('[remote "origin"]\n\turl = git@github.com:user/repo.git\n')
         detections = detect_tooling(tmp_path)
         assert detections.git_remote == "git@github.com:user/repo.git"
         assert detections.ci_provider.name == "github-actions"
@@ -532,4 +528,3 @@ strict = true
         config = load_policy_yaml(policy_path)
         assert config.schema_version == "1.0"
         assert config.policy.id == "auto-generated"
-

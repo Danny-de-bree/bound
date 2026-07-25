@@ -36,9 +36,7 @@ __all__ = [
 #: Supports the common pytest summary states: ``passed``, ``failed``,
 #: ``error``/``errors``, ``skipped``, ``xfailed``, ``xpassed``. Mirrors the
 #: reference parser in the Todo benchmark integration.
-_TEST_OUTCOME_RE = re.compile(
-    r"\b(\d+)\s+(passed|failed|errors?|skipped|xfailed|xpassed)\b"
-)
+_TEST_OUTCOME_RE = re.compile(r"\b(\d+)\s+(passed|failed|errors?|skipped|xfailed|xpassed)\b")
 
 #: Map each summary keyword to the :class:`PytestSummary` field that counts
 #: it. ``error`` and ``errors`` both fold into the ``errors`` field. Kept as a
@@ -52,6 +50,7 @@ _OUTCOME_TO_FIELD: dict[str, str] = {
     "xfailed": "xfailed",
     "xpassed": "xpassed",
 }
+
 
 class PytestSummary(BaseModel):
     """Counts of pytest test outcomes parsed from a ``-q`` summary line.
@@ -104,14 +103,7 @@ class PytestSummary(BaseModel):
         Returns:
             The total count of executed tests across all counted outcomes.
         """
-        return (
-            self.passed
-            + self.failed
-            + self.errors
-            + self.skipped
-            + self.xfailed
-            + self.xpassed
-        )
+        return self.passed + self.failed + self.errors + self.skipped + self.xfailed + self.xpassed
 
 
 def parse_pytest_summary(text: str) -> PytestSummary:
@@ -183,6 +175,8 @@ def _last_summary_line(text: str) -> str | None:
         if _TEST_OUTCOME_RE.search(line):
             return line
     return None
+
+
 class GitInspection(BaseModel):
     """Result of inspecting a working tree via ``git status --porcelain``.
 
@@ -261,6 +255,7 @@ class GitInspection(BaseModel):
         """
         return self.command_succeeded and not self.unexpected_paths
 
+
 def parse_git_status_porcelain(
     output: str,
     allowed_prefixes: tuple[str, ...],
@@ -306,14 +301,14 @@ def parse_git_status_porcelain(
         path = line[3:].split(" -> ", 1)[-1].strip().strip('"')
         if path:
             changed_paths.append(path)
-    unexpected_paths = [
-        path for path in changed_paths if not _path_allowed(path, allowed_prefixes)
-    ]
+    unexpected_paths = [path for path in changed_paths if not _path_allowed(path, allowed_prefixes)]
     return GitInspection(
         command_succeeded=True,
         changed_paths=changed_paths,
         unexpected_paths=unexpected_paths,
     )
+
+
 class ServiceTestEvidence(BaseModel):
     """Service-specific acceptance evidence for ``service-tests-pass``.
 
@@ -363,7 +358,6 @@ class ServiceTestEvidence(BaseModel):
             executed.
         """
         return self.command_succeeded and self.executed_test_count >= 1
-
 
 
 # ---------------------------------------------------------------------------
@@ -496,9 +490,7 @@ def parse_ruff_output(
         raise ValueError(f"Cannot parse ruff JSON output: {e}") from e
 
     if not isinstance(violations, list):
-        raise ValueError(
-            f"Expected a JSON array from ruff, got {type(violations).__name__}"
-        )
+        raise ValueError(f"Expected a JSON array from ruff, got {type(violations).__name__}")
 
     total = len(violations)
     files: set[str] = set()
@@ -540,9 +532,7 @@ def parse_ruff_output(
 
 #: Regex matching a single mypy error line produced by ``--show-error-codes``.
 #: Groups: filename, line_number, error_code, message.
-_MYPY_LINE_RE = re.compile(
-    r"^(.+?):(\d+): error: (.+?)  \[([^\]]+)\]$"
-)
+_MYPY_LINE_RE = re.compile(r"^(.+?):(\d+): error: (.+?)  \[([^\]]+)\]$")
 
 
 class MypyEvidence(BaseModel):
@@ -582,9 +572,7 @@ class MypyEvidence(BaseModel):
         return self.status is EvidenceStatus.PASSED
 
     @classmethod
-    def run(
-        cls, paths: list[str] | None = None, cwd: str | None = None
-    ) -> MypyEvidence:
+    def run(cls, paths: list[str] | None = None, cwd: str | None = None) -> MypyEvidence:
         """Execute ``mypy --show-error-codes`` and return evidence.
 
         Args:
@@ -670,9 +658,7 @@ def parse_mypy_output(
         error_codes[error_code] = error_codes.get(error_code, 0) + 1
 
     total_errors = sum(error_codes.values())
-    status = (
-        EvidenceStatus.PASSED if total_errors == 0 else EvidenceStatus.FAILED
-    )
+    status = EvidenceStatus.PASSED if total_errors == 0 else EvidenceStatus.FAILED
 
     return MypyEvidence(
         total_errors=total_errors,
@@ -858,9 +844,7 @@ def parse_coverage_output(
 
     files_raw = data.get("files", {}) if isinstance(data, dict) else {}
     if not isinstance(files_raw, dict):
-        raise ValueError(
-            f"Expected 'files' to be a dict, got {type(files_raw).__name__}"
-        )
+        raise ValueError(f"Expected 'files' to be a dict, got {type(files_raw).__name__}")
 
     files_dict: dict[str, dict[str, Any]] = {}
     lines_total = 0
@@ -898,22 +882,16 @@ def parse_coverage_output(
             "excluded_lines": excluded,
         }
 
-    line_pct = (
-        (lines_covered / lines_total * 100.0) if lines_total > 0 else 100.0
-    )
+    line_pct = (lines_covered / lines_total * 100.0) if lines_total > 0 else 100.0
     branch_pct: float | None = (
-        (branches_covered / branches_total * 100.0)
-        if branches_total > 0
-        else None
+        (branches_covered / branches_total * 100.0) if branches_total > 0 else None
     )
 
     status = EvidenceStatus.PASSED if line_pct >= 80.0 else EvidenceStatus.FAILED
 
     return CoverageEvidence(
         line_coverage_pct=round(line_pct, 2),
-        branch_coverage_pct=(
-            round(branch_pct, 2) if branch_pct is not None else None
-        ),
+        branch_coverage_pct=(round(branch_pct, 2) if branch_pct is not None else None),
         file_count=len(files_dict),
         files=files_dict,
         tool_version=tool_version,
@@ -939,4 +917,3 @@ def _path_allowed(path: str, allowed_prefixes: tuple[str, ...]) -> bool:
         ``True`` iff *path* starts with at least one allowed prefix.
     """
     return any(path.startswith(prefix) for prefix in allowed_prefixes)
-

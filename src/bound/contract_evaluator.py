@@ -123,11 +123,7 @@ def _budget_dimension(
             f"saturated to {norm:.4f} because compliance with the {budget_label} "
             "budget cannot be confirmed"
         )
-    prov = (
-        metric.provenance
-        if raw_value is not None
-        else EvidenceProvenance.MISSING
-    )
+    prov = metric.provenance if raw_value is not None else EvidenceProvenance.MISSING
     return (cost_source, raw, mx, norm, note, prov)
 
 
@@ -188,7 +184,7 @@ _VERIFIED_PROVENANCE: frozenset[EvidenceProvenance] = frozenset(
         EvidenceProvenance.OBSERVED,
         EvidenceProvenance.VERIFIED,
         EvidenceProvenance.ATTESTED,
-    }
+    },
 )
 
 
@@ -486,7 +482,6 @@ class ContractEvaluator:
         self._policy_gate: PolicyGateOutcome | None = None
         self._effective_weights: dict[str, float] = {}
 
-
     @property
     def influence(self) -> float | None:
         """The externally-supplied influence override, or ``None`` for default."""
@@ -594,7 +589,9 @@ class ContractEvaluator:
             acceptance, acceptance_evidence = self._acceptance(contract, evidence)
         else:
             acceptance, acceptance_evidence = self._acceptance_with_policy(
-                contract, evidence, policy
+                contract,
+                evidence,
+                policy,
             )
 
         risk, risk_evidence = self._risk(contract, evidence)
@@ -610,9 +607,7 @@ class ContractEvaluator:
 
         self._assurance = self.assess_assurance(contract, evidence)
         self._policy_gate = (
-            self.assess_policy_gate(contract, evidence, policy)
-            if policy is not None
-            else None
+            self.assess_policy_gate(contract, evidence, policy) if policy is not None else None
         )
         self._effective_weights = (
             self._policy_gate.effective_weights if self._policy_gate is not None else {}
@@ -754,7 +749,6 @@ class ContractEvaluator:
         self._record_optional_acceptance(optional, by_id, records)
         return acceptance, records
 
-
     @staticmethod
     def _record_optional_acceptance(
         optional: list,
@@ -787,7 +781,6 @@ class ContractEvaluator:
                 ),
             )
 
-
     # ------------------------------------------------------------------
     # v0.7 active-policy weighted acceptance (todo 2.2 / 6.1)
     # ------------------------------------------------------------------
@@ -813,8 +806,7 @@ class ContractEvaluator:
         if not evs:
             return False
         if any(
-            e.status
-            in (EvidenceStatus.MISSING, EvidenceStatus.INVALID, EvidenceStatus.STALE)
+            e.status in (EvidenceStatus.MISSING, EvidenceStatus.INVALID, EvidenceStatus.STALE)
             for e in evs
         ):
             return False
@@ -1055,8 +1047,7 @@ class ContractEvaluator:
                     "rollback_available",
                     0.0,
                     0.0,
-                    "✓ rollback available (rollback_available=True); "
-                    "contributes 0.0.",
+                    "✓ rollback available (rollback_available=True); contributes 0.0.",
                 ),
             )
         else:
@@ -1094,7 +1085,6 @@ class ContractEvaluator:
             ),
         )
         return risk, records
-
 
     def _cost(
         self,
@@ -1153,31 +1143,40 @@ class ContractEvaluator:
         terms: list[tuple[str, float, float, float, str, EvidenceProvenance]] = []
 
         dim = _budget_dimension(
-            evidence.retry_count, budget.max_retries,
-            field_name="retry_count", budget_label="retry", cost_source="retry_cost",
+            evidence.retry_count,
+            budget.max_retries,
+            field_name="retry_count",
+            budget_label="retry",
+            cost_source="retry_cost",
         )
         if dim is not None:
             terms.append(dim)
 
         dim = _budget_dimension(
-            evidence.tool_call_count, budget.max_tool_calls,
-            field_name="tool_call_count", budget_label="tool-call",
+            evidence.tool_call_count,
+            budget.max_tool_calls,
+            field_name="tool_call_count",
+            budget_label="tool-call",
             cost_source="tool_cost",
         )
         if dim is not None:
             terms.append(dim)
 
         dim = _budget_dimension(
-            evidence.token_usage, budget.max_tokens,
-            field_name="token_usage", budget_label="token",
+            evidence.token_usage,
+            budget.max_tokens,
+            field_name="token_usage",
+            budget_label="token",
             cost_source="token_cost",
         )
         if dim is not None:
             terms.append(dim)
 
         dim = _budget_dimension(
-            evidence.runtime_seconds, budget.max_runtime_seconds,
-            field_name="runtime_seconds", budget_label="runtime",
+            evidence.runtime_seconds,
+            budget.max_runtime_seconds,
+            field_name="runtime_seconds",
+            budget_label="runtime",
             cost_source="runtime_cost",
         )
         if dim is not None:
@@ -1222,7 +1221,6 @@ class ContractEvaluator:
             ),
         )
         return cost, records
-
 
     def _influence(self) -> tuple[float, list[ScoreEvidence]]:
         """Resolve downstream influence (v0.3: honest default or external).
@@ -1356,8 +1354,7 @@ class ContractEvaluator:
             return (
                 "insufficient",
                 on_missing,
-                f"check '{check_id}'{critical_note} has no matching evidence "
-                f"(provenance: MISSING)",
+                f"check '{check_id}'{critical_note} has no matching evidence (provenance: MISSING)",
             )
 
         if any(e.status is EvidenceStatus.INVALID for e in evs):
@@ -1405,8 +1402,7 @@ class ContractEvaluator:
             return (
                 "claimed",
                 on_claimed,
-                f"check '{check_id}'{critical_note} relies on CLAIMED "
-                f"evidence (agent self-report)",
+                f"check '{check_id}'{critical_note} relies on CLAIMED evidence (agent self-report)",
             )
         return (
             "insufficient",
@@ -1524,7 +1520,7 @@ class ContractEvaluator:
         if block_action is not None:
             block_reasons.append(
                 "ACCEPT requires VERIFIED acceptance evidence; gated to the "
-                f"contract's {block_action.value} action."
+                f"contract's {block_action.value} action.",
             )
 
         return AssuranceAssessment(
@@ -1606,9 +1602,7 @@ class ContractEvaluator:
                 f"blocker '{gate.id}' has no matching evidence "
                 f"(provenance: MISSING); cannot be compensated.",
             )
-        if any(
-            e.status in (EvidenceStatus.INVALID, EvidenceStatus.STALE) for e in evs
-        ):
+        if any(e.status in (EvidenceStatus.INVALID, EvidenceStatus.STALE) for e in evs):
             return (
                 True,
                 gate.on_missing,
@@ -1627,11 +1621,7 @@ class ContractEvaluator:
         assert eff is not None  # evs is non-empty here
 
         if gate.accepted_provenance is not None and eff not in gate.accepted_provenance:
-            action = (
-                gate.on_claimed
-                if eff is EvidenceProvenance.CLAIMED
-                else gate.on_missing
-            )
+            action = gate.on_claimed if eff is EvidenceProvenance.CLAIMED else gate.on_missing
             return (
                 True,
                 action,
@@ -1648,13 +1638,8 @@ class ContractEvaluator:
                 on_claimed=gate.on_claimed,
                 evs=evs,
             )
-            evidence_assurance = _CATEGORY_ASSURANCE.get(
-                category, DecisionAssurance.INSUFFICIENT
-            )
-            if (
-                _ASSURANCE_RANK[evidence_assurance]
-                < _ASSURANCE_RANK[gate.minimum_assurance]
-            ):
+            evidence_assurance = _CATEGORY_ASSURANCE.get(category, DecisionAssurance.INSUFFICIENT)
+            if _ASSURANCE_RANK[evidence_assurance] < _ASSURANCE_RANK[gate.minimum_assurance]:
                 action = (
                     gate.on_claimed
                     if evidence_assurance is DecisionAssurance.CLAIMED
@@ -1772,9 +1757,7 @@ class ContractEvaluator:
             else:
                 state = "none"
                 action = None
-                reason = (
-                    f"budget '{dimension}' value {value} within declared limit(s)."
-                )
+                reason = f"budget '{dimension}' value {value} within declared limit(s)."
 
             statuses.append(
                 BudgetStatus(
@@ -1785,7 +1768,7 @@ class ContractEvaluator:
                     state=state,
                     action=action,
                     reason=reason,
-                )
+                ),
             )
             if state in ("soft", "hard", "missing") and action is not None:
                 breached_actions.append(action)
@@ -1858,9 +1841,7 @@ class ContractEvaluator:
             else None
         )
 
-        budget_status, budget_action, budget_reasons = self._assess_budgets(
-            policy, evidence
-        )
+        budget_status, budget_action, budget_reasons = self._assess_budgets(policy, evidence)
         budget_breached = budget_action is not None
 
         return PolicyGateOutcome(
@@ -1923,4 +1904,3 @@ class ContractEvaluator:
             "Per-dimension ScoreEvidence provenance is available via "
             "ContractEvaluator.provenance."
         )
-

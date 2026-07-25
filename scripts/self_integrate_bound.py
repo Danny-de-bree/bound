@@ -55,11 +55,28 @@ RETRY_MARGIN = 0.1
 #: every changed path falls within this set — a stray temp file outside it would
 #: be flagged as unsafe (decision-critical risk), never silently passed.
 ALLOWED_PREFIXES = (
-    "src/", "tests/", "examples/", "docs/", "integrations/", "skills/",
-    "benchmarks/", "scripts/", "architecture/", "assets/", "bound_integration/",
-    ".github/", ".gitignore", ".pre-commit-config.yaml", "CHANGELOG.md",
-    "CONTRIBUTING.md", "LICENSE", "Makefile", "README.md", "pyproject.toml",
-    "uv.lock", "todo.md",
+    "src/",
+    "tests/",
+    "examples/",
+    "docs/",
+    "integrations/",
+    "skills/",
+    "benchmarks/",
+    "scripts/",
+    "architecture/",
+    "assets/",
+    "bound_integration/",
+    ".github/",
+    ".gitignore",
+    ".pre-commit-config.yaml",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "Makefile",
+    "README.md",
+    "pyproject.toml",
+    "uv.lock",
+    "todo.md",
 )
 
 
@@ -81,6 +98,8 @@ def _runner() -> CommandCollector:
             "git-status": CommandSpec(argv=["git", "status", "--porcelain"], timeout=30.0),
         }
     )
+
+
 def _contract() -> StepContract:
     """Three VERIFIED-only acceptance checks + a decision-critical git risk."""
     verified = [
@@ -190,12 +209,12 @@ def _print_evidence(evidence: ExecutionEvidence) -> None:
             f"provenance={ce.provenance.value} collector={ce.collector} "
             f"version={ce.collector_version} status={ce.status}"
         )
+
+
 def main() -> int:
     runner = _runner()
     contract = _contract()
-    criteria = BoundCriteria(
-        weights=BoundWeights(), threshold=THRESHOLD, retry_margin=RETRY_MARGIN
-    )
+    criteria = BoundCriteria(weights=BoundWeights(), threshold=THRESHOLD, retry_margin=RETRY_MARGIN)
     bound_version = "0.7.0"
     try:
         dist_version = importlib.metadata.version("bound-policy")
@@ -264,9 +283,7 @@ def main() -> int:
     out_dir = REPO / "bound_integration"
     out_dir.mkdir(exist_ok=True)
     (out_dir / "run.json").write_text(trace.model_dump_json(indent=2), encoding="utf-8")
-    (out_dir / "INTEGRATION_REPORT.md").write_text(
-        render_from_trace(trace), encoding="utf-8"
-    )
+    (out_dir / "INTEGRATION_REPORT.md").write_text(render_from_trace(trace), encoding="utf-8")
     print("-" * 78)
     print(f"wrote {out_dir / 'run.json'}")
     print(f"wrote {out_dir / 'INTEGRATION_REPORT.md'}")
@@ -274,9 +291,7 @@ def main() -> int:
     store = LineageStore()
     with start_run(contract.goal, store=store, config=config) as run:
         lineage_run_id = run.run_id
-        step = run.start_step(
-            contract_id="PHASE-001", attempt=1, description=contract.description
-        )
+        step = run.start_step(contract_id="PHASE-001", attempt=1, description=contract.description)
         for ce in (*evidence.acceptance, *evidence.risks):
             run.record_evidence_collected(
                 step_id=step.step_id,
@@ -312,9 +327,7 @@ def main() -> int:
             decision=evaluation.final_decision,
             note="self-integration complete",
         )
-        run.finish_run(
-            status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED
-        )
+        run.finish_run(status=RunFinishStatus.COMPLETED, reason_code=ReasonCode.RUN_COMPLETED)
 
     print("-" * 78)
     print(f"lineage run recorded: .bound/runs/{lineage_run_id}/")
@@ -325,5 +338,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

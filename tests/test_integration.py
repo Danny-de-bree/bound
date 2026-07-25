@@ -104,7 +104,6 @@ def test_replan_maps_to_replan() -> None:
     assert result.next_action == "replan"
 
 
-
 def test_rollback_maps_to_rollback() -> None:
     """ROLLBACK (high-severity risk check violated) overrides acceptance -> ``rollback``.
 
@@ -153,29 +152,21 @@ def test_all_four_mappings_are_exhaustive_and_deterministic() -> None:
     cases: list[tuple[StepContract, ExecutionEvidence, BoundCriteria]] = [
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _passed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _passed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6),
         ),
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_passed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_passed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.2),
         ),
         (
             _contract(),
-            ExecutionEvidence(
-                acceptance=[_failed("a"), _failed("b")], rollback_available=True
-            ),
+            ExecutionEvidence(acceptance=[_failed("a"), _failed("b")], rollback_available=True),
             BoundCriteria(threshold=0.6, retry_margin=0.1),
         ),
         (
-            _contract(
-                risk_checks=[RiskCheck(id="r", description="boundary", severity=0.9)]
-            ),
+            _contract(risk_checks=[RiskCheck(id="r", description="boundary", severity=0.9)]),
             ExecutionEvidence(
                 acceptance=[_passed("a"), _passed("b")],
                 risks=[_failed("r")],
@@ -191,12 +182,8 @@ def test_all_four_mappings_are_exhaustive_and_deterministic() -> None:
 
     observed: dict[str, NextAction] = {}
     for contract, evidence, criteria in cases:
-        first = evaluate_agent_step(
-            contract=contract, evidence=evidence, criteria=criteria
-        )
-        second = evaluate_agent_step(
-            contract=contract, evidence=evidence, criteria=criteria
-        )
+        first = evaluate_agent_step(contract=contract, evidence=evidence, criteria=criteria)
+        second = evaluate_agent_step(contract=contract, evidence=evidence, criteria=criteria)
         assert first.next_action == second.next_action
         assert first.feedback == second.feedback  # deterministic feedback
         observed[first.evaluation.decision] = first.next_action
@@ -214,17 +201,11 @@ def test_evaluate_agent_step_does_not_modify_decision() -> None:
     from bound.bound_workflow import BoundWorkflow
 
     contract = _contract()
-    evidence = ExecutionEvidence(
-        acceptance=[_passed("a"), _failed("b")], rollback_available=True
-    )
+    evidence = ExecutionEvidence(acceptance=[_passed("a"), _failed("b")], rollback_available=True)
     criteria = BoundCriteria(threshold=0.6, retry_margin=0.2)
 
-    direct = BoundWorkflow().evaluate_step(
-        contract=contract, evidence=evidence, criteria=criteria
-    )
-    result = evaluate_agent_step(
-        contract=contract, evidence=evidence, criteria=criteria
-    )
+    direct = BoundWorkflow().evaluate_step(contract=contract, evidence=evidence, criteria=criteria)
+    result = evaluate_agent_step(contract=contract, evidence=evidence, criteria=criteria)
 
     assert result.evaluation.decision == direct.decision
     assert result.evaluation.score == pytest.approx(direct.score)
@@ -240,9 +221,7 @@ def test_render_feedback_is_pure_function_of_inputs() -> None:
     from bound.bound_workflow import BoundWorkflow
 
     contract = _contract()
-    evidence = ExecutionEvidence(
-        acceptance=[_passed("a"), _passed("b")], rollback_available=True
-    )
+    evidence = ExecutionEvidence(acceptance=[_passed("a"), _passed("b")], rollback_available=True)
     criteria = BoundCriteria(threshold=0.6)
 
     evaluation = BoundWorkflow().evaluate_step(
@@ -253,5 +232,3 @@ def test_render_feedback_is_pure_function_of_inputs() -> None:
 
     assert fb1 == fb2
     assert "ACCEPT" in fb1
-
-

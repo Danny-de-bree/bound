@@ -481,7 +481,6 @@ def test_result_revalidation_is_idempotent_with_non_default_weights() -> None:
     assert wrapped.result.decision == "ACCEPT"
 
 
-
 def test_result_defaults_rollback_risk_threshold_and_retry_margin() -> None:
     """When omitted, the audit fields default to the criteria defaults."""
     result = _result()
@@ -650,9 +649,7 @@ def _policy_result(
     cost: float = 0.0,
 ) -> EvaluationResult:
     """Run the real policy so distance_to_threshold is the actual ``S - T``."""
-    scores = EvaluationScores(
-        acceptance=acceptance, influence=influence, risk=risk, cost=cost
-    )
+    scores = EvaluationScores(acceptance=acceptance, influence=influence, risk=risk, cost=cost)
     criteria = BoundCriteria(weight=weight, threshold=threshold)
     return BoundPolicy(StaticEvaluator(scores)).evaluate(_ACTION, criteria)
 
@@ -804,9 +801,7 @@ def test_signals_test_mutation_counts_accept_zero() -> None:
     Zero is the valid "no mutation" value (not ``None``, which means unobserved),
     so an agent that touched no tests records explicit zeros rather than absence.
     """
-    signals = CodingWorkflowSignals(
-        tests_added=0, tests_removed=0, tests_modified=0
-    )
+    signals = CodingWorkflowSignals(tests_added=0, tests_removed=0, tests_modified=0)
     assert signals.tests_added == 0
     assert signals.tests_removed == 0
     assert signals.tests_modified == 0

@@ -77,8 +77,7 @@ RETRY_MARGIN = 0.1
 #: The lint verification command (taken verbatim from the approved policy). Kept as
 #: a constant so the policy YAML and the harness runner stay in lock-step.
 _LINT_CODE = (
-    "import sys; t=open('src/validation.py').read(); "
-    "sys.exit('TODO' in t or 'print(' in t)"
+    "import sys; t=open('src/validation.py').read(); sys.exit('TODO' in t or 'print(' in t)"
 )
 
 #: The generated ``bound-policy.yaml`` reflecting the user intent. This IS the
@@ -179,16 +178,12 @@ def _sys_argv(*args: str) -> list[str]:
 
 def _explain(policy) -> str:
     """A concise human-readable explanation of the approved policy."""
-    blockers = [g.id for g in policy.acceptance_checks] + [
-        g.id for g in policy.risk_checks
-    ]
+    blockers = [g.id for g in policy.acceptance_checks] + [g.id for g in policy.risk_checks]
     signals = [
-        f"{s.id} ({s.importance}, weight {s.effective_weight})"
-        for s in policy.quality_checks
+        f"{s.id} ({s.importance}, weight {s.effective_weight})" for s in policy.quality_checks
     ]
     budgets = [
-        f"{name}: hard {dim.hard_limit} -> {dim.on_hard}"
-        for name, dim in policy.budgets.items()
+        f"{name}: hard {dim.hard_limit} -> {dim.on_hard}" for name, dim in policy.budgets.items()
     ]
     scope = policy.change_scope.allowed_paths
     lines = [
@@ -197,12 +192,12 @@ def _explain(policy) -> str:
         f"  Weighted signals: {', '.join(signals) if signals else '(none)'}",
         f"  Budgets: {', '.join(budgets) if budgets else '(none)'}",
         f"  Allowed paths: {', '.join(scope) if scope else '(any)'}",
-        f"  Approvals: rollback required = "
-        f"{policy.approvals.require_rollback_availability}",
+        f"  Approvals: rollback required = {policy.approvals.require_rollback_availability}",
         "  An ACCEPT requires every blocker to pass with VERIFIED evidence; the",
         "  agent can never weaken this policy mid-run.",
     ]
     return "\n".join(lines)
+
 
 class _CommandCheckCollector:
     """A generic command collector bound to the active policy.
@@ -230,18 +225,14 @@ class _CommandCheckCollector:
         self._success = set(success_exit_codes or [0])
 
     def collect(self, *, cwd: str | None = None, timeout: float | None = None):
-        result = self._runner.run(
-            self._command_name, cwd=cwd, timeout=timeout, store_raw=True
-        )
+        result = self._runner.run(self._command_name, cwd=cwd, timeout=timeout, store_raw=True)
         return self._evidence_from_result(result)
 
     def _evidence_from_result(self, result: CommandResult):
         source = _command_source(result.argv)
         hashes = f"stdout={result.stdout_hash} stderr={result.stderr_hash}"
         if result.error is not None or result.timed_out or result.exit_code is None:
-            reason = result.error or (
-                "timeout" if result.timed_out else "no exit code"
-            )
+            reason = result.error or ("timeout" if result.timed_out else "no exit code")
             return _bound_check(
                 self._check_id,
                 passed=None,
@@ -272,7 +263,7 @@ def _init_repo(repo: Path) -> None:
     (repo / "src").mkdir(parents=True, exist_ok=True)
     (repo / "src" / "__init__.py").write_text("", encoding="utf-8")
     (repo / "src" / "validation.py").write_text(
-        'def validate_email(value: str) -> bool:\n'
+        "def validate_email(value: str) -> bool:\n"
         '    """Return True when value looks like an email."""\n'
         '    return "@" in value and "." in value.split("@", 1)[1]\n',
         encoding="utf-8",
@@ -286,19 +277,19 @@ def _init_repo(repo: Path) -> None:
 def _write_tests(repo: Path, *, b_pass: bool, c_pass: bool) -> None:
     """Write the three test files; b/c assertions flip between attempts."""
     (repo / "tests" / "test_a.py").write_text(
-        'from src.validation import validate_email\n'
+        "from src.validation import validate_email\n"
         'def test_a():\n    assert validate_email("a@b.com") is True\n',
         encoding="utf-8",
     )
     b_expected = "False" if b_pass else "True"
     (repo / "tests" / "test_b.py").write_text(
-        'from src.validation import validate_email\n'
+        "from src.validation import validate_email\n"
         f'def test_b():\n    assert validate_email("noat") is {b_expected}\n',
         encoding="utf-8",
     )
     c_expected = "False" if c_pass else "True"
     (repo / "tests" / "test_c.py").write_text(
-        'from src.validation import validate_email\n'
+        "from src.validation import validate_email\n"
         f'def test_c():\n    assert validate_email("a@b") is {c_expected}\n',
         encoding="utf-8",
     )
@@ -348,8 +339,14 @@ def _runners(repo: Path) -> CommandCollector:
         {
             "pytest": CommandSpec(
                 argv=_sys_argv(
-                    "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                    "tests/test_a.py", "tests/test_b.py", "tests/test_c.py",
+                    "-m",
+                    "pytest",
+                    "-q",
+                    "-p",
+                    "no:cacheprovider",
+                    "tests/test_a.py",
+                    "tests/test_b.py",
+                    "tests/test_c.py",
                 ),
                 cwd=str(repo),
                 timeout=60.0,
@@ -375,15 +372,21 @@ def _collectors(runner: CommandCollector):
     """Instantiate the real collectors bound to the active policy's check ids."""
     pytest_c = PytestCollector(runner, command_name="pytest", check_id="tests-pass")
     typecheck_c = _CommandCheckCollector(
-        runner, command_name="typecheck", check_id="typecheck-pass",
+        runner,
+        command_name="typecheck",
+        check_id="typecheck-pass",
         collector_name="bound.typecheck",
     )
     lint_c = _CommandCheckCollector(
-        runner, command_name="lint", check_id="lint-clean",
+        runner,
+        command_name="lint",
+        check_id="lint-clean",
         collector_name="bound.lint",
     )
     git_c = GitCollector(
-        runner, command_name="git-status", check_id="scope-respected",
+        runner,
+        command_name="git-status",
+        check_id="scope-respected",
         allowed_prefixes=("src", "tests"),
     )
     return pytest_c, typecheck_c, lint_c, git_c
@@ -419,11 +422,13 @@ def _attempt(
         risks=[scope_ev],
         rollback_available=True,
         retry_count=EvidenceMetric(
-            value=attempt - 1, provenance=EvidenceProvenance.OBSERVED,
+            value=attempt - 1,
+            provenance=EvidenceProvenance.OBSERVED,
             source="harness.attempts",
         ),
         tool_call_count=EvidenceMetric(
-            value=tool_calls, provenance=EvidenceProvenance.OBSERVED,
+            value=tool_calls,
+            provenance=EvidenceProvenance.OBSERVED,
             source="harness.tool_calls",
         ),
     )
@@ -524,8 +529,7 @@ def _print_attempt(label: str, result, evidence) -> None:
     final = result.final_decision or result.decision
     assurance = result.assurance.value if result.assurance else "-"
     print(f"  candidate={cand}  final={final}  assurance={assurance}")
-    print(f"  A={result.scores.acceptance:.4f}  score={result.score:.4f}  "
-          f"threshold={THRESHOLD}")
+    print(f"  A={result.scores.acceptance:.4f}  score={result.score:.4f}  threshold={THRESHOLD}")
 
 
 def main() -> int:
@@ -577,23 +581,27 @@ def main() -> int:
             run_id = run.run_id
             print(f"started run: {run_id}")
             print(f"run config policy hash: {config.policy_hash}")
-            print(f"active policy: {policy.policy.id}@{policy.policy.version} "
-                  f"({policy_hash})")
+            print(f"active policy: {policy.policy.id}@{policy.policy.version} ({policy_hash})")
             run.record_policy_proposed(
-                policy_id=policy.policy.id, policy_version=policy.policy.version,
+                policy_id=policy.policy.id,
+                policy_version=policy.policy.version,
                 policy_hash=policy_hash,
             )
             run.record_policy_validated(
-                policy_id=policy.policy.id, policy_version=policy.policy.version,
+                policy_id=policy.policy.id,
+                policy_version=policy.policy.version,
                 policy_hash=policy_hash,
             )
             run.record_policy_approved(
-                policy_id=policy.policy.id, policy_version=policy.policy.version,
-                policy_hash=policy_hash, approver="human",
+                policy_id=policy.policy.id,
+                policy_version=policy.policy.version,
+                policy_hash=policy_hash,
+                approver="human",
                 approved_at=datetime.now(UTC),
             )
             run.record_policy_activated(
-                policy_id=policy.policy.id, policy_version=policy.policy.version,
+                policy_id=policy.policy.id,
+                policy_version=policy.policy.version,
                 policy_hash=policy_hash,
             )
             print("policy lifecycle: proposed -> validated -> approved -> activated")
@@ -602,9 +610,18 @@ def main() -> int:
             # Attempt 1: agent claims "all tests pass", BOUND re-runs pytest.
             print("attempt 1: agent says 'all tests pass'")
             r1, ev1, sid1, _ = _attempt(
-                run, collectors, repo, contract, criteria, policy,
-                attempt=1, contract_id="PHASE-001", b_pass=False, c_pass=False,
-                tool_calls=12, note="switched strategy to correct test assertions",
+                run,
+                collectors,
+                repo,
+                contract,
+                criteria,
+                policy,
+                attempt=1,
+                contract_id="PHASE-001",
+                b_pass=False,
+                c_pass=False,
+                tool_calls=12,
+                note="switched strategy to correct test assertions",
             )
             _print_attempt("1", r1, ev1)
             assert r1.final_decision == "REPLAN", r1.final_decision
@@ -613,9 +630,18 @@ def main() -> int:
             # Attempt 2: pytest 3/3, typecheck/lint/scope PASS, 18/20 tool calls.
             print("attempt 2:")
             r2, ev2, sid2, _ = _attempt(
-                run, collectors, repo, contract, criteria, policy,
-                attempt=2, contract_id="PHASE-001-R1", b_pass=True, c_pass=True,
-                tool_calls=18, note="continued to next step",
+                run,
+                collectors,
+                repo,
+                contract,
+                criteria,
+                policy,
+                attempt=2,
+                contract_id="PHASE-001-R1",
+                b_pass=True,
+                c_pass=True,
+                tool_calls=18,
+                note="continued to next step",
             )
             _print_attempt("2", r2, ev2)
             assert r2.final_decision == "ACCEPT", r2.final_decision
@@ -627,9 +653,7 @@ def main() -> int:
             )
 
         print("=" * 78)
-        _write_artifacts(
-            store, run_id, contract, ev2, r2, sid1, sid2, policy, policy_hash
-        )
+        _write_artifacts(store, run_id, contract, ev2, r2, sid1, sid2, policy, policy_hash)
         _print_proof(store, run_id, policy_hash)
         print("=" * 78)
         print("reproduction command:")
@@ -669,13 +693,18 @@ def _write_artifacts(
         ],
         decision_history=[
             DecisionHistoryEntry(
-                step_id=sid1, attempt=1, decision="REPLAN",
+                step_id=sid1,
+                attempt=1,
+                decision="REPLAN",
                 next_action="replan",
                 note="tests-pass blocker failed (1/3); agent corrected assertions",
             ),
             DecisionHistoryEntry(
-                step_id=sid2, attempt=2, decision=decision,
-                next_action=next_action, note="all blockers VERIFIED; ACCEPT",
+                step_id=sid2,
+                attempt=2,
+                decision=decision,
+                next_action=next_action,
+                note="all blockers VERIFIED; ACCEPT",
             ),
         ],
         config=log.run.config,
@@ -700,8 +729,7 @@ def _print_proof(store, run_id: str, policy_hash: str) -> None:
     gated = [e for e in log.events if e.event == "decision.gated"]
     for e in collected:
         print(
-            f"  {e.check_id}: collector={e.collector} provenance={e.provenance} "
-            f"passed={e.passed}"
+            f"  {e.check_id}: collector={e.collector} provenance={e.provenance} passed={e.passed}"
         )
     for e in gated:
         assurance = e.assurance.value if e.assurance else "-"
@@ -709,13 +737,8 @@ def _print_proof(store, run_id: str, policy_hash: str) -> None:
             f"  decision.gated: candidate={e.candidate_decision} "
             f"final={e.final_decision} assurance={assurance}"
         )
-    depended_on_claimed = any(
-        e.provenance == EvidenceProvenance.CLAIMED.value for e in collected
-    )
-    print(
-        "the final decision did NOT depend on CLAIMED evidence: "
-        f"{not depended_on_claimed}"
-    )
+    depended_on_claimed = any(e.provenance == EvidenceProvenance.CLAIMED.value for e in collected)
+    print(f"the final decision did NOT depend on CLAIMED evidence: {not depended_on_claimed}")
 
 
 if __name__ == "__main__":

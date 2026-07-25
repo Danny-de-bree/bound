@@ -122,6 +122,7 @@ def test_lint_false_counts_as_zero_not_ignored() -> None:
 
     assert scores.acceptance == pytest.approx(0.25)
 
+
 # ---------------------------------------------------------------------------
 # Evidence-breadth confidence floor (blind-spot fix on A)
 # ---------------------------------------------------------------------------
@@ -207,9 +208,7 @@ def test_acceptance_provenance_records_evidence_breadth() -> None:
     """
     thin = CodingWorkflowEvaluator(CodingWorkflowSignals(lint_passed=True))
     thin.evaluate(_ACTION)
-    breadth = next(
-        e for e in thin.provenance["acceptance"] if e.source == "evidence_breadth"
-    )
+    breadth = next(e for e in thin.provenance["acceptance"] if e.source == "evidence_breadth")
     assert breadth.value == pytest.approx(0.25)
     assert breadth.contribution == pytest.approx(0.25)
     assert "evidence_breadth" in breadth.description
@@ -223,11 +222,8 @@ def test_acceptance_provenance_records_evidence_breadth() -> None:
         )
     )
     full.evaluate(_ACTION)
-    full_breadth = next(
-        e for e in full.provenance["acceptance"] if e.source == "evidence_breadth"
-    )
+    full_breadth = next(e for e in full.provenance["acceptance"] if e.source == "evidence_breadth")
     assert full_breadth.value == pytest.approx(1.0)
-
 
 
 # ---------------------------------------------------------------------------
@@ -364,9 +360,9 @@ def test_deterministic_normalization_cost_value() -> None:
     )
     signals = CodingWorkflowSignals(
         test_pass_rate=1.0,
-        retry_count=2,          # 2/4 = 0.5
-        tool_call_count=25,     # 25/100 = 0.25
-        token_usage=300,        # 300/1000 = 0.3
+        retry_count=2,  # 2/4 = 0.5
+        tool_call_count=25,  # 25/100 = 0.25
+        token_usage=300,  # 300/1000 = 0.3
         execution_time_seconds=30.0,  # 30/60 = 0.5
     )
 
@@ -414,9 +410,7 @@ def test_cost_cap_zero_treats_nonzero_as_over_budget() -> None:
     scores = evaluator.evaluate(_ACTION)
 
     assert scores.cost == pytest.approx(0.5)
-    retry_term = next(
-        e for e in evaluator.provenance["cost"] if e.source == "retry_count"
-    )
+    retry_term = next(e for e in evaluator.provenance["cost"] if e.source == "retry_count")
     # Saturated normalized value of 1.0, split across the 2 available cost terms.
     assert retry_term.contribution == pytest.approx(0.5)
 
@@ -455,9 +449,9 @@ def test_risk_unexpected_files_increase_risk() -> None:
     zero unexpected files gives R=0.0 while ≥1 gives R=0.5 (mean of 1.0 and 0.0).
     """
     clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
-    surprised = CodingWorkflowEvaluator(
-        _clean_risk_signals(unexpected_files_changed=5)
-    ).evaluate(_ACTION)
+    surprised = CodingWorkflowEvaluator(_clean_risk_signals(unexpected_files_changed=5)).evaluate(
+        _ACTION
+    )
 
     assert clean.risk == pytest.approx(0.0)
     assert surprised.risk == pytest.approx(0.5)
@@ -470,12 +464,10 @@ def test_risk_rollback_unavailable_increases_risk() -> None:
     rollback_available=True contributes 0.0; False contributes 1.0. With a
     perfect gate this is the only active indicator besides failed-checks=0.0.
     """
-    safe = CodingWorkflowEvaluator(
-        _clean_risk_signals(rollback_available=True)
-    ).evaluate(_ACTION)
-    unsafe = CodingWorkflowEvaluator(
-        _clean_risk_signals(rollback_available=False)
-    ).evaluate(_ACTION)
+    safe = CodingWorkflowEvaluator(_clean_risk_signals(rollback_available=True)).evaluate(_ACTION)
+    unsafe = CodingWorkflowEvaluator(_clean_risk_signals(rollback_available=False)).evaluate(
+        _ACTION
+    )
 
     assert safe.risk == pytest.approx(0.0)
     assert unsafe.risk == pytest.approx(0.5)
@@ -510,21 +502,16 @@ def test_risk_failed_checks_are_coupled_to_acceptance() -> None:
     complement — so a single passing gate reads as ``A=0.25 / R=0.75`` rather
     than the old blind-spot ``A=1.0 / R=0.0``.
     """
-    perfect = CodingWorkflowEvaluator(
-        CodingWorkflowSignals(test_pass_rate=1.0)
-    ).evaluate(_ACTION)
-    half = CodingWorkflowEvaluator(
-        CodingWorkflowSignals(test_pass_rate=0.5)
-    ).evaluate(_ACTION)
-    none = CodingWorkflowEvaluator(
-        CodingWorkflowSignals(test_pass_rate=0.0)
-    ).evaluate(_ACTION)
+    perfect = CodingWorkflowEvaluator(CodingWorkflowSignals(test_pass_rate=1.0)).evaluate(_ACTION)
+    half = CodingWorkflowEvaluator(CodingWorkflowSignals(test_pass_rate=0.5)).evaluate(_ACTION)
+    none = CodingWorkflowEvaluator(CodingWorkflowSignals(test_pass_rate=0.0)).evaluate(_ACTION)
 
     assert perfect.risk == pytest.approx(0.75)
     assert half.risk == pytest.approx(0.875)
     assert none.risk == pytest.approx(1.0)
     # Risk is monotonic in the acceptance gap.
     assert perfect.risk < half.risk < none.risk
+
 
 def test_risk_tests_removed_increases_risk() -> None:
     """Deleting tests raises risk (the canonical blind-spot signal).
@@ -536,9 +523,7 @@ def test_risk_tests_removed_increases_risk() -> None:
     ``R = mean(1.0, 0.0) = 0.5``.
     """
     clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
-    mutating = CodingWorkflowEvaluator(
-        _clean_risk_signals(tests_removed=2)
-    ).evaluate(_ACTION)
+    mutating = CodingWorkflowEvaluator(_clean_risk_signals(tests_removed=2)).evaluate(_ACTION)
 
     assert clean.risk == pytest.approx(0.0)
     assert mutating.risk == pytest.approx(0.5)
@@ -559,15 +544,9 @@ def test_risk_tests_modified_is_milder_than_tests_removed() -> None:
     milder than a single deletion (``R = 0.5``).
     """
     clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
-    one_mod = CodingWorkflowEvaluator(
-        _clean_risk_signals(tests_modified=1)
-    ).evaluate(_ACTION)
-    many_mod = CodingWorkflowEvaluator(
-        _clean_risk_signals(tests_modified=10)
-    ).evaluate(_ACTION)
-    removed = CodingWorkflowEvaluator(
-        _clean_risk_signals(tests_removed=1)
-    ).evaluate(_ACTION)
+    one_mod = CodingWorkflowEvaluator(_clean_risk_signals(tests_modified=1)).evaluate(_ACTION)
+    many_mod = CodingWorkflowEvaluator(_clean_risk_signals(tests_modified=10)).evaluate(_ACTION)
+    removed = CodingWorkflowEvaluator(_clean_risk_signals(tests_removed=1)).evaluate(_ACTION)
 
     assert one_mod.risk == pytest.approx(0.05)
     assert many_mod.risk == pytest.approx(0.25)
@@ -582,16 +561,12 @@ def test_risk_tests_added_is_not_a_risk_signal() -> None:
     appear in risk provenance or raise risk — only removals and modifications do.
     """
     clean = CodingWorkflowEvaluator(_clean_risk_signals()).evaluate(_ACTION)
-    adding = CodingWorkflowEvaluator(
-        _clean_risk_signals(tests_added=5)
-    ).evaluate(_ACTION)
+    adding = CodingWorkflowEvaluator(_clean_risk_signals(tests_added=5)).evaluate(_ACTION)
 
     assert adding.risk == pytest.approx(clean.risk)
     adding_ev = CodingWorkflowEvaluator(_clean_risk_signals(tests_added=5))
     adding_ev.evaluate(_ACTION)
     assert "tests_added" not in {e.source for e in adding_ev.provenance["risk"]}
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -688,9 +663,7 @@ def test_provenance_explains_every_score() -> None:
             # Acceptance is mean × evidence_breadth (blind-spot fix): the
             # breadth entry is a multiplier, so reconstruct as a product.
             breadth = next(e for e in evidence if e.source == "evidence_breadth")
-            signal_total = sum(
-                e.contribution for e in evidence if e.source != "evidence_breadth"
-            )
+            signal_total = sum(e.contribution for e in evidence if e.source != "evidence_breadth")
             reconstructed = signal_total * breadth.contribution
         else:
             reconstructed = sum(e.contribution for e in evidence)
@@ -722,9 +695,7 @@ def test_no_network_or_model_dependency() -> None:
 
     assert scores is not None
     for forbidden in ("requests", "openai", "anthropic", "httpx", "aiohttp", "socket"):
-        assert not hasattr(workflow_mod, forbidden), (
-            f"bound.workflow must not expose '{forbidden}'"
-        )
+        assert not hasattr(workflow_mod, forbidden), f"bound.workflow must not expose '{forbidden}'"
 
 
 def test_scores_stay_within_bound_ranges() -> None:
@@ -755,4 +726,3 @@ def test_scores_stay_within_bound_ranges() -> None:
     # Worst-case inputs saturate cost and risk at 1.0.
     assert scores.cost == pytest.approx(1.0)
     assert scores.risk == pytest.approx(1.0)
-

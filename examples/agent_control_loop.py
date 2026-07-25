@@ -80,7 +80,6 @@ _SIMULATED_AVOIDED_STEPS = [
 ]
 
 
-
 def _contract() -> StepContract:
     """Build the step contract for the validation task.
 
@@ -152,12 +151,9 @@ def main() -> int:
     # (v0.6 Phase 6): PLAN.md "PHASE-001" -> StepContract(id="PHASE-001") -> here.
     print(f"plan step id: {PLAN_STEP_ID}  (preserved PLAN.md -> StepContract -> trajectory)")
     print(f"goal: {GOAL}")
+    print(f"contract id: {contract.id}  (matches plan step id: {contract.id == PLAN_STEP_ID})")
     print(
-        f"contract id: {contract.id}  (matches plan step id: {contract.id == PLAN_STEP_ID})"
-    )
-    print(
-        f"criteria: threshold T={THRESHOLD}  retry_margin={RETRY_MARGIN}  "
-        f"W_A={ACCEPTANCE_WEIGHT}"
+        f"criteria: threshold T={THRESHOLD}  retry_margin={RETRY_MARGIN}  W_A={ACCEPTANCE_WEIGHT}"
     )
     print("score formula (this task): S = W_A * (passed_required / total_required)")
     print("=" * 80)
@@ -197,9 +193,7 @@ def main() -> int:
             f"C={result.scores.cost:.4f}  S={result.score:.4f}  "
             f"(T={result.threshold:.4f})"
         )
-        print(
-            f"  decision: {result.decision}  ->  control action: {control.next_action}"
-        )
+        print(f"  decision: {result.decision}  ->  control action: {control.next_action}")
         print(f"  feedback: {control.feedback}")
 
         if accepted:
@@ -217,9 +211,7 @@ def main() -> int:
     print(f"acceptance threshold T:    {THRESHOLD}")
     print(f"BOUND returned ACCEPT at:  attempt {len(decisions)}")
 
-    print(
-        "\navoided hypothetical extra steps (SIMULATED — not measured from a real run):"
-    )
+    print("\navoided hypothetical extra steps (SIMULATED — not measured from a real run):")
     for step in _SIMULATED_AVOIDED_STEPS:
         print(f"  - [simulated] {step}")
     print(
@@ -231,5 +223,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

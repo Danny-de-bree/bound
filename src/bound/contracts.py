@@ -17,7 +17,7 @@ from bound.models import DecisionAssurance
 _PHASE_ID_RE = re.compile(
     r"^PHASE-\d+(?:-[A-Z])?(?:-R\d+)?$"
     r"|"
-    r"^PHASE-\d+(?:-R\d+)?(?:-[A-Z])?$"
+    r"^PHASE-\d+(?:-R\d+)?(?:-[A-Z])?$",
 )
 
 
@@ -171,7 +171,7 @@ class AcceptanceCheck(BaseModel):
         if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
             raise ValueError(
                 "accepted_provenance must be None (accept any) or a non-empty "
-                "list of EvidenceProvenance values."
+                "list of EvidenceProvenance values.",
             )
         return self
 
@@ -251,7 +251,7 @@ class RiskCheck(BaseModel):
         if self.accepted_provenance is not None and len(self.accepted_provenance) == 0:
             raise ValueError(
                 "accepted_provenance must be None (accept any) or a non-empty "
-                "list of EvidenceProvenance values."
+                "list of EvidenceProvenance values.",
             )
         return self
 

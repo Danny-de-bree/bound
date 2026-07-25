@@ -188,10 +188,13 @@ class TestPolicyLifecycleStateMachine:
     def _filter_lifecycle(log: RunLog) -> list:
         """Return only lifecycle events from a ``RunLog``."""
         lifecycle_events = {
-            "policy.proposed", "policy.validated",
-            "policy.approved", "policy.activated",
+            "policy.proposed",
+            "policy.validated",
+            "policy.approved",
+            "policy.activated",
         }
         return [e for e in log.events if e.event in lifecycle_events]
+
 
 # ===================================================================
 # Gap 2 — Secret redaction (§8, §10)
@@ -237,9 +240,7 @@ class TestDefaultRedactor:
 
     def test_masks_private_key(self) -> None:
         """A ``private_key=xxx`` pattern is redacted."""
-        redacted = default_redactor(
-            "private_key=-----BEGIN RSA PRIVATE KEY-----"
-        )
+        redacted = default_redactor("private_key=-----BEGIN RSA PRIVATE KEY-----")
         assert "BEGIN" not in redacted
         assert "***REDACTED***" in redacted
 
@@ -322,9 +323,7 @@ class TestCommandCollectorRawNotStoredByDefault:
     def test_stdout_raw_is_none_by_default(self) -> None:
         """With default ``store_raw=False``, ``stdout_raw`` is ``None``."""
         collector = CommandCollector(
-            {"echo": command_collector.CommandSpec(
-                argv=["echo", "hello-world-42"]
-            )},
+            {"echo": command_collector.CommandSpec(argv=["echo", "hello-world-42"])},
             store_raw=False,
         )
         result = collector.run("echo")
@@ -334,9 +333,7 @@ class TestCommandCollectorRawNotStoredByDefault:
     def test_hash_is_stored_even_without_raw(self) -> None:
         """A sha256 hash of the *redacted* full output is always kept."""
         collector = CommandCollector(
-            {"echo": command_collector.CommandSpec(
-                argv=["echo", "hello-world-42"]
-            )},
+            {"echo": command_collector.CommandSpec(argv=["echo", "hello-world-42"])},
             store_raw=False,
         )
         result = collector.run("echo")
@@ -346,9 +343,7 @@ class TestCommandCollectorRawNotStoredByDefault:
     def test_summary_is_stored(self) -> None:
         """A redacted, size-capped summary is always stored."""
         collector = CommandCollector(
-            {"echo": command_collector.CommandSpec(
-                argv=["echo", "hello-world-42"]
-            )},
+            {"echo": command_collector.CommandSpec(argv=["echo", "hello-world-42"])},
             store_raw=False,
         )
         result = collector.run("echo")
@@ -358,9 +353,7 @@ class TestCommandCollectorRawNotStoredByDefault:
     def test_stdout_raw_populated_when_store_raw_true(self) -> None:
         """With ``store_raw=True``, ``stdout_raw`` is retained."""
         collector = CommandCollector(
-            {"echo": command_collector.CommandSpec(
-                argv=["echo", "hello-world-42"]
-            )},
+            {"echo": command_collector.CommandSpec(argv=["echo", "hello-world-42"])},
             store_raw=True,
         )
         result = collector.run("echo")
@@ -369,9 +362,7 @@ class TestCommandCollectorRawNotStoredByDefault:
     def test_secret_is_redacted_before_hashing(self) -> None:
         """A secret in stdout is masked in both hash input and summary."""
         collector = CommandCollector(
-            {"leak": command_collector.CommandSpec(
-                argv=["echo", "password=supersecret"]
-            )},
+            {"leak": command_collector.CommandSpec(argv=["echo", "password=supersecret"])},
             store_raw=True,
         )
         result = collector.run("leak")
@@ -379,6 +370,7 @@ class TestCommandCollectorRawNotStoredByDefault:
         assert "***REDACTED***" in (result.stdout_raw or "")
         assert "supersecret" not in result.stdout_summary
         assert "***REDACTED***" in result.stdout_summary
+
 
 # ===================================================================
 # Gap 3 — ``--only-unverified`` CLI flag (§9.1)
@@ -394,9 +386,7 @@ class TestOnlyUnverifiedJsonFlag:
     the JSON variant and a mixed-provenance trace.
     """
 
-    def test_only_unverified_json_filters_evidence(
-        self, tmp_path: Path
-    ) -> None:
+    def test_only_unverified_json_filters_evidence(self, tmp_path: Path) -> None:
         """With ``only_unverified=True``, the JSON payload's collected evidence
         contains only unverified / missing / claimed / invalid entries."""
         store, run_id = self._build_mixed_run(tmp_path)
@@ -410,15 +400,16 @@ class TestOnlyUnverifiedJsonFlag:
                 prov = row["provenance"]
                 status = row["status"]
                 assert prov in ("claimed", "missing", "defaulted") or status in (
-                    "unverified", "missing", "invalid", "stale"
+                    "unverified",
+                    "missing",
+                    "invalid",
+                    "stale",
                 ), (
                     f"row {row['check_id']} has provenance={prov!r} "
                     f"status={status!r} which should not appear"
                 )
 
-    def test_all_verified_json_emits_empty_collected_when_filtered(
-        self, tmp_path: Path
-    ) -> None:
+    def test_all_verified_json_emits_empty_collected_when_filtered(self, tmp_path: Path) -> None:
         """When all evidence is VERIFIED, ``--only-unverified --json`` emits
         an empty ``collected`` dict."""
         store = LineageStore(base_dir=tmp_path / "runs")
@@ -427,9 +418,7 @@ class TestOnlyUnverifiedJsonFlag:
         payload = _inspect_json_payload(log, only_unverified=True)
         assert payload["evidence"]["collected"] == {}
 
-    def test_only_unverified_false_includes_all(
-        self, tmp_path: Path
-    ) -> None:
+    def test_only_unverified_false_includes_all(self, tmp_path: Path) -> None:
         """With ``only_unverified=False``, the JSON payload includes all
         evidence including VERIFIED checks."""
         store, run_id = self._build_mixed_run(tmp_path)
@@ -456,18 +445,30 @@ class TestOnlyUnverifiedJsonFlag:
         run_id = evt.run_id
         step_id = "step-001"
         store.record_evidence_collected(
-            run_id, step_id=step_id, check_id="tests-pass",
-            collector="bound.pytest", collector_version="0.7.0",
-            provenance="verified", passed=True,
+            run_id,
+            step_id=step_id,
+            check_id="tests-pass",
+            collector="bound.pytest",
+            collector_version="0.7.0",
+            provenance="verified",
+            passed=True,
         )
         store.record_evidence_collected(
-            run_id, step_id=step_id, check_id="type-check-pass",
-            collector="bound.mypy", provenance="missing",
-            passed=None, status="missing",
+            run_id,
+            step_id=step_id,
+            check_id="type-check-pass",
+            collector="bound.mypy",
+            provenance="missing",
+            passed=None,
+            status="missing",
         )
         store.record_evidence_collected(
-            run_id, step_id=step_id, check_id="agent-claim",
-            collector="agent", provenance="claimed", passed=True,
+            run_id,
+            step_id=step_id,
+            check_id="agent-claim",
+            collector="agent",
+            provenance="claimed",
+            passed=True,
         )
         store.finish_run(run_id)
         return store, run_id
@@ -482,12 +483,17 @@ class TestOnlyUnverifiedJsonFlag:
         run_id = evt.run_id
         step_id = "step-001"
         store.record_evidence_collected(
-            run_id, step_id=step_id, check_id="tests-pass",
-            collector="bound.pytest", collector_version="0.7.0",
-            provenance="verified", passed=True,
+            run_id,
+            step_id=step_id,
+            check_id="tests-pass",
+            collector="bound.pytest",
+            collector_version="0.7.0",
+            provenance="verified",
+            passed=True,
         )
         store.finish_run(run_id)
         return run_id
+
 
 # ===================================================================
 # Gap 4 — STALE evidence rejection (§10)
@@ -513,7 +519,7 @@ class TestStaleJUnitEvidence:
         return (
             f'<?xml version="1.0"?>\n'
             f'<testsuite name="pytest" tests="{tests}"'
-            f'{failures_attr}{errors_attr}>\n'
+            f"{failures_attr}{errors_attr}>\n"
             f"  <testcase classname='test' name='test_foo' />\n"
             f"</testsuite>\n"
         )
@@ -544,9 +550,7 @@ class TestStaleJUnitEvidence:
         path = tmp_path / "junit.xml"
         path.write_text(self._junit(tests=5))
         future = datetime.now(UTC) + timedelta(hours=1)
-        stale_evidence = JUnitCollector(max_age_seconds=1.0).collect(
-            path, now=future
-        )
+        stale_evidence = JUnitCollector(max_age_seconds=1.0).collect(path, now=future)
         contract = StepContract(
             id="PHASE-001",
             description="Test step",
@@ -586,9 +590,7 @@ class TestStaleJUnitEvidence:
         )
         assert result.final_decision != "ACCEPT"
 
-    def test_stale_evidence_cannot_satisfy_blocker_policy(
-        self, tmp_path: Path
-    ) -> None:
+    def test_stale_evidence_cannot_satisfy_blocker_policy(self, tmp_path: Path) -> None:
         """Stale (INVALID) evidence causes the gate to fail even with a
         permissive policy."""
         evidence = ExecutionEvidence(

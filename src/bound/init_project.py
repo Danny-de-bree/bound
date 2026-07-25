@@ -105,6 +105,7 @@ class ProjectDetections:
         self.git_remote: str = ""
         self.ci_provider: ToolDetection = ToolDetection("unknown", Confidence.NOT_FOUND)
 
+
 # =========================================================================
 # Detection helpers
 # =========================================================================
@@ -168,6 +169,8 @@ def _check_cfg_section(content: str, section: str) -> bool:
             if current == section:
                 return True
     return False
+
+
 # =========================================================================
 # Public API
 # =========================================================================
@@ -200,52 +203,77 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
     # Build system
     # ------------------------------------------------------------------
     if pyproject_toml is not None:
-        if "build-system" in pyproject_toml and 'hatchling' in pyproject_toml:
+        if "build-system" in pyproject_toml and "hatchling" in pyproject_toml:
             detections.build_system = ToolDetection("hatchling", Confidence.DETECTED)
-        elif "build-system" in pyproject_toml and 'setuptools' in pyproject_toml:
+        elif "build-system" in pyproject_toml and "setuptools" in pyproject_toml:
             detections.build_system = ToolDetection("setuptools", Confidence.DETECTED)
         elif "build-system" in pyproject_toml:
-            detections.build_system = ToolDetection("hatchling", Confidence.UNCERTAIN,
-                                                    detail="build-system found but backend unclear")
+            detections.build_system = ToolDetection(
+                "hatchling",
+                Confidence.UNCERTAIN,
+                detail="build-system found but backend unclear",
+            )
         else:
             detections.build_system = ToolDetection(
-                "hatchling", Confidence.UNCERTAIN,
+                "hatchling",
+                Confidence.UNCERTAIN,
                 detail="pyproject.toml present but no build-system",
             )
 
     if detections.build_system.confidence == Confidence.NOT_FOUND:
         if setup_py is not None and "setup" in setup_py:
-            detections.build_system = ToolDetection("setuptools", Confidence.DETECTED,
-                                                    detail="setup.py present")
+            detections.build_system = ToolDetection(
+                "setuptools",
+                Confidence.DETECTED,
+                detail="setup.py present",
+            )
         if setup_cfg is not None and "metadata" in setup_cfg:
-            detections.build_system = ToolDetection("setuptools", Confidence.DETECTED,
-                                                    detail="setup.cfg present")
+            detections.build_system = ToolDetection(
+                "setuptools",
+                Confidence.DETECTED,
+                detail="setup.cfg present",
+            )
 
     # Check for poetry / uv independently
     if pyproject_toml is not None:
         if "[tool.poetry]" in pyproject_toml:
-            detections.build_system = ToolDetection("poetry", Confidence.DETECTED,
-                                                    detail="[tool.poetry] section")
+            detections.build_system = ToolDetection(
+                "poetry",
+                Confidence.DETECTED,
+                detail="[tool.poetry] section",
+            )
         if "[tool.uv]" in pyproject_toml or (root / "uv.lock").exists():
-            detections.build_system = ToolDetection("uv", Confidence.DETECTED,
-                                                    detail="uv tool config or uv.lock")
+            detections.build_system = ToolDetection(
+                "uv",
+                Confidence.DETECTED,
+                detail="uv tool config or uv.lock",
+            )
 
     # Fallback — check for Makefile, requirements.txt, etc.
     if detections.build_system.confidence == Confidence.NOT_FOUND:
         if (root / "Makefile").exists():
-            detections.build_system = ToolDetection("make", Confidence.UNCERTAIN,
-                                                    detail="Makefile found")
+            detections.build_system = ToolDetection(
+                "make",
+                Confidence.UNCERTAIN,
+                detail="Makefile found",
+            )
         if (root / "requirements.txt").exists():
-            detections.build_system = ToolDetection("pip", Confidence.UNCERTAIN,
-                                                    detail="requirements.txt found")
+            detections.build_system = ToolDetection(
+                "pip",
+                Confidence.UNCERTAIN,
+                detail="requirements.txt found",
+            )
 
     if detections.build_system.confidence == Confidence.NOT_FOUND:
         if (root / "Cargo.toml").exists() or (root / "package.json").exists():
-            detections.build_system = ToolDetection("other", Confidence.UNCERTAIN,
-                                                    detail="non-Python build file detected")
+            detections.build_system = ToolDetection(
+                "other",
+                Confidence.UNCERTAIN,
+                detail="non-Python build file detected",
+            )
         else:
             detections.build_system = ToolDetection("unknown", Confidence.NOT_FOUND)
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Test framework
     # ------------------------------------------------------------------
     detected_test = False
@@ -255,35 +283,48 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
         or "pytest" in pyproject_toml.lower()
     ):
         detections.test_framework = ToolDetection(
-            "pytest", Confidence.DETECTED, detail="pyproject.toml pytest config"
+            "pytest",
+            Confidence.DETECTED,
+            detail="pyproject.toml pytest config",
         )
         detected_test = True
 
     if not detected_test and setup_cfg is not None and _check_cfg_section(setup_cfg, "tool:pytest"):
         detections.test_framework = ToolDetection(
-            "pytest", Confidence.DETECTED, detail="setup.cfg pytest config"
+            "pytest",
+            Confidence.DETECTED,
+            detail="setup.cfg pytest config",
         )
         detected_test = True
 
     if not detected_test:
         cfg = _read_file_safe(root / "pytest.ini")
         if cfg is not None:
-            detections.test_framework = ToolDetection("pytest", Confidence.DETECTED,
-                                                      detail="pytest.ini")
+            detections.test_framework = ToolDetection(
+                "pytest",
+                Confidence.DETECTED,
+                detail="pytest.ini",
+            )
             detected_test = True
 
     if not detected_test:
         tox_ini = _read_file_safe(root / "tox.ini")
         if tox_ini is not None and "pytest" in tox_ini.lower():
-            detections.test_framework = ToolDetection("pytest", Confidence.UNCERTAIN,
-                                                      detail="referenced in tox.ini")
+            detections.test_framework = ToolDetection(
+                "pytest",
+                Confidence.UNCERTAIN,
+                detail="referenced in tox.ini",
+            )
             detected_test = True
 
     if not detected_test:
         conftest = root / "tests" / "conftest.py"
         if conftest.exists():
-            detections.test_framework = ToolDetection("pytest", Confidence.DETECTED,
-                                                      detail="tests/conftest.py found")
+            detections.test_framework = ToolDetection(
+                "pytest",
+                Confidence.DETECTED,
+                detail="tests/conftest.py found",
+            )
             detected_test = True
 
     if not detected_test:
@@ -294,37 +335,50 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
                 content = _read_file_safe(test_files[0])
                 if content and "unittest" in content and "pytest" not in content:
                     detections.test_framework = ToolDetection(
-                        "unittest", Confidence.DETECTED,
+                        "unittest",
+                        Confidence.DETECTED,
                         detail=f"{test_files[0].name} imports unittest",
                     )
                     detected_test = True
                 else:
-                    detections.test_framework = ToolDetection("pytest", Confidence.UNCERTAIN,
-                                                              detail="test_*.py files found")
+                    detections.test_framework = ToolDetection(
+                        "pytest",
+                        Confidence.UNCERTAIN,
+                        detail="test_*.py files found",
+                    )
                     detected_test = True
 
     if not detected_test:
         detections.test_framework = ToolDetection("unknown", Confidence.NOT_FOUND)
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Linter
     # ------------------------------------------------------------------
     detected_lint = False
 
     if pyproject_toml is not None:
         if "[tool.ruff]" in pyproject_toml:
-            detections.linter = ToolDetection("ruff", Confidence.DETECTED,
-                                              detail="[tool.ruff] in pyproject.toml")
+            detections.linter = ToolDetection(
+                "ruff",
+                Confidence.DETECTED,
+                detail="[tool.ruff] in pyproject.toml",
+            )
             detected_lint = True
         elif "ruff" in pyproject_toml.lower():
-            detections.linter = ToolDetection("ruff", Confidence.UNCERTAIN,
-                                              detail="ruff mentioned in pyproject.toml")
+            detections.linter = ToolDetection(
+                "ruff",
+                Confidence.UNCERTAIN,
+                detail="ruff mentioned in pyproject.toml",
+            )
             detected_lint = True
 
     if not detected_lint:
         for cfg_name in (".ruff.toml", "ruff.toml"):
             if (root / cfg_name).exists():
-                detections.linter = ToolDetection("ruff", Confidence.DETECTED,
-                                                  detail=f"{cfg_name} found")
+                detections.linter = ToolDetection(
+                    "ruff",
+                    Confidence.DETECTED,
+                    detail=f"{cfg_name} found",
+                )
                 detected_lint = True
                 break
 
@@ -332,66 +386,89 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
         (root / ".flake8").exists() or (setup_cfg is not None and "[flake8]" in setup_cfg)
     ):
         detections.linter = ToolDetection(
-            "flake8", Confidence.DETECTED, detail="flake8 config found"
+            "flake8",
+            Confidence.DETECTED,
+            detail="flake8 config found",
         )
         detected_lint = True
 
     if not detected_lint:
         pylint_rc = root / ".pylintrc"
         if pylint_rc.exists() or (root / "pylintrc").exists():
-            detections.linter = ToolDetection("pylint", Confidence.DETECTED,
-                                              detail="pylintrc found")
+            detections.linter = ToolDetection(
+                "pylint",
+                Confidence.DETECTED,
+                detail="pylintrc found",
+            )
             detected_lint = True
 
     if not detected_lint and pyproject_toml is not None and "lint" in pyproject_toml.lower():
         detections.linter = ToolDetection(
-            "unknown", Confidence.UNCERTAIN, detail="lint mentioned in pyproject.toml"
+            "unknown",
+            Confidence.UNCERTAIN,
+            detail="lint mentioned in pyproject.toml",
         )
 
     if not detected_lint:
         detections.linter = ToolDetection("unknown", Confidence.NOT_FOUND)
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Type checker
     # ------------------------------------------------------------------
     detected_type = False
 
     if pyproject_toml is not None:
         if "[tool.mypy]" in pyproject_toml:
-            detections.type_checker = ToolDetection("mypy", Confidence.DETECTED,
-                                                    detail="[tool.mypy] in pyproject.toml")
+            detections.type_checker = ToolDetection(
+                "mypy",
+                Confidence.DETECTED,
+                detail="[tool.mypy] in pyproject.toml",
+            )
             detected_type = True
         elif "mypy" in pyproject_toml.lower():
-            detections.type_checker = ToolDetection("mypy", Confidence.UNCERTAIN,
-                                                    detail="mypy mentioned in pyproject.toml")
+            detections.type_checker = ToolDetection(
+                "mypy",
+                Confidence.UNCERTAIN,
+                detail="mypy mentioned in pyproject.toml",
+            )
             detected_type = True
 
     if not detected_type:
         mypy_ini = root / "mypy.ini"
         if mypy_ini.exists():
-            detections.type_checker = ToolDetection("mypy", Confidence.DETECTED,
-                                                    detail="mypy.ini found")
+            detections.type_checker = ToolDetection(
+                "mypy",
+                Confidence.DETECTED,
+                detail="mypy.ini found",
+            )
             detected_type = True
 
     if not detected_type and setup_cfg is not None and "[mypy]" in setup_cfg:
         detections.type_checker = ToolDetection(
-            "mypy", Confidence.DETECTED, detail="[mypy] in setup.cfg"
+            "mypy",
+            Confidence.DETECTED,
+            detail="[mypy] in setup.cfg",
         )
         detected_type = True
 
     if not detected_type and pyproject_toml is not None and "[tool.pyright]" in pyproject_toml:
         detections.type_checker = ToolDetection(
-            "pyright", Confidence.DETECTED, detail="[tool.pyright] in pyproject.toml"
+            "pyright",
+            Confidence.DETECTED,
+            detail="[tool.pyright] in pyproject.toml",
         )
         detected_type = True
 
     if not detected_type:
         pyright_json = root / "pyrightconfig.json"
         if pyright_json.exists():
-            detections.type_checker = ToolDetection("pyright", Confidence.DETECTED,
-                                                    detail="pyrightconfig.json found")
+            detections.type_checker = ToolDetection(
+                "pyright",
+                Confidence.DETECTED,
+                detail="pyrightconfig.json found",
+            )
             detected_type = True
 
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Coverage
     # ------------------------------------------------------------------
     detected_cov = False
@@ -400,39 +477,53 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
         "[tool.coverage.run]" in pyproject_toml or "[tool.coverage.report]" in pyproject_toml
     ):
         detections.coverage = ToolDetection(
-            "coverage.py", Confidence.DETECTED, detail="[tool.coverage.*] in pyproject.toml"
+            "coverage.py",
+            Confidence.DETECTED,
+            detail="[tool.coverage.*] in pyproject.toml",
         )
         detected_cov = True
 
     if not detected_cov:
         for cfg_name in (".coveragerc", ".coverage"):
             if (root / cfg_name).exists():
-                detections.coverage = ToolDetection("coverage.py", Confidence.DETECTED,
-                                                    detail=f"{cfg_name} found")
+                detections.coverage = ToolDetection(
+                    "coverage.py",
+                    Confidence.DETECTED,
+                    detail=f"{cfg_name} found",
+                )
                 detected_cov = True
                 break
 
     if not detected_cov and setup_cfg is not None and _check_cfg_section(setup_cfg, "coverage:run"):
         detections.coverage = ToolDetection(
-            "coverage.py", Confidence.DETECTED, detail="[coverage:run] in setup.cfg"
+            "coverage.py",
+            Confidence.DETECTED,
+            detail="[coverage:run] in setup.cfg",
         )
         detected_cov = True
 
     if not detected_cov:
         tox_ini = _read_file_safe(root / "tox.ini")
         if tox_ini is not None and "pytest-cov" in tox_ini:
-            detections.coverage = ToolDetection("pytest-cov", Confidence.UNCERTAIN,
-                                                detail="referenced in tox.ini")
+            detections.coverage = ToolDetection(
+                "pytest-cov",
+                Confidence.UNCERTAIN,
+                detail="referenced in tox.ini",
+            )
             detected_cov = True
 
-    if not detected_cov and pyproject_toml is not None and (
-        "pytest-cov" in pyproject_toml or "coverage" in pyproject_toml.lower()
+    if (
+        not detected_cov
+        and pyproject_toml is not None
+        and ("pytest-cov" in pyproject_toml or "coverage" in pyproject_toml.lower())
     ):
         detections.coverage = ToolDetection(
-            "coverage.py", Confidence.UNCERTAIN, detail="coverage mentioned in pyproject.toml"
+            "coverage.py",
+            Confidence.UNCERTAIN,
+            detail="coverage mentioned in pyproject.toml",
         )
         detected_cov = True
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Git configuration
     # ------------------------------------------------------------------
     git_dir = root / ".git"
@@ -460,24 +551,41 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
             if "github.com" in remote_upper:
                 gh_actions = root / ".github" / "workflows"
                 if gh_actions.is_dir() and list(gh_actions.iterdir()):
-                    detections.ci_provider = ToolDetection("github-actions", Confidence.DETECTED,
-                                                           detail=".github/workflows found")
+                    detections.ci_provider = ToolDetection(
+                        "github-actions",
+                        Confidence.DETECTED,
+                        detail=".github/workflows found",
+                    )
                 else:
-                    detections.ci_provider = ToolDetection("github-actions", Confidence.DETECTED,
-                                                           detail="remote is github.com")
+                    detections.ci_provider = ToolDetection(
+                        "github-actions",
+                        Confidence.DETECTED,
+                        detail="remote is github.com",
+                    )
             elif "gitlab" in remote_upper:
-                detections.ci_provider = ToolDetection("gitlab-ci", Confidence.DETECTED,
-                                                       detail="remote is gitlab")
+                detections.ci_provider = ToolDetection(
+                    "gitlab-ci",
+                    Confidence.DETECTED,
+                    detail="remote is gitlab",
+                )
             else:
                 detections.ci_provider = ToolDetection(
-                    "unknown", Confidence.UNCERTAIN, detail=f"remote: {detections.git_remote[:60]}"
+                    "unknown",
+                    Confidence.UNCERTAIN,
+                    detail=f"remote: {detections.git_remote[:60]}",
                 )
         else:
-            detections.ci_provider = ToolDetection("unknown", Confidence.NOT_FOUND,
-                                                   detail="no remote configured")
+            detections.ci_provider = ToolDetection(
+                "unknown",
+                Confidence.NOT_FOUND,
+                detail="no remote configured",
+            )
     else:
-        detections.ci_provider = ToolDetection("unknown", Confidence.NOT_FOUND,
-                                               detail="no .git directory")
+        detections.ci_provider = ToolDetection(
+            "unknown",
+            Confidence.NOT_FOUND,
+            detail="no .git directory",
+        )
 
     logger.debug("detected tooling: %s", detections)
     return detections
@@ -486,6 +594,8 @@ def detect_tooling(project_dir: str | Path) -> ProjectDetections:
         detections.coverage = ToolDetection("unknown", Confidence.NOT_FOUND)
     if not detected_type:
         detections.type_checker = ToolDetection("unknown", Confidence.NOT_FOUND)
+
+
 def generate_policy(detections: ProjectDetections) -> str:
     """Generate a minimal reviewable ``bound-policy.yaml``.
 
@@ -513,7 +623,7 @@ def generate_policy(detections: ProjectDetections) -> str:
     lines.append("")
 
     # --- Policy identity ---
-    lines.append("schema_version: \"1.0\"")
+    lines.append('schema_version: "1.0"')
     lines.append("")
     lines.append("policy:")
     lines.append("  id: auto-generated")
@@ -550,7 +660,7 @@ def generate_policy(detections: ProjectDetections) -> str:
             lines.append("    timeout_seconds: 120")
             lines.append("    success_exit_codes: [0]")
             lines.append("")
-# --- Acceptance checks ---
+    # --- Acceptance checks ---
     lines.append("# --- Hard gates (blockers): can never be compensated by positive scores. ---")
 
     if detections.test_framework and detections.test_framework.confidence != Confidence.NOT_FOUND:
@@ -571,8 +681,7 @@ def generate_policy(detections: ProjectDetections) -> str:
 
     # --- Quality checks ---
     lines.append(
-        "# --- Weighted signals (quality): soft contributions, "
-        "never override a blocker. ---"
+        "# --- Weighted signals (quality): soft contributions, never override a blocker. ---",
     )
 
     added_quality = False
@@ -588,8 +697,7 @@ def generate_policy(detections: ProjectDetections) -> str:
             quality_items.append('    description: "Lint is clean."')
             if detections.linter.confidence == Confidence.UNCERTAIN:
                 quality_items.append(
-                    f"    # UNCERTAIN: "
-                    f"{detections.linter.detail or 'linter detection uncertain'}"
+                    f"    # UNCERTAIN: {detections.linter.detail or 'linter detection uncertain'}",
                 )
             quality_items.append("    importance: medium")
             quality_items.append("    collector: lint")
@@ -599,8 +707,7 @@ def generate_policy(detections: ProjectDetections) -> str:
     if detections.type_checker:
         if detections.type_checker.confidence == Confidence.NOT_FOUND:
             quality_items.append(
-                "  # NOTE: no type checker detected; "
-                "add a typecheck signal if needed."
+                "  # NOTE: no type checker detected; add a typecheck signal if needed.",
             )
         else:
             quality_items.append("  - id: typecheck-clean")
@@ -608,7 +715,7 @@ def generate_policy(detections: ProjectDetections) -> str:
             if detections.type_checker.confidence == Confidence.UNCERTAIN:
                 quality_items.append(
                     f"    # UNCERTAIN: "
-                    f"{detections.type_checker.detail or 'type checker detection uncertain'}"
+                    f"{detections.type_checker.detail or 'type checker detection uncertain'}",
                 )
             quality_items.append("    importance: medium")
             quality_items.append("    collector: typecheck")
@@ -618,8 +725,7 @@ def generate_policy(detections: ProjectDetections) -> str:
     if detections.coverage:
         if detections.coverage.confidence == Confidence.NOT_FOUND:
             quality_items.append(
-                "  # NOTE: no coverage tool detected; "
-                "add a coverage signal if needed."
+                "  # NOTE: no coverage tool detected; add a coverage signal if needed.",
             )
         else:
             quality_items.append("  - id: coverage")
@@ -627,7 +733,7 @@ def generate_policy(detections: ProjectDetections) -> str:
             if detections.coverage.confidence == Confidence.UNCERTAIN:
                 quality_items.append(
                     f"    # UNCERTAIN: "
-                    f"{detections.coverage.detail or 'coverage detection uncertain'}"
+                    f"{detections.coverage.detail or 'coverage detection uncertain'}",
                 )
             quality_items.append("    importance: low")
             quality_items.append("")
@@ -639,7 +745,7 @@ def generate_policy(detections: ProjectDetections) -> str:
     else:
         # Empty list — schema requires a list, not null
         lines.append("quality_checks: []")
-# --- Risk checks ---
+    # --- Risk checks ---
     lines.append("# --- Risk hard gates (blockers): violations are unacceptable. ---")
     lines.append("risk_checks:")
     lines.append("  - id: no-secrets")
@@ -733,6 +839,8 @@ def generate_policy(detections: ProjectDetections) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
 # =========================================================================
 # Helper utilities
 # =========================================================================
@@ -819,8 +927,18 @@ def _find_dependency_files(project_dir: Path) -> list[str]:
         A list of relative file names or glob patterns.
     """
     patterns: list[str] = []
-    for fname in ("pyproject.toml", "uv.lock", "requirements.txt", "Pipfile", "Pipfile.lock",
-                  "poetry.lock", "Cargo.toml", "Cargo.lock", "package.json", "yarn.lock"):
+    for fname in (
+        "pyproject.toml",
+        "uv.lock",
+        "requirements.txt",
+        "Pipfile",
+        "Pipfile.lock",
+        "poetry.lock",
+        "Cargo.toml",
+        "Cargo.lock",
+        "package.json",
+        "yarn.lock",
+    ):
         if (project_dir / fname).exists():
             patterns.append(fname)
     return patterns or ["pyproject.toml", "requirements*.txt"]
@@ -837,8 +955,12 @@ def _uncertain_comment_lines(detections: ProjectDetections) -> list[str]:
     """
     lines: list[str] = []
     for attr in (
-        "test_framework", "linter", "type_checker", "coverage",
-        "build_system", "ci_provider",
+        "test_framework",
+        "linter",
+        "type_checker",
+        "coverage",
+        "build_system",
+        "ci_provider",
     ):
         detection: ToolDetection = getattr(detections, attr)
         comment = detection.comment_line

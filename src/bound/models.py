@@ -131,7 +131,7 @@ class BoundCriteria(BaseModel):
         if self.weight is not None and self.weights != _DEFAULT_WEIGHTS:
             raise ValueError(
                 "Cannot supply both 'weight' and a non-default 'weights'; "
-                "use 'weights' (BoundWeights) only."
+                "use 'weights' (BoundWeights) only.",
             )
         if self.weight is not None:
             self.weights = BoundWeights(acceptance=self.weight)
@@ -363,7 +363,7 @@ class EvaluationResult(BaseModel):
         ):
             raise ValueError(
                 "Cannot supply both 'weight' and a non-default 'weights'; "
-                "use 'weights' (BoundWeights) only."
+                "use 'weights' (BoundWeights) only.",
             )
         if self.weight is not None:
             self.weights = BoundWeights(acceptance=self.weight)

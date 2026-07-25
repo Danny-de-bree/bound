@@ -38,14 +38,22 @@ from bound.workflow import CodingWorkflowEvaluator
 # the v0.1-equivalent score ``S = 0.8`` and ``ACCEPT`` decision are preserved.
 _DOD_ARGS = [
     "evaluate",
-    "--action", "Book the direct flight",
-    "--goal", "Travel from Paris to New York",
-    "--acceptance", "0.9",
-    "--influence", "0.2",
-    "--risk", "0.1",
-    "--cost", "0.2",
-    "--weight", "1.0",
-    "--threshold", "0.6",
+    "--action",
+    "Book the direct flight",
+    "--goal",
+    "Travel from Paris to New York",
+    "--acceptance",
+    "0.9",
+    "--influence",
+    "0.2",
+    "--risk",
+    "0.1",
+    "--cost",
+    "0.2",
+    "--weight",
+    "1.0",
+    "--threshold",
+    "0.6",
 ]
 
 # A ``bound evaluate-workflow`` invocation that derives scores from workflow
@@ -55,16 +63,23 @@ _DOD_ARGS = [
 # so S=1.0 >= T=0.6 -> ACCEPT.
 _DOD_WORKFLOW_ARGS = [
     "evaluate-workflow",
-    "--action", "Implement feature X",
-    "--goal", "Complete issue #123",
-    "--test-pass-rate", "1.0",
+    "--action",
+    "Implement feature X",
+    "--goal",
+    "Complete issue #123",
+    "--test-pass-rate",
+    "1.0",
     "--lint-passed",
     "--type-check-passed",
-    "--required-checks-passed", "1.0",
+    "--required-checks-passed",
+    "1.0",
     "--rollback-available",
-    "--retry-count", "0",
-    "--tool-call-count", "0",
-    "--threshold", "0.6",
+    "--retry-count",
+    "0",
+    "--tool-call-count",
+    "0",
+    "--threshold",
+    "0.6",
 ]
 
 # Fields the auditable CLI JSON payload must expose for the v0.2 contract.
@@ -195,10 +210,12 @@ _FORBIDDEN_IMPORT_ROOTS = frozenset(
 #: Thin adapter modules that are allowed to import networking primitives.
 #: Each adapter is independently verified to use the shared service layer
 #: (see ``test_adapters_use_service_layer``).
-_ADAPTER_MODULES: frozenset = frozenset({
-    "ui.py",
-    "mcp_server.py",
-})
+_ADAPTER_MODULES: frozenset = frozenset(
+    {
+        "ui.py",
+        "mcp_server.py",
+    }
+)
 
 #: Environment variables that would signal an API-key-based provider is expected.
 _API_KEY_ENV_VARS = (
@@ -408,9 +425,7 @@ def test_importing_bound_does_not_load_any_provider_sdk() -> None:
         for name in loaded
         if name.split(".")[0].lower().replace("_", "-") in _FORBIDDEN_PROVIDER_PACKAGES
     }
-    assert not offenders, (
-        f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
-    )
+    assert not offenders, f"Importing bound loaded forbidden provider modules: {sorted(offenders)}"
     assert bound.__version__, "bound.__version__ must be set"
 
 
@@ -438,8 +453,7 @@ def test_bound_source_imports_no_network_or_provider_modules() -> None:
             offenders[rel] = forbidden
 
     assert not offenders, (
-        "BOUND core must not import networking/provider modules; "
-        f"found: {offenders}"
+        f"BOUND core must not import networking/provider modules; found: {offenders}"
     )
 
 
@@ -477,8 +491,10 @@ def test_adapters_use_service_layer() -> None:
                 ):
                     imports_bound_services = True
                     break
-            elif isinstance(node, ast.ImportFrom) and node.module and (
-                node.module == "bound.services" or node.module.startswith("bound.services.")
+            elif (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and (node.module == "bound.services" or node.module.startswith("bound.services."))
             ):
                 imports_bound_services = True
                 break
@@ -487,6 +503,8 @@ def test_adapters_use_service_layer() -> None:
                 f"Adapter {rel_name} does not yet import from bound.services "
                 "(refactoring task S1-SLA-2 is pending)"
             )
+
+
 def test_policy_reaches_decision_with_socket_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -766,8 +784,7 @@ def test_llm_adapters_module_is_import_free() -> None:
     assert path.exists(), f"llm_adapters.py not found under {_SRC_ROOT}"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     import_nodes = [
-        node for node in ast.walk(tree)
-        if isinstance(node, (ast.Import, ast.ImportFrom))
+        node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))
     ]
     assert not import_nodes, (
         "bound.llm_adapters must remain import-free (the optional-LLM seam); "
@@ -1001,9 +1018,7 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     # ROLLBACK: unsafe risk crosses the safety boundary before the threshold.
     decisions.add(
         BoundPolicy(
-            StaticEvaluator(
-                EvaluationScores(acceptance=1.0, influence=0.0, risk=0.9, cost=0.0)
-            )
+            StaticEvaluator(EvaluationScores(acceptance=1.0, influence=0.0, risk=0.9, cost=0.0))
         )
         .evaluate(action, BoundCriteria(threshold=0.6, rollback_risk_threshold=0.8))
         .decision
@@ -1011,9 +1026,7 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     # ACCEPT: score exactly at the threshold (boundary-inclusive).
     decisions.add(
         BoundPolicy(
-            StaticEvaluator(
-                EvaluationScores(acceptance=0.6, influence=0.0, risk=0.0, cost=0.0)
-            )
+            StaticEvaluator(EvaluationScores(acceptance=0.6, influence=0.0, risk=0.0, cost=0.0))
         )
         .evaluate(action, BoundCriteria(threshold=0.6, rollback_risk_threshold=0.8))
         .decision
@@ -1021,9 +1034,7 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     # RETRY: just below threshold but within the retry margin.
     decisions.add(
         BoundPolicy(
-            StaticEvaluator(
-                EvaluationScores(acceptance=0.55, influence=0.0, risk=0.0, cost=0.0)
-            )
+            StaticEvaluator(EvaluationScores(acceptance=0.55, influence=0.0, risk=0.0, cost=0.0))
         )
         .evaluate(
             action,
@@ -1034,9 +1045,7 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     # REPLAN: too far below the threshold to retry (fall-through).
     decisions.add(
         BoundPolicy(
-            StaticEvaluator(
-                EvaluationScores(acceptance=0.2, influence=0.0, risk=0.0, cost=0.0)
-            )
+            StaticEvaluator(EvaluationScores(acceptance=0.2, influence=0.0, risk=0.0, cost=0.0))
         )
         .evaluate(
             action,
@@ -1046,7 +1055,6 @@ def test_all_four_decisions_are_reachable_offline() -> None:
     )
 
     assert decisions == {"ACCEPT", "RETRY", "REPLAN", "ROLLBACK"}
-
 
 
 # ---------------------------------------------------------------------------
@@ -1117,6 +1125,7 @@ def test_bound_workflow_decision_is_deterministic_without_llm() -> None:
     assert result_a == result_b
     assert result_a.decision == "ACCEPT"
 
+
 # ---------------------------------------------------------------------------
 # v0.3 Definition of Done: contract workflow reaching ACCEPT without an LLM
 # ---------------------------------------------------------------------------
@@ -1164,8 +1173,8 @@ def test_contract_workflow_definition_of_done_reaches_accept_offline(
     # The four dimensions are *derived*, not supplied manually: the user gave
     # no A/I/R/C — only the contract and the evidence.
     assert scores.acceptance == pytest.approx(1.0, abs=1e-12)  # 2/2 required pass
-    assert scores.risk == pytest.approx(0.0, abs=1e-12)        # no violated risk checks
-    assert scores.cost == pytest.approx(0.0, abs=1e-12)        # no budget declared
+    assert scores.risk == pytest.approx(0.0, abs=1e-12)  # no violated risk checks
+    assert scores.cost == pytest.approx(0.0, abs=1e-12)  # no budget declared
     assert scores.influence == pytest.approx(0.0, abs=1e-12)  # not derivable
 
     # Stage 3: automatic A/I/R/C -> deterministic BOUND decision (ACCEPT).
@@ -1206,14 +1215,15 @@ def test_service_modules_do_not_use_print() -> None:
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 func = node.value.func
                 if (
-                    isinstance(func, ast.Name) and func.id == "print"
-                    or isinstance(func, ast.Attribute) and func.attr == "print"
+                    isinstance(func, ast.Name)
+                    and func.id == "print"
+                    or isinstance(func, ast.Attribute)
+                    and func.attr == "print"
                 ):
                     offenders.setdefault(rel, []).append(node.lineno)
 
     assert not offenders, (
-        "Non-adapter modules must not use print(); "
-        f"found: {dict(sorted(offenders.items()))}"
+        f"Non-adapter modules must not use print(); found: {dict(sorted(offenders.items()))}"
     )
 
 
@@ -1231,6 +1241,8 @@ def test_service_layer_does_not_call_sys_exit() -> None:
         rel = str(path.relative_to(_SRC_ROOT))
         if rel == "cli.py":
             continue
+        if rel == "__main__.py":
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
@@ -1244,9 +1256,10 @@ def test_service_layer_does_not_call_sys_exit() -> None:
                     offenders.setdefault(rel, []).append(node.lineno)
 
     assert not offenders, (
-        "Only cli.py may call sys.exit(); "
-        f"found in: {dict(sorted(offenders.items()))}"
+        f"Only cli.py may call sys.exit(); found in: {dict(sorted(offenders.items()))}"
     )
+
+
 # ---------------------------------------------------------------------------
 # Service layer must not import adapter modules (dependency inversion)
 # ---------------------------------------------------------------------------
@@ -1270,19 +1283,16 @@ def test_service_layer_does_not_import_adapter_modules() -> None:
             for alias in node.names:
                 mod = alias.name.split(".")[0]
                 assert mod != "bound", (
-                    "services.py must not import from adapter modules, "
-                    f"but found: {alias.name}"
+                    f"services.py must not import from adapter modules, but found: {alias.name}"
                 )
         elif isinstance(node, ast.ImportFrom) and node.module:
             if node.module == "bound.ui" or node.module.startswith("bound.ui."):
                 pytest.fail(
-                    f"services.py must not import from bound.ui; "
-                    f"found at line {node.lineno}"
+                    f"services.py must not import from bound.ui; found at line {node.lineno}"
                 )
             if node.module == "bound.cli" or node.module.startswith("bound.cli."):
                 pytest.fail(
-                    f"services.py must not import from bound.cli; "
-                    f"found at line {node.lineno}"
+                    f"services.py must not import from bound.cli; found at line {node.lineno}"
                 )
 
 
@@ -1366,4 +1376,3 @@ def test_service_layer_run_service_starts_and_inspects_with_socket_blocked(
     list_resp = RunService.list_runs(list_req)
     run_ids = [r.run_id for r in list_resp.runs]
     assert run_id in run_ids
-

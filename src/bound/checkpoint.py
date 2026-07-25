@@ -61,6 +61,8 @@ def generate_checkpoint_id(*, run_id: str, step_id: str, timestamp: datetime) ->
 def _file_sha256(path: Path) -> str:
     """Return the SHA-256 hex of a file's contents."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # Git command helpers
 # ---------------------------------------------------------------------------
@@ -127,6 +129,8 @@ def _git_branch(cwd: Path) -> str | None:
         return None
     branch = proc.stdout.strip()
     return branch if branch != "HEAD" else None
+
+
 # ---------------------------------------------------------------------------
 # Checkpoint data model
 # ---------------------------------------------------------------------------
@@ -195,6 +199,8 @@ class Checkpoint(BaseModel):
     untracked_content: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, str] = Field(default_factory=dict)
     signature: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Capture
 # ---------------------------------------------------------------------------
@@ -208,10 +214,7 @@ def _is_within_scope(path: str, scope: list[str]) -> bool:
     if not scope:
         return True
     normalized = path.replace("\\", "/")
-    return any(
-        normalized == prefix or normalized.startswith(prefix + "/")
-        for prefix in scope
-    )
+    return any(normalized == prefix or normalized.startswith(prefix + "/") for prefix in scope)
 
 
 def _parse_porcelain_status(status_line: str) -> tuple[str, str]:
@@ -227,6 +230,8 @@ def _parse_porcelain_status(status_line: str) -> tuple[str, str]:
     if " -> " in path_part and status[0] == "R":
         path_part = path_part.split(" -> ")[-1]
     return (status, path_part)
+
+
 def capture_checkpoint(
     *,
     run_id: str,
@@ -255,18 +260,14 @@ def capture_checkpoint(
     cwd = cwd or Path.cwd()
     scope = scope or []
     now = datetime.now(UTC)
-    checkpoint_id = generate_checkpoint_id(
-        run_id=run_id, step_id=step_id, timestamp=now
-    )
+    checkpoint_id = generate_checkpoint_id(run_id=run_id, step_id=step_id, timestamp=now)
 
     head = _git_head(cwd)
     # C4: Refuse to create a checkpoint when git HEAD is unavailable —
     # otherwise the integrity check short-circuits and verification is
     # undermined.
     if head is None:
-        raise RuntimeError(
-            "Cannot create checkpoint: git HEAD unavailable"
-        )
+        raise RuntimeError("Cannot create checkpoint: git HEAD unavailable")
     branch = _git_branch(cwd)
     # Full diff for merge-conflict detection (all paths).
     full_diff = _git_diff_index(cwd)
@@ -281,9 +282,7 @@ def capture_checkpoint(
     if full_diff:
         for line in full_diff.split("\n"):
             if line.startswith("<<<<<<<") or line.startswith(">>>>>>>"):
-                raise RuntimeError(
-                    "Cannot create checkpoint: merge conflicts detected in worktree"
-                )
+                raise RuntimeError("Cannot create checkpoint: merge conflicts detected in worktree")
 
     # Parse changed files from porcelain status
     changed_files: list[CheckpointFileEntry] = []
@@ -310,17 +309,16 @@ def capture_checkpoint(
             except OSError:
                 pass
 
-        changed_files.append(CheckpointFileEntry(
-            path=path,
-            status=status_flags,
-            content_hash=content_hash,
-        ))
+        changed_files.append(
+            CheckpointFileEntry(
+                path=path,
+                status=status_flags,
+                content_hash=content_hash,
+            ),
+        )
 
     # Filter untracked files by scope
-    in_scope_untracked = [
-        p for p in all_untracked
-        if not scope or _is_within_scope(p, scope)
-    ]
+    in_scope_untracked = [p for p in all_untracked if not scope or _is_within_scope(p, scope)]
     # C3: Store the actual content of untracked in-scope files so they can
     # be restored even if deleted (git cannot restore untracked files).
     untracked_content: dict[str, str] = {}
@@ -329,9 +327,7 @@ def capture_checkpoint(
         if full_path.exists() and full_path.is_file():
             try:
                 artifact_hashes[p] = _file_sha256(full_path)
-                untracked_content[p] = base64.b64encode(
-                    full_path.read_bytes()
-                ).decode("ascii")
+                untracked_content[p] = base64.b64encode(full_path.read_bytes()).decode("ascii")
             except OSError:
                 pass
 
@@ -350,6 +346,8 @@ def capture_checkpoint(
         untracked_content=untracked_content,
         metadata=metadata or {},
     )
+
+
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
@@ -411,9 +409,7 @@ def _checkpoints_dir(run_id: str, base_dir: Path | None = None) -> Path:
     return root / run_id
 
 
-def _checkpoint_path(
-    run_id: str, checkpoint_id: str, base_dir: Path | None = None
-) -> Path:
+def _checkpoint_path(run_id: str, checkpoint_id: str, base_dir: Path | None = None) -> Path:
     """Return the full path to a checkpoint JSON file."""
     return _checkpoints_dir(run_id, base_dir) / f"{checkpoint_id}.json"
 
@@ -467,9 +463,7 @@ def checkpoint_from_dict(data: dict[str, Any]) -> Checkpoint:
     )
 
 
-def save_checkpoint(
-    cp: Checkpoint, base_dir: Path | None = None
-) -> Path:
+def save_checkpoint(cp: Checkpoint, base_dir: Path | None = None) -> Path:
     """Persist a :class:`Checkpoint` to disk.
 
     Args:
@@ -501,9 +495,7 @@ def save_checkpoint(
     return file_path
 
 
-def load_checkpoint(
-    run_id: str, checkpoint_id: str, base_dir: Path | None = None
-) -> Checkpoint:
+def load_checkpoint(run_id: str, checkpoint_id: str, base_dir: Path | None = None) -> Checkpoint:
     """Load a :class:`Checkpoint` from disk.
 
     Args:
@@ -520,9 +512,7 @@ def load_checkpoint(
     """
     file_path = _checkpoint_path(run_id, checkpoint_id, base_dir)
     if not file_path.exists():
-        raise FileNotFoundError(
-            f"Checkpoint not found: {checkpoint_id} (run: {run_id})"
-        )
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_id} (run: {run_id})")
     data = json.loads(file_path.read_text(encoding="utf-8"))
     # C5: Verify the HMAC-SHA256 signature to detect tampering or
     # corruption.  A missing or mismatched signature is rejected.
@@ -536,9 +526,7 @@ def load_checkpoint(
     return checkpoint_from_dict(data)
 
 
-def list_checkpoints(
-    run_id: str, base_dir: Path | None = None
-) -> list[str]:
+def list_checkpoints(run_id: str, base_dir: Path | None = None) -> list[str]:
     """List all checkpoint ids for a given run.
 
     Args:
@@ -558,6 +546,8 @@ def list_checkpoints(
         cp_id = f.stem
         checkpoint_ids.append(cp_id)
     return checkpoint_ids
+
+
 # ---------------------------------------------------------------------------
 # Integrity verification
 # ---------------------------------------------------------------------------
@@ -594,7 +584,7 @@ def verify_checkpoint_integrity(
     elif current_head != cp.head_commit:
         issues.append(
             f"HEAD diverged: checkpoint had {cp.head_commit[:12]}, "
-            f"current is {current_head[:12] if current_head else 'None'}"
+            f"current is {current_head[:12] if current_head else 'None'}",
         )
 
     for path, expected_hash in cp.artifact_hashes.items():
@@ -610,7 +600,7 @@ def verify_checkpoint_integrity(
             if actual_hash != expected_hash:
                 issues.append(
                     f"Hash mismatch for {path}: "
-                    f"expected {expected_hash[:12]}, got {actual_hash[:12]}"
+                    f"expected {expected_hash[:12]}, got {actual_hash[:12]}",
                 )
         except OSError as exc:
             issues.append(f"Cannot read {path}: {exc}")
@@ -661,9 +651,7 @@ def _git_show_head(path: str, cwd: Path) -> str | None:
     return proc.stdout
 
 
-def _diverged_files_outside_scope(
-    cp: Checkpoint, cwd: Path
-) -> list[str]:
+def _diverged_files_outside_scope(cp: Checkpoint, cwd: Path) -> list[str]:
     """Check for divergent changes outside the checkpoint's recorded scope.
 
     Returns a list of file paths that have been modified outside the scope
@@ -725,7 +713,10 @@ def _git_apply_patch(patch_content: str, cwd: Path) -> tuple[bool, str]:
     import tempfile
 
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".patch", delete=False, encoding="utf-8"
+        mode="w",
+        suffix=".patch",
+        delete=False,
+        encoding="utf-8",
     ) as f:
         f.write(patch_content)
         patch_path = f.name
@@ -737,6 +728,8 @@ def _git_apply_patch(patch_content: str, cwd: Path) -> tuple[bool, str]:
         return True, ""
     finally:
         Path(patch_path).unlink(missing_ok=True)
+
+
 def restore_checkpoint_files(
     cp: Checkpoint,
     cwd: Path | None = None,
@@ -783,15 +776,13 @@ def restore_checkpoint_files(
     # C4: A checkpoint without a recorded head_commit cannot be safely
     # rolled back — the HEAD-match check would silently pass.
     if cp.head_commit is None:
-        raise RuntimeError(
-            "Cannot rollback: checkpoint has no recorded head_commit"
-        )
+        raise RuntimeError("Cannot rollback: checkpoint has no recorded head_commit")
     if current_head != cp.head_commit:
         raise RuntimeError(
             f"Cannot rollback: HEAD has diverged. "
             f"Checkpoint had {cp.head_commit[:12]}, "
             f"current is {current_head[:12] if current_head else 'None'}. "
-            f"Commit or stash your changes and try again."
+            f"Commit or stash your changes and try again.",
         )
 
     # ------------------------------------------------------------------
@@ -804,7 +795,7 @@ def restore_checkpoint_files(
             f"Cannot rollback: workspace has diverged outside the recorded scope. "
             f"Found {len(diverged)} file(s) with changes outside the checkpoint scope: "
             f"{sample}. "
-            f"Commit or stash these changes first, or create a new checkpoint."
+            f"Commit or stash these changes first, or create a new checkpoint.",
         )
 
     # ------------------------------------------------------------------
@@ -853,9 +844,7 @@ def restore_checkpoint_files(
                         restored.append(path)
                     except OSError as exc:
                         failed.append(path)
-                        logger.warning(
-                            "Failed to restore untracked file %s: %s", path, exc
-                        )
+                        logger.warning("Failed to restore untracked file %s: %s", path, exc)
                 else:
                     # File still exists — already present, count as restored
                     # only if it matches the recorded hash.
@@ -877,7 +866,8 @@ def restore_checkpoint_files(
         if not success:
             logger.warning(
                 "Worktree diff patch application failed: %s. "
-                "Restoring user backups so no work is lost.", err,
+                "Restoring user backups so no work is lost.",
+                err,
             )
             # C2: Restore backups so the user's pre-rollback work is not
             # lost when the patch fails to apply.
@@ -888,9 +878,7 @@ def restore_checkpoint_files(
                         try:
                             full_path.write_bytes(content)
                         except OSError:
-                            logger.warning(
-                                "Failed to restore backup for %s", path
-                            )
+                            logger.warning("Failed to restore backup for %s", path)
                     # else: could not read backup, leave as-is
                 else:
                     # File did not exist before rollback — remove what
@@ -900,9 +888,7 @@ def restore_checkpoint_files(
                         try:
                             full_path.unlink()
                         except OSError:
-                            logger.warning(
-                                "Failed to remove %s after failed patch", path
-                            )
+                            logger.warning("Failed to remove %s after failed patch", path)
 
             # Re-evaluate which files match the expected checkpoint state.
             for path in list(restored):
@@ -955,9 +941,7 @@ def compute_rollback_preview(
     cwd = cwd or Path.cwd()
 
     current_head = _git_head(cwd)
-    head_match = (
-        cp.head_commit is not None and current_head == cp.head_commit
-    )
+    head_match = cp.head_commit is not None and current_head == cp.head_commit
 
     changed: list[str] = []
     added: list[str] = []

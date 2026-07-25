@@ -98,6 +98,7 @@ def test_negative_final_score() -> None:
 
     assert calculate_bound_score(scores, criteria) == pytest.approx(-1.9, abs=1e-9)
 
+
 # ---------------------------------------------------------------------------
 # Symmetric weights (v0.2)
 # ---------------------------------------------------------------------------
@@ -218,8 +219,6 @@ def test_all_four_weights_combined() -> None:
     )
 
     assert calculate_bound_score(scores, criteria) == pytest.approx(0.6, abs=1e-9)
-
-
 
 
 # ---------------------------------------------------------------------------

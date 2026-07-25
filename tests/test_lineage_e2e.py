@@ -218,8 +218,11 @@ def test_policy_lifecycle_and_observed_actions_e2e(tmp_path) -> None:
 
     store = LineageStore(base_dir=tmp_path / "runs", enabled=True)
     cfg = build_run_config(
-        bound_version="0.7.0", policy_id="coding-default", policy_version="1.0",
-        policy_hash="sha256:abc", threshold=0.6,
+        bound_version="0.7.0",
+        policy_id="coding-default",
+        policy_version="1.0",
+        policy_hash="sha256:abc",
+        threshold=0.6,
     )
     ctx = start_run("csv export", store=store, config=cfg)
 
@@ -231,8 +234,10 @@ def test_policy_lifecycle_and_observed_actions_e2e(tmp_path) -> None:
         policy_id="coding-default", policy_version="1.0", policy_hash="sha256:abc"
     )
     ctx.record_policy_approved(
-        policy_id="coding-default", policy_version="1.0",
-        policy_hash="sha256:abc", approver="alice",
+        policy_id="coding-default",
+        policy_version="1.0",
+        policy_hash="sha256:abc",
+        approver="alice",
     )
     ctx.record_policy_activated(
         policy_id="coding-default", policy_version="1.0", policy_hash="sha256:abc"
@@ -293,7 +298,8 @@ def test_policy_lifecycle_and_observed_actions_e2e(tmp_path) -> None:
     )
     assert r2.decision == "ACCEPT"
     ctx.record_step_completed(
-        step_id=ctx.last_step_event.step_id, outcome="ACCEPTED"  # type: ignore[union-attr]
+        step_id=ctx.last_step_event.step_id,
+        outcome="ACCEPTED",  # type: ignore[union-attr]
     )
     finish_run(ctx.run_id, store=store)
 
@@ -301,7 +307,10 @@ def test_policy_lifecycle_and_observed_actions_e2e(tmp_path) -> None:
     # Policy lifecycle events are in the log.
     policy_events = [e.event for e in log.events if e.event.startswith("policy.")]
     assert policy_events == [
-        "policy.proposed", "policy.validated", "policy.approved", "policy.activated",
+        "policy.proposed",
+        "policy.validated",
+        "policy.approved",
+        "policy.activated",
     ]
     # evaluation.completed carries policy fields.
     ec_events = [e for e in log.events if e.event == "evaluation.completed"]

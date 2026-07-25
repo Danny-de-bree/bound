@@ -58,7 +58,7 @@ _WATCH_EVENT_TAGS: frozenset[str] = frozenset(
         "control_action_reported",
         "control_action_observed",
         "task_finished",
-    }
+    },
 )
 
 
@@ -185,6 +185,8 @@ class WatchTaskFinishedEvent(_WatchEventBase):
     outcome: Literal["completed", "interrupted", "abandoned", "cancelled"]
     summary: str | None = None
     run_id: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Discriminated union + parser
 # ---------------------------------------------------------------------------

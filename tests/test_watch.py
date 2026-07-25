@@ -172,6 +172,8 @@ class TestWatchEngineEventLoop:
         event = _make_event("task_started", schema_version="0.0")
         engine._stdin = [json.dumps(event) + "\n"]
         engine.run()
+
+
 # ---------------------------------------------------------------------------
 # _handle_task_started
 # ---------------------------------------------------------------------------
@@ -186,8 +188,11 @@ class TestHandleTaskStarted:
         engine._store, _ = _sentinel_store()
         with patch.object(RunService, "start") as mock_start:
             mock_start.return_value = RunStartResponse(
-                run_id="test-run-001", task="test", started_at="...",
-                status="started", schema_version="1.0",
+                run_id="test-run-001",
+                task="test",
+                started_at="...",
+                status="started",
+                schema_version="1.0",
             )
             event = parse_watch_event(_make_event("task_started"))
             engine._handle_task_started(event)  # type: ignore[arg-type]
@@ -203,7 +208,8 @@ class TestHandleTaskStarted:
         engine._load_policy()
         engine._store, _ = _sentinel_store()
         engine._tasks["test-task-001"] = _TaskState(
-            task_id="test-task-001", run_id="existing-run",
+            task_id="test-task-001",
+            run_id="existing-run",
         )
         with patch.object(RunService, "start") as mock_start:
             event = parse_watch_event(_make_event("task_started", goal="Updated goal"))
@@ -289,6 +295,8 @@ class TestHandleStepCompleted:
         # Daemon survives: the task is still tracked and not marked finished.
         assert "test-task-001" in engine._tasks
         assert state.finished is False
+
+
 # ---------------------------------------------------------------------------
 # _handle_verification_requested
 # ---------------------------------------------------------------------------
@@ -358,8 +366,9 @@ class TestHandleControlActionReported:
         engine._tasks["test-task-001"] = state
 
         with patch.object(OutcomeService, "record") as mock_outcome:
-            event = parse_watch_event(_make_event("control_action_reported",
-                                                    action="retry", note="fixing bug"))
+            event = parse_watch_event(
+                _make_event("control_action_reported", action="retry", note="fixing bug")
+            )
             engine._handle_control_action_reported(event)  # type: ignore[arg-type]
 
         mock_outcome.assert_called_once()
@@ -405,9 +414,11 @@ class TestHandleControlActionObserved:
         engine._tasks["test-task-001"] = state
 
         with patch.object(OutcomeService, "record") as mock_outcome:
-            event = parse_watch_event(_make_event("control_action_observed",
-                                                    matches_intended=False,
-                                                    note="agent deviated"))
+            event = parse_watch_event(
+                _make_event(
+                    "control_action_observed", matches_intended=False, note="agent deviated"
+                )
+            )
             engine._handle_control_action_observed(event)  # type: ignore[arg-type]
 
         mock_outcome.assert_called_once()
@@ -420,6 +431,8 @@ class TestHandleControlActionObserved:
         # The note records both the match status and the agent's own note.
         assert "matches=False" in args.note
         assert "agent deviated" in args.note
+
+
 # ---------------------------------------------------------------------------
 # _handle_task_finished
 # ---------------------------------------------------------------------------
@@ -444,7 +457,9 @@ class TestHandleTaskFinished:
 
         with patch.object(RunService, "finish") as mock_finish:
             mock_finish.return_value = RunFinishResponse(
-                run_id="test-run-001", status="completed", finished_at="...",
+                run_id="test-run-001",
+                status="completed",
+                finished_at="...",
             )
             event = parse_watch_event(_make_event("task_finished", outcome="completed"))
             engine._handle_task_finished(event)  # type: ignore[arg-type]
@@ -568,11 +583,16 @@ class TestFullEventLoop:
             patch.object(RunService, "finish") as mock_finish,
         ):
             mock_start.return_value = RunStartResponse(
-                run_id="test-run-001", task="test", started_at="...",
-                status="started", schema_version="1.0",
+                run_id="test-run-001",
+                task="test",
+                started_at="...",
+                status="started",
+                schema_version="1.0",
             )
             mock_finish.return_value = RunFinishResponse(
-                run_id="test-run-001", status="completed", finished_at="...",
+                run_id="test-run-001",
+                status="completed",
+                finished_at="...",
             )
             code = engine.run()
 
@@ -593,8 +613,9 @@ class TestFullEventLoop:
 
         # A decision_emitted event was written to stdout as JSON.
         out_lines = [ln for ln in captured.getvalue().splitlines() if ln.strip()]
-        decisions = [json.loads(ln) for ln in out_lines
-                     if json.loads(ln).get("event") == "decision_emitted"]
+        decisions = [
+            json.loads(ln) for ln in out_lines if json.loads(ln).get("event") == "decision_emitted"
+        ]
         assert len(decisions) == 1
         assert decisions[0]["decision"] == "ACCEPT"
         assert decisions[0]["run_id"] == "test-run-001"
@@ -623,7 +644,9 @@ class TestFullEventLoop:
         engine._store, _ = _sentinel_store()
         # One active, unfinished run in flight when the signal arrives.
         engine._tasks["test-task-001"] = _TaskState(
-            task_id="test-task-001", run_id="test-run-001", goal="test",
+            task_id="test-task-001",
+            run_id="test-run-001",
+            goal="test",
         )
 
         class _ShutdownStdin:
@@ -637,7 +660,9 @@ class TestFullEventLoop:
 
         with patch.object(RunService, "finish") as mock_finish:
             mock_finish.return_value = RunFinishResponse(
-                run_id="test-run-001", status="interrupted", finished_at="...",
+                run_id="test-run-001",
+                status="interrupted",
+                finished_at="...",
             )
             code = engine.run()
 
@@ -646,6 +671,8 @@ class TestFullEventLoop:
         finish_args: RunFinishRequest = mock_finish.call_args[0][0]
         assert finish_args.run_id == "test-run-001"
         assert finish_args.status == "interrupted"
+
+
 # ---------------------------------------------------------------------------
 # CLI integration
 # ---------------------------------------------------------------------------

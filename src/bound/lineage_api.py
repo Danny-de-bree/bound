@@ -727,4 +727,3 @@ def finish_run(
         note=note,
         finished_at=finished_at,
     )
-

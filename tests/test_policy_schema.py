@@ -89,7 +89,9 @@ def test_unknown_budget_dimension_rejected() -> None:
 
 def test_duplicate_check_id_rejected() -> None:
     """A check id reused across sections is a validation error."""
-    bad = _minimal_yaml() + """
+    bad = (
+        _minimal_yaml()
+        + """
 acceptance_checks:
   - id: dup
     description: "first"
@@ -97,6 +99,7 @@ quality_checks:
   - id: dup
     description: "second"
 """
+    )
     with pytest.raises(ValidationError) as exc:
         parse_policy_yaml(bad)
     assert "duplicate check id" in str(exc.value)
@@ -382,5 +385,3 @@ def test_compute_contract_hash_bare_hex_and_matches_lineage() -> None:
 def test_default_policy_yaml_is_in_package() -> None:
     """The default policy file lives under src/bound and is readable."""
     assert DEFAULT_POLICY_PATH.is_file()
-
-

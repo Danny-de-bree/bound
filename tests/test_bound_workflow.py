@@ -300,7 +300,9 @@ def test_first_accept_stops_optimization_loop() -> None:
     for evidence in evidence_sequence:
         attempts += 1
         final = workflow.evaluate_step(
-            contract=contract, evidence=evidence, criteria=criteria,
+            contract=contract,
+            evidence=evidence,
+            criteria=criteria,
         )
         if final.decision == "ACCEPT":
             break
@@ -399,7 +401,6 @@ def test_evaluate_step_does_not_mutate_policy_evaluator() -> None:
     assert workflow.policy.evaluator is placeholder
 
 
-
 def test_replan_requires_new_strategy() -> None:
     """REPLAN drives the caller to prepare a new plan (a new strategy).
 
@@ -486,4 +487,3 @@ def test_rollback_overrides_acceptance() -> None:
     assert result.scores.risk == pytest.approx(0.9)
     assert result.score >= result.threshold  # would otherwise ACCEPT
     assert result.decision == "ROLLBACK"  # safety boundary overrides acceptance
-

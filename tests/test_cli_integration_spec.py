@@ -135,7 +135,6 @@ def test_integration_spec_decision_mapping(
     }
 
 
-
 def test_integration_spec_help_lists_subcommand(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

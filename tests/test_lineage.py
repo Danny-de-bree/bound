@@ -87,7 +87,6 @@ class TestReasonCodes:
         assert ReasonCode.ACCEPT == "ACCEPT"
 
 
-
 # ---------------------------------------------------------------------------
 # Deterministic, reproducible identifiers
 # ---------------------------------------------------------------------------
@@ -101,12 +100,8 @@ class TestDeterministicIds:
         assert a.startswith("run_")
 
     def test_different_inputs_yield_different_id(self) -> None:
-        assert generate_run_id(task="a", started_at=T0) != generate_run_id(
-            task="b", started_at=T0
-        )
-        assert generate_run_id(task="a", started_at=T0) != generate_run_id(
-            task="a", started_at=T1
-        )
+        assert generate_run_id(task="a", started_at=T0) != generate_run_id(task="b", started_at=T0)
+        assert generate_run_id(task="a", started_at=T0) != generate_run_id(task="a", started_at=T1)
 
     def test_id_prefixes_are_distinct(self) -> None:
         run_id = generate_run_id(task="t", started_at=T0)
@@ -122,9 +117,7 @@ class TestDeterministicIds:
         run_id = generate_run_id(task="t", started_at=T0)
         step_id = generate_step_id(run_id=run_id, contract_id="PHASE-001", attempt=1)
         a = generate_evaluation_id(run_id=run_id, step_id=step_id, attempt=1)
-        b = generate_evaluation_id(
-            run_id=run_id, step_id=step_id, attempt=1, salt="secondary"
-        )
+        b = generate_evaluation_id(run_id=run_id, step_id=step_id, attempt=1, salt="secondary")
         assert a != b
 
 
@@ -141,17 +134,13 @@ class TestTimestamps:
 
     def test_naive_timestamp_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            RunStartedEvent(
-                event_id="evt_x", timestamp=datetime(2025, 1, 1), run_id="r", task="t"
-            )
+            RunStartedEvent(event_id="evt_x", timestamp=datetime(2025, 1, 1), run_id="r", task="t")
 
     def test_non_utc_offset_normalized_to_utc(self) -> None:
         aware = T0.astimezone(timezone(timedelta(hours=2)))
         ev = RunStartedEvent(event_id="evt_x", timestamp=aware, run_id="r", task="t")
         assert ev.timestamp == T0
         assert ev.timestamp.tzinfo is UTC
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +220,6 @@ class TestEventSerialization:
         payload = ev.model_dump_json()
         assert "2025-01-02T03:04:05" in payload
         assert "Z" in payload or "+00:00" in payload
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -354,8 +341,6 @@ class TestLineageEventParsing:
         assert outcomes[0].next_action == "replan"
         assert outcomes[1].next_action == "continue"
         assert evals[0].attempt == 1 and evals[1].attempt == 2
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -880,7 +865,6 @@ class TestPolicyLifecycleAndNewEvents:
                 }
             )
 
-
     def test_evaluation_completed_round_trip(self) -> None:
         evt = parse_lineage_event(
             {
@@ -1046,8 +1030,7 @@ class TestRunConfigSnapshot:
         from bound.policy_schema import parse_policy_yaml
 
         policy = parse_policy_yaml(
-            "schema_version: '1.0'\n"
-            "policy:\n  id: test-policy\n  version: '2.0'\n"
+            "schema_version: '1.0'\npolicy:\n  id: test-policy\n  version: '2.0'\n"
         )
         cfg = build_run_config(bound_version="0.7.0", policy=policy, threshold=0.6)
         assert cfg.policy_id == "test-policy"
@@ -1062,8 +1045,7 @@ class TestRunConfigSnapshot:
         from bound.policy_schema import parse_policy_yaml
 
         policy = parse_policy_yaml(
-            "schema_version: '1.0'\n"
-            "policy:\n  id: test-policy\n  version: '2.0'\n"
+            "schema_version: '1.0'\npolicy:\n  id: test-policy\n  version: '2.0'\n"
         )
         cfg = build_run_config(policy=policy, threshold=0.6)
         assert cfg.policy_hash == compute_policy_hash(policy)
