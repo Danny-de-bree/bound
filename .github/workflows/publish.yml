@@ -1,14 +1,20 @@
 # ──────────────────────────────────────────────────────────────────────
-# Recovery publish workflow — alleen voor herpublicatie
+# Recovery publish workflow — alleen voor herpublicatie naar PyPI
 # ──────────────────────────────────────────────────────────────────────
-# Deze workflow bouwt NOOIT opnieuw. Hij downloadt alleen de artifacts
-# van een bestaande GitHub Release en publiceert ze naar PyPI.
+# Deze workflow bouwt NOOIT opnieuw. Hij downloadt de artifacts van
+# de GitHub Release (of — als fallback — van de release workflow run).
 #
 # Gebruik dit ALLEEN als release.yml de PyPI-publicatie heeft gemist
 # (bv. door een netwerkfout of environment-approval die bleef hangen).
 #
-# Voor normale releases: gebruik release.yml, dat publiceert zelf naar
+# Voor normale releases: gebruik release.yml, dat publiceert naar
 # GitHub EN PyPI in één build-once pipeline.
+#
+# Inputs:
+#   version  — versienummer zonder v (bv. "0.8.1"), required
+#   run-id   — (optioneel) workflow run ID van release.yml.
+#              Met run-id: downloadt artifact direct uit die run.
+#              Zonder:    downloadt van de GitHub Release (moet bestaan).
 # ──────────────────────────────────────────────────────────────────────
 
 name: Publish to PyPI (recovery)
@@ -17,9 +23,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish, without the leading v (e.g. 0.7.0)"
+        description: "Version to publish, without the leading v (e.g. 0.8.1)"
         required: true
         type: string
+      run-id:
+        description: "(Optional) release.yml workflow run ID to download artifact from"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -32,23 +43,58 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      actions: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Download release assets from GitHub Release
+      - name: Download release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ inputs.version }}"
           mkdir -p release/python
-          echo "Downloading assets from release $TAG ..."
-          gh release download "$TAG" \
-            --pattern "*.whl" \
-            --pattern "*.tar.gz" \
-            --dir release/python/
-          echo "Downloaded:"
+
+          if [ -n "${{ inputs.run-id }}" ]; then
+            echo "📦 Downloading artifact from workflow run ${{ inputs.run-id }} ..."
+            RUN_ID="${{ inputs.run-id }}"
+            ARTIFACT_NAME="release-bundle-${{ inputs.version }}"
+
+            # Get artifact download URL from the run
+            ARTIFACT_URL=$(gh api \
+              "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
+              --jq ".artifacts[] | select(.name==\"${ARTIFACT_NAME}\") | .archive_download_url")
+
+            if [ -z "$ARTIFACT_URL" ]; then
+              echo "❌ Artifact '${ARTIFACT_NAME}' not found in run ${RUN_ID}"
+              echo "   Check that the run completed and the artifact name is correct."
+              exit 1
+            fi
+
+            curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+              -o /tmp/artifact.zip "$ARTIFACT_URL"
+            unzip -qo /tmp/artifact.zip -d release/
+            rm -f /tmp/artifact.zip
+            echo "✅ Downloaded from workflow artifact"
+          else
+            echo "📦 Downloading from GitHub Release $TAG ..."
+            if ! gh release view "$TAG" &>/dev/null; then
+              echo "❌ GitHub Release $TAG not found."
+              echo "   Either:"
+              echo "   1. Re-run release.yml to create the release, or"
+              echo "   2. Pass --run-id <id> to download from a specific workflow run"
+              exit 1
+            fi
+            gh release download "$TAG" \
+              --pattern "*.whl" \
+              --pattern "*.tar.gz" \
+              --dir release/python/
+            echo "✅ Downloaded from GitHub Release"
+          fi
+
+          echo ""
+          echo "Release assets:"
           ls -la release/python/
 
       - name: Publish to PyPI

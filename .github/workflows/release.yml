@@ -7,7 +7,8 @@
 #      sdist, Skills ZIP, checksums) en upload 1 immutable bundle.
 #   2. publish-github     — download de bundle, push de tag, maak GitHub
 #      Release met alle assets.
-#   3. publish-pypi       — download de bundle, publiceer naar PyPI.
+#   3. publish-pypi       — download de bundle, publiceer naar PyPI via
+#      trusted publishing (OIDC).
 #
 # Er wordt NOOIT opnieuw gebouwd. Hetzelfde artifact gaat naar GitHub
 # EN PyPI. Herpublicatie (recovery) gebeurt via publish.yml, dat ook
@@ -18,10 +19,8 @@
 # project.version in pyproject.toml én bound.__version__, wat wordt
 # gecontroleerd voordat er iets wordt gebouwd of getagd.
 #
-# Gebruik RELEASE_PAT (secret) met contents:write + workflows scopes
-# om de tag push te laten doorstromen naar publish.yml. Zonder PAT
-# wordt de tag nog steeds aangemaakt, maar moet publish.yml handmatig
-# worden gestart.
+# publish-github gebruikt GITHUB_TOKEN met contents:write om de tag te
+# pushen — geen PAT of extra secrets nodig.
 # ──────────────────────────────────────────────────────────────────────
 
 name: Release
@@ -54,9 +53,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        with:
-          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
-          persist-credentials: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -177,9 +173,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        with:
-          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
-          persist-credentials: true
 
       - name: Download release bundle
         uses: actions/download-artifact@v4
