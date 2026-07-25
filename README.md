@@ -30,7 +30,7 @@ BOUND emits the signal; the agent performs the action.
 
 ## Get started in 3 sentences
 
-Install with `pip install bound-policy`, then run `bound setup --agent generic` — it auto-detects your test, lint, and type-check tooling, generates a `bound-policy.yaml`, installs the integration prompt, and validates everything in one command. Then let your agent do the work, calling `bound evaluate` at each meaningful step and acting on the ACCEPT / RETRY / REPLAN / ROLLBACK verdict. Open `bound ui` in a second terminal to watch decisions live.
+Install with `pip install bound-policy`, then run `bound setup --agent generic` to auto-detect your tooling, generate a policy, and create an integration prompt in `.bound/integration-prompt.md`. **Paste that prompt into your agent** — it tells the agent when and how to call `bound evaluate` at each step. From there the agent does the work, BOUND decides ACCEPT / RETRY / REPLAN / ROLLBACK, and you can watch live with `bound ui`.
 
 ## Install — two parts, one command
 
@@ -63,6 +63,15 @@ For other agents, pass `--agent`:
 | Claude Code | `bound setup --agent claude-code` |
 
 Or paste a prompt manually from [`integrations/`](integrations/).
+
+### 3. Paste the prompt into your agent
+
+```bash
+cat .bound/integration-prompt.md
+```
+
+Copy the output and paste it into your coding agent. The agent now knows
+when and how to call `bound evaluate`. That's it.
 
 ## How it works in an agent
 
