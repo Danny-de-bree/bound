@@ -153,9 +153,70 @@ bound policy explain bound-policy.yaml   # see what your policy does
 
 | Mode | How | Command |
 | --- | --- | --- |
-| Manual | Agent calls BOUND at each boundary | `bound evaluate ...` |
-| Event-driven | Stream JSONL events, BOUND evaluates automatically | `bound watch --policy ...` |
-| MCP | Agent uses BOUND as MCP tools | `bound mcp` |
+| **Prompt** | Agent reads instructions, calls BOUND at each boundary | `bound evaluate ...` |
+| **MCP / Watch** | Agent calls BOUND tools or streams JSONL events | `bound mcp` / `bound watch` |
+| **Adapter (v0.9.5)** | BOUND spawns agent as child, full control loop via ACP | Python API |
+
+### Native adapter control (v0.9.5) — strongest integration
+
+The adapter layer lets BOUND **actively control** the agent instead of waiting
+for it to call `bound evaluate`. BOUND spawns the agent as a child process,
+reads events from its stdout, evaluates each step, and sends decisions back
+via stdin — all through the ACP (Adapter Control Protocol), a JSONL message
+format.
+
+```python
+from bound.adapters import GenericProcessAdapter
+from bound.runtime import BoundRuntime
+
+# Any CLI agent that speaks ACP JSONL on stdin/stdout
+adapter = GenericProcessAdapter(
+    agent_command=["python", "-m", "my_agent", "--acp"],
+    working_dir="/path/to/project",
+)
+
+# BOUND drives the full control loop
+runtime = BoundRuntime.from_policy("bound-policy.yaml")
+result = runtime.run_with_adapter(
+    adapter=adapter,
+    task="Implement input validation",
+    plan=load_plan("plan.md"),
+)
+# → BOUND spawns agent → agent does work → agent reports events
+# → BOUND evaluates → BOUND sends ACCEPT/RETRY/REPLAN/ROLLBACK
+# → Agent handles decision → repeat until done
+```
+
+**How the agent speaks ACP** (minimal example):
+
+```python
+import sys, json
+
+# Agent reads the task from BOUND on stdin
+task = json.loads(sys.stdin.readline())
+
+# Agent does work, then reports completion
+print(json.dumps({
+    "type": "step.completed",
+    "evidence": {"tests_pass": 3, "tests_total": 3, "lint_ok": True},
+    "candidate_id": task["candidate_id"],
+}), flush=True)
+
+# Agent waits for BOUND's decision on stdin
+decision = json.loads(sys.stdin.readline())
+if decision["type"] == "continue":
+    # ... next step
+elif decision["type"] == "replan":
+    # ... rethink approach
+```
+
+The adapter is **language-agnostic** — your agent can be Python, Node.js, Rust,
+Go, or a shell script. As long as it reads JSONL commands from stdin and writes
+JSONL events to stdout, BOUND can control it.
+
+Reference integrations for Cline, Codex, and Claude Code live in
+[`integrations/`](integrations/).  See also the tests at
+`tests/test_adapters_generic.py` for working examples.
 
 ## License
 

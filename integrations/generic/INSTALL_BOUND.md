@@ -623,6 +623,31 @@ To disable lineage entirely (CI, ephemeral environments), set
 - `bound ui` — local dashboard at http://127.0.0.1:8765
 - `bound checkpoint` / `bound rollback --execute` — safe rollback with explicit opt-in
 
+## v0.9.5 native adapter surface
+
+BOUND can now **directly control** the agent through the ACP (Adapter Control
+Protocol). Instead of the agent calling `bound evaluate` yourself, BOUND
+spawns the agent as a child process and drives the full control loop:
+
+```bash
+# Agent speaks ACP on stdin/stdout (language-agnostic)
+bound run start "Add validation"
+bound evaluate --step PHASE-001 --action "..." --run <id>  # manual path still works
+
+# Or programmatically via Python API:
+python -c "
+from bound.adapters import GenericProcessAdapter
+from bound.runtime import BoundRuntime
+
+adapter = GenericProcessAdapter(agent_command=['python', '-m', 'my_agent', '--acp'])
+runtime = BoundRuntime.from_policy('bound-policy.yaml')
+runtime.run_with_adapter(adapter=adapter, task='Fix validation bug')
+"
+```
+
+The adapter reads JSONL events from agent stdout and writes decisions to
+agent stdin. The agent never calls BOUND — BOUND calls the agent.
+
 ## Done
 
 When finished, summarize:
