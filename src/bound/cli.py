@@ -449,6 +449,23 @@ def _build_parser() -> argparse.ArgumentParser:
     run_delete.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
     run_delete.set_defaults(func=_run_run_delete)
 
+    run_use = run_sub.add_parser(
+        "use",
+        help="Set the active project run for this session.",
+        description="Write .bound/current_run so subsequent bound evaluate calls "
+        "without --run automatically append to this run.",
+    )
+    run_use.add_argument("run_id", help="The run id to set as active.")
+    run_use.set_defaults(func=_run_run_use)
+
+    run_current = run_sub.add_parser(
+        "current",
+        help="Show the active project run.",
+        description="Print the run id from .bound/current_run if one is set.",
+    )
+    run_current.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
+    run_current.set_defaults(func=_run_run_current)
+
     # --- lineage: inspect ----------------------------------------------------
     inspect = subparsers.add_parser(
         "inspect",
@@ -1056,6 +1073,7 @@ def _run_run_start(args: argparse.Namespace) -> int:
         )
     else:
         print(response.run_id)
+    _set_current_run(response.run_id)
     return 0
 
 def _run_run_finish(args: argparse.Namespace) -> int:
@@ -1122,6 +1140,46 @@ def _run_run_delete(args: argparse.Namespace) -> int:
         print(json.dumps({"run_id": response.run_id, "deleted": True}, indent=2))
     else:
         print(f"deleted run {response.run_id}")
+    return 0
+
+_CURRENT_RUN_FILE = ".bound/current_run"
+
+def _get_current_run() -> str | None:
+    """Read the current run id from .bound/current_run, if set."""
+    try:
+        return Path(_CURRENT_RUN_FILE).read_text().strip() or None
+    except (OSError, FileNotFoundError):
+        return None
+
+def _set_current_run(run_id: str) -> None:
+    """Write the current run id to .bound/current_run."""
+    Path(_CURRENT_RUN_FILE).parent.mkdir(parents=True, exist_ok=True)
+    Path(_CURRENT_RUN_FILE).write_text(run_id + "\n")
+
+def _run_run_use(args: argparse.Namespace) -> int:
+    """Execute ``bound run use <id>``."""
+    try:
+        _store().read_run(args.run_id, strict=False)
+    except RunNotFound as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+    _set_current_run(args.run_id)
+    print(f"active run: {args.run_id}")
+    return 0
+
+def _run_run_current(args: argparse.Namespace) -> int:
+    """Execute ``bound run current``."""
+    current = _get_current_run()
+    if current is None:
+        if args.json:
+            print(json.dumps({"active_run": None}))
+        else:
+            print("(no active run — use 'bound run use <id>' to set one)")
+        return 0
+    if args.json:
+        print(json.dumps({"active_run": current}))
+    else:
+        print(current)
     return 0
 
 def _checks_summary(evaluation: Evaluation) -> str:
