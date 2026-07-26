@@ -588,7 +588,13 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Path to a plan.md file to pre-load for all runs.",
     )
-    ui.set_defaults(func=_run_ui, open_browser=True)
+    ui.add_argument(
+        "--open",
+        action="store_true",
+        default=False,
+        help="Open the dashboard URL in the default browser after startup.",
+    )
+    ui.set_defaults(func=_run_ui)
 
     # --- lineage: outcome ----------------------------------------------------
     outcome = subparsers.add_parser(
@@ -2162,7 +2168,7 @@ def _run_ui(args: argparse.Namespace) -> int:
 
     serve(
         port=args.port,
-        open_browser=args.open_browser,
+        open_browser=args.open,
         run_id=args.run_id,
         plan_path=getattr(args, "plan", None),
     )
