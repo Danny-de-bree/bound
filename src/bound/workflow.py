@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bound.calculator import normalize_capped
 from bound.models import (
     Action,
     CodingWorkflowSignals,
@@ -7,6 +8,9 @@ from bound.models import (
     ScoreEvidence,
     WorkflowNormalization,
 )
+
+#: Deprecated re-export -- use :func:`bound.calculator.normalize_capped`.
+_normalize_capped = normalize_capped
 
 # ---------------------------------------------------------------------------
 # v0.2 reference-heuristic constants (NOT scientifically calibrated)
@@ -52,25 +56,6 @@ _LARGE_TEST_MODIFICATION = 5
 #: so a modification never outweighs a deletion. v0.2 reference heuristic (NOT
 #: scientifically calibrated).
 _TEST_MODIFICATION_SATURATED = 0.5
-
-
-def _normalize_capped(value: float, cap: float) -> float:
-    """Normalize ``value`` against ``cap`` into ``[0.0, 1.0]``.
-
-    A cap of ``0`` means "any nonzero value is already over budget": the result
-    is ``1.0`` when ``value > 0`` and ``0.0`` when ``value == 0``. This keeps the
-    normalization fully configuration-driven while avoiding a division by zero.
-
-    Args:
-        value: The raw observed value (non-negative).
-        cap: The configured :class:`WorkflowNormalization` ceiling.
-
-    Returns:
-        ``min(value / cap, 1.0)`` (or the cap-zero rule described above).
-    """
-    if cap <= 0:
-        return 1.0 if value > 0 else 0.0
-    return min(value / cap, 1.0)
 
 
 class CodingWorkflowEvaluator:

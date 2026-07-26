@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import shlex
 import subprocess
 import time
@@ -25,6 +24,10 @@ from bound.evidence import (
     EvidenceProvenance,
     EvidenceStatus,
 )
+
+#: Re-exported for backwards compatibility -- canonical definition lives in
+#: :mod:`bound.hashing`.
+from bound.hashing import sha256_hex  # noqa: F401
 
 __all__ = [
     "BudgetCollector",
@@ -83,24 +86,6 @@ def default_redactor(text: str) -> str:
         The text with secret values masked in place.
     """
     return SECRET_PATTERN.sub(lambda m: f"{m.group(1)}=***REDACTED***", text)
-
-
-def sha256_hex(data: bytes) -> str:
-    """Return the ``sha256:``-prefixed hex digest of *data*.
-
-    The ``sha256:`` prefix matches the
-    :attr:`~bound.evidence.CheckEvidence.artifact_hash` convention so a verifier
-    can re-fetch and re-hash a raw artefact without retaining its (possibly
-    sensitive) contents.
-
-    Args:
-        data: The raw bytes to hash.
-
-    Returns:
-        ``"sha256:<64 hex chars>"``.
-    """
-    return "sha256:" + hashlib.sha256(data).hexdigest()
-
 
 def _truncate_text(text: str, cap: int | None) -> tuple[str, bool]:
     """Truncate *text* to at most *cap* UTF-8 bytes.

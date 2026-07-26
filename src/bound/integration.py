@@ -7,8 +7,12 @@ from pydantic import BaseModel, ConfigDict
 
 from bound.bound_workflow import BoundWorkflow
 from bound.contracts import StepContract
+from bound.decisions import DECISION_TO_ACTION
 from bound.evidence import ExecutionEvidence
 from bound.models import BoundCriteria, EvaluationResult
+
+#: Deprecated re-export -- use :data:`bound.decisions.DECISION_TO_ACTION`.
+_DECISION_TO_ACTION = DECISION_TO_ACTION
 
 if TYPE_CHECKING:
     from bound.lineage_api import RunContext
@@ -16,22 +20,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bound.integration")
 
 NextAction = Literal["continue", "retry", "replan", "rollback"]
-
-#: The deterministic BOUND decision -> agent control action mapping. This is
-#: the **single runtime source** of that translation: :func:`evaluate_agent_step`
-#: looks decisions up here and nowhere else. A *data-only* copy of the same
-#: mapping is also published via :func:`bound.integration_spec.integration_spec`
-#: (``decision_to_control``) so integrations can wire their control flow from
-#: the published spec, but that copy must never be consulted to *make* a runtime
-#: decision independently of BOUND — the decision is owned by the deterministic
-#: :class:`~bound.policy.BoundPolicy` and only *translated* here.
-_DECISION_TO_ACTION: dict[str, NextAction] = {
-    "ACCEPT": "continue",
-    "RETRY": "retry",
-    "REPLAN": "replan",
-    "ROLLBACK": "rollback",
-}
-
 
 class AgentControlResult(BaseModel):
     """A BOUND decision translated into a framework-neutral agent instruction.

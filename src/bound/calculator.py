@@ -109,3 +109,22 @@ def calculate_components(
         cost=cost,
         total=total,
     )
+
+def normalize_capped(value: float, cap: float) -> float:
+    """Normalize ``value`` against ``cap`` into ``[0.0, 1.0]``.
+
+    A cap of ``0`` means "any nonzero value is already over budget": the result
+    is ``1.0`` when ``value > 0`` and ``0.0`` when ``value == 0``. This keeps the
+    normalization fully configuration-driven while avoiding a division by zero.
+
+    Args:
+        value: The raw observed value (non-negative).
+        cap: The configured budget ceiling for this dimension.
+
+    Returns:
+        ``min(value / cap, 1.0)`` (or the cap-zero rule described above).
+    """
+    if cap <= 0:
+        return 1.0 if value > 0 else 0.0
+    return min(value / cap, 1.0)
+

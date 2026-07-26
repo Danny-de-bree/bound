@@ -15,9 +15,18 @@ from pydantic import (
 )
 
 from bound.evidence import EvidenceProvenance, EvidenceStatus
+
+#: Re-exported for backwards compatibility -- canonical definition in
+#: :mod:`bound.hashing`.  Legacy callers that imported ``sha256_hex`` from
+#: :mod:`bound.lineage` will still work, but new code should import
+#: :func:`bound.hashing.sha256_hex_bare` directly.
+from bound.hashing import sha256_hex_bare
 from bound.integration import NextAction
 from bound.models import BoundWeights, Decision, DecisionAssurance, EvaluationScores
 from bound.policy_canon import compute_policy_hash
+
+#: Deprecated re-export -- use :func:`bound.hashing.sha256_hex_bare`.
+sha256_hex = sha256_hex_bare
 
 if TYPE_CHECKING:
     from bound.policy_schema import BoundPolicyConfig
@@ -322,24 +331,6 @@ def generate_event_id(*, run_id: str, sequence: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def sha256_hex(data: str | bytes) -> str:
-    """Return the SHA-256 hex digest of ``data``.
-
-    Used for content-addressing contracts and policy configs so a trace can
-    prove *which* configuration governed a decision without re-running the
-    agent's actions (item 11: policy replay).
-
-    Args:
-        data: A string (UTF-8 encoded) or bytes payload.
-
-    Returns:
-        The 64-character lowercase hex digest.
-    """
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return hashlib.sha256(data).hexdigest()
-
-
 def _canonical_json(obj: object) -> str:
     """Return a deterministic, sorted-keys JSON string for hashing.
 
@@ -362,7 +353,7 @@ def compute_contract_hash(contract: BaseModel | dict | str) -> str:
     Returns:
         The 64-character hex digest identifying the exact contract version.
     """
-    return sha256_hex(_canonical_json(contract))
+    return sha256_hex_bare(_canonical_json(contract))
 
 
 def compute_policy_config_hash(config: BaseModel | dict | str) -> str:
@@ -375,7 +366,7 @@ def compute_policy_config_hash(config: BaseModel | dict | str) -> str:
     Returns:
         The 64-character hex digest identifying the exact policy config.
     """
-    return sha256_hex(_canonical_json(config))
+    return sha256_hex_bare(_canonical_json(config))
 
 
 # ---------------------------------------------------------------------------

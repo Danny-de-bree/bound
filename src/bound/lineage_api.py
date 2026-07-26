@@ -4,7 +4,8 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from bound.integration import _DECISION_TO_ACTION, NextAction
+from bound.decisions import ACTION_TO_OUTCOME_REASON, DECISION_TO_ACTION, DECISION_TO_EVAL_REASON
+from bound.integration import NextAction
 from bound.lineage import (
     ActionObservedEvent,
     ActionReportedEvent,
@@ -41,43 +42,24 @@ __all__ = [
 
 logger = logging.getLogger("bound.lineage_api")
 
-#: BOUND decision -> evaluation reason code. The evaluation event mirrors the
-#: deterministic decision rather than re-deriving free-text evidence, so the
-#: recorded lineage is reproducible from the decision alone.
-_DECISION_TO_EVAL_REASON: dict[str, ReasonCode] = {
-    "ACCEPT": ReasonCode.ACCEPT,
-    "RETRY": ReasonCode.RETRY,
-    "REPLAN": ReasonCode.REPLAN,
-    "ROLLBACK": ReasonCode.ROLLBACK,
-}
-
-#: Mapped control action -> outcome reason code.
-_ACTION_TO_OUTCOME_REASON: dict[str, ReasonCode] = {
-    "continue": ReasonCode.CONTINUED,
-    "retry": ReasonCode.RETRIED,
-    "replan": ReasonCode.REPLANNED,
-    "rollback": ReasonCode.ROLLED_BACK,
-}
-
-
 def next_action_for(decision: Decision | str) -> NextAction:
     """Map a BOUND decision to its framework-neutral control action.
 
-    Reuses :data:`bound.integration._DECISION_TO_ACTION` (the single runtime
+    Reuses :data:`bound.decisions.DECISION_TO_ACTION` (the single runtime
     source of the decision->action translation) so lineage never invents a
     parallel mapping.
     """
-    return _DECISION_TO_ACTION[str(decision)]
+    return DECISION_TO_ACTION[str(decision)]
 
 
 def evaluation_reason_for(decision: Decision | str) -> ReasonCode:
     """Return the evaluation reason code mirroring a BOUND decision."""
-    return _DECISION_TO_EVAL_REASON[str(decision)]
+    return ReasonCode(DECISION_TO_EVAL_REASON[str(decision)])
 
 
 def outcome_reason_for(next_action: NextAction | str) -> ReasonCode:
     """Return the outcome reason code mirroring a control action."""
-    return _ACTION_TO_OUTCOME_REASON[str(next_action)]
+    return ReasonCode(ACTION_TO_OUTCOME_REASON[str(next_action)])
 
 
 class RunContext:

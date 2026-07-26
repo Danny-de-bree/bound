@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-#: The deterministic BOUND decision -> agent control action mapping.
-_DECISION_TO_CONTROL: dict[str, str] = {
-    "ACCEPT": "continue",
-    "RETRY": "retry",
-    "REPLAN": "replan",
-    "ROLLBACK": "rollback",
-}
+from bound.decisions import DECISION_TO_CONTROL
+
+#: Deprecated re-export -- use :data:`bound.decisions.DECISION_TO_CONTROL`.
+_DECISION_TO_CONTROL = DECISION_TO_CONTROL
 
 
 def integration_spec() -> dict[str, Any]:

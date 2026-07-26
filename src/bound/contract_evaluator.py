@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+#: Re-exported for backwards compatibility -- canonical definition in
+#: :mod:`bound.calculator`.
+from bound.calculator import normalize_capped
 from bound.contracts import (
     AcceptanceCheck,
     EvidencePolicyAction,
@@ -23,6 +26,9 @@ from bound.policy_schema import (
     BoundPolicyConfig,
     HardGate,
 )
+
+#: Deprecated re-export -- use :func:`bound.calculator.normalize_capped`.
+_normalize_capped = normalize_capped
 
 if TYPE_CHECKING:
     from bound.lineage_api import RunContext
@@ -53,26 +59,6 @@ _ROLLBACK_UNAVAILABLE_INDICATOR = 1.0
 #: than silently as zero cost. v0.3 reference heuristic (NOT scientifically
 #: calibrated).
 _UNMEASURED_COST_SATURATION = 1.0
-
-
-def _normalize_capped(value: float, cap: float) -> float:
-    """Normalize ``value`` against ``cap`` into ``[0.0, 1.0]``.
-
-    A cap of ``0`` means "any nonzero value is already over budget": the result
-    is ``1.0`` when ``value > 0`` and ``0.0`` when ``value == 0``. This keeps the
-    normalization fully configuration-driven while avoiding a division by zero,
-    and mirrors :func:`bound.workflow._normalize_capped`.
-
-    Args:
-        value: The raw observed value (non-negative).
-        cap: The configured budget ceiling for this dimension.
-
-    Returns:
-        ``min(value / cap, 1.0)`` (or the cap-zero rule described above).
-    """
-    if cap <= 0:
-        return 1.0 if value > 0 else 0.0
-    return min(value / cap, 1.0)
 
 
 def _budget_dimension(

@@ -37,6 +37,10 @@ convenience layer, never a requirement.
 """
 
 from bound.bound_workflow import BoundWorkflow
+from bound.candidate import (
+    Candidate,
+    CandidateDecision,
+)
 from bound.command_collector import (
     BudgetCollector,
     BudgetMetrics,
@@ -49,7 +53,6 @@ from bound.command_collector import (
     PytestCollector,
     Redactor,
     default_redactor,
-    sha256_hex,
 )
 from bound.contract_evaluator import (
     AssuranceAssessment,
@@ -66,6 +69,24 @@ from bound.contracts import (
     StepBudget,
     StepContract,
 )
+from bound.decisions import (
+    ACTION_TO_OUTCOME_REASON,
+    DECISION_TO_ACTION,
+    DECISION_TO_CONTROL,
+    DECISION_TO_EVAL_REASON,
+)
+from bound.display import (
+    DECISION_COLORS,
+    INDEPENDENTLY_VERIFIED,
+    PROVENANCE_COLORS,
+    PROVENANCE_STRENGTH,
+    UNVERIFIED_PROVENANCE,
+    UNVERIFIED_STATUS,
+    fmt_dt,
+    html_escape,
+    provenance_label,
+    sv,
+)
 from bound.evidence import (
     CheckEvidence,
     EvidenceCollector,
@@ -74,6 +95,10 @@ from bound.evidence import (
     EvidenceStatus,
     ExecutionEvidence,
     migrate_legacy_execution_evidence,
+)
+from bound.hashing import (
+    sha256_hex,
+    sha256_hex_bare,
 )
 from bound.integration import (
     AgentControlResult,
@@ -178,6 +203,14 @@ from bound.policy_schema import (
     parse_policy_yaml,
     policy_json_schema,
 )
+from bound.runtime import (
+    BoundRuntime,
+    EvaluationContext,
+    FinishRunResult,
+    OutcomeRecordContext,
+    OutcomeResult,
+    RunHandle,
+)
 
 __all__ = [
     "AcceptanceCheck",
@@ -194,6 +227,8 @@ __all__ = [
     "BUDGET_DIMENSIONS",
     "BudgetDimension",
     "ApprovalsPolicy",
+    "Candidate",
+    "CandidateDecision",
     "ChangeScope",
     "CheckEvidence",
     "CodingWorkflowSignals",
@@ -289,6 +324,15 @@ __all__ = [
     "Redactor",
     "default_redactor",
     "sha256_hex",
+    "sha256_hex_bare",
+    "normalize_capped",
+    # --- v0.9.0 public runtime ---
+    "BoundRuntime",
+    "EvaluationContext",
+    "FinishRunResult",
+    "OutcomeRecordContext",
+    "OutcomeResult",
+    "RunHandle",
     # --- v0.7.0 policy configuration schema + canonicalisation (todo 2/4) ---
     "DEFAULT_WEIGHTS",
     "POLICY_SCHEMA_VERSION",
@@ -302,6 +346,21 @@ __all__ = [
     "canonicalize_policy",
     "compute_policy_hash",
     "policy_changed_since",
+    # --- v0.9.0 dedup refactoring ---
+    "ACTION_TO_OUTCOME_REASON",
+    "DECISION_TO_ACTION",
+    "DECISION_TO_CONTROL",
+    "DECISION_TO_EVAL_REASON",
+    "DECISION_COLORS",
+    "INDEPENDENTLY_VERIFIED",
+    "PROVENANCE_COLORS",
+    "PROVENANCE_STRENGTH",
+    "UNVERIFIED_PROVENANCE",
+    "UNVERIFIED_STATUS",
+    "fmt_dt",
+    "html_escape",
+    "provenance_label",
+    "sv",
 ]
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"

@@ -22,12 +22,12 @@ This module owns:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any
 
 from pydantic import BaseModel
 
+from bound.hashing import sha256_hex_bare
 from bound.policy_schema import BoundPolicyConfig
 
 __all__ = [
@@ -36,20 +36,6 @@ __all__ = [
     "compute_policy_hash",
     "policy_changed_since",
 ]
-
-
-def _sha256_hex(data: str | bytes) -> str:
-    """Return the bare SHA-256 hex digest of ``data``.
-
-    Args:
-        data: A string (UTF-8 encoded) or bytes payload.
-
-    Returns:
-        The 64-character lowercase hex digest (no ``"sha256:"`` prefix).
-    """
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return hashlib.sha256(data).hexdigest()
 
 
 def _canonical_json(obj: object) -> str:
@@ -128,7 +114,7 @@ def compute_policy_hash(policy: BoundPolicyConfig) -> str:
         canonical policy form.
     """
     canonical = canonicalize_policy(policy)
-    digest = _sha256_hex(json.dumps(canonical, sort_keys=True, separators=(",", ":")))
+    digest = sha256_hex_bare(json.dumps(canonical, sort_keys=True, separators=(",", ":")))
     return f"sha256:{digest}"
 
 
@@ -148,7 +134,7 @@ def compute_contract_hash(contract: BaseModel | dict[str, Any] | str) -> str:
     Returns:
         The 64-character lowercase hex digest identifying the exact contract.
     """
-    return _sha256_hex(_canonical_json(contract))
+    return sha256_hex_bare(_canonical_json(contract))
 
 
 def policy_changed_since(
