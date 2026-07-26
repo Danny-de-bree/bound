@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-07-26
+
+### Fixed
+
+- **`bound ui` browser crash** — the `--open` flag now defaults to `False` and
+  is properly registered as an argparse flag. Previously the server crashed in
+  headless environments when `gio` failed to open a browser.
+- **Integration path for installed packages** — `bound setup --agent cline` now
+  resolves integration prompts from both the package-local `integrations/`
+  directory and the repo-root fallback, fixing the "Integration prompt not
+  found" error when installed from a wheel.
+
+### Changed
+
+- **Plan parser: acceptance checks per phase** — checkboxes (`- [ ]`), numbered
+  items (`1. ...`), and plain list items under a `## Phase` heading are now
+  collected as `acceptance_checks` on the phase step rather than emitted as
+  separate steps. A typical plan shrinks from ~184 granular steps to ~27
+  phase-level steps, making the BOUND dashboard plan view usable.
+- Version bumped to `0.9.2`.
+- **Hatch build** — `integrations/` directory now force-included in the wheel
+  via `[tool.hatch.build.targets.wheel.force-include]`.
+
 ## [0.9.1] - 2026-07-26
 
 ### Fixed
@@ -714,7 +737,8 @@ corpus (`benchmarks/contracts/`, `benchmarks/trajectories/`) and the
   (no network, no API key, no LLM SDK).
 - MIT license.
 
-[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/Danny-de-bree/bound/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/Danny-de-bree/bound/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Danny-de-bree/bound/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Danny-de-bree/bound/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Danny-de-bree/bound/compare/v0.8.0...v0.8.1

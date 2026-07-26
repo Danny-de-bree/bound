@@ -1,6 +1,6 @@
 [project]
 name = "bound-policy"
-version = "0.9.1"
+version = "0.9.2"
 description = "A deterministic, configurable control policy for agent workflows."
 readme = "README.md"
 requires-python = ">=3.12"
