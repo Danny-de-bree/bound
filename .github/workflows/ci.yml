@@ -12,25 +12,30 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v5
         with:
-          version: "0.5.18"
           enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Sync dependencies
         run: uv sync --locked --all-extras --dev
 
-      - name: Ruff
+      - name: Ruff lint
         run: uv run ruff check .
 
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q --cov=src/bound --cov-report=term-missing
 
       - name: Build package
         run: uv build

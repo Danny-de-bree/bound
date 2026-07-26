@@ -1,25 +1,25 @@
 # ──────────────────────────────────────────────────────────────────────
 # Build-once release workflow
 # ──────────────────────────────────────────────────────────────────────
-# Dit is het ENIGE entrypoint voor productie-releases. De workflow:
+# This is the ONLY entrypoint for production releases. The workflow:
 #
-#   1. quality-and-build  — verifieer, test, bouw ALLE artifacts (wheel,
-#      sdist, Skills ZIP, checksums) en upload 1 immutable bundle.
-#   2. publish-github     — download de bundle, push de tag, maak GitHub
-#      Release met alle assets.
-#   3. publish-pypi       — download de assets van de GitHub Release,
-#      publiceer naar PyPI via trusted publishing (OIDC).
+#   1. quality-and-build  — verify, test, build ALL artifacts (wheel,
+#      sdist, Skills ZIP, checksums) and upload 1 immutable bundle.
+#   2. publish-github     — download the bundle, push the tag, create
+#      GitHub Release with all assets.
+#   3. publish-pypi       — download assets from the GitHub Release,
+#      publish to PyPI via trusted publishing (OIDC).
 #
-# De stappen lopen sequentieel: GitHub Release bestaat altijd voordat
-# PyPI wordt gepubliceerd. Herpublicatie kan altijd via publish.yml.
+# Steps run sequentially: GitHub Release always exists before PyPI is
+# published. Re-publishing is always possible via publish.yml.
 #
-# Trigger: Actions tab → "Release" → "Run workflow" → voer de versie in
-# (zonder voorloop-v, bv. "0.7.0"). De input MOET gelijk zijn aan
-# project.version in pyproject.toml én bound.__version__, wat wordt
-# gecontroleerd voordat er iets wordt gebouwd of getagd.
+# Trigger: Actions tab → "Release" → "Run workflow" → enter the version
+# (without leading v, e.g. "0.7.0"). The input MUST match
+# project.version in pyproject.toml AND bound.__version__, which is
+# verified before anything is built or tagged.
 #
-# publish-github gebruikt GITHUB_TOKEN met contents:write om de tag te
-# pushen — geen PAT of extra secrets nodig.
+# publish-github uses GITHUB_TOKEN with contents:write to push the tag
+# — no PAT or extra secrets needed.
 # ──────────────────────────────────────────────────────────────────────
 
 name: Release
@@ -32,12 +32,12 @@ on:
         required: true
         type: string
 
-# ── Concurrency: voorkom dubbele builds voor dezelfde versie ────────
+# ── Concurrency: prevent duplicate builds for the same version ────────
 concurrency:
   group: release-${{ inputs.version }}
   cancel-in-progress: false
 
-# ── Minimale root-permissions; per-job worden rechten verhoogd ──────
+# ── Minimal root permissions; per-job permissions are elevated ──────
 permissions:
   contents: read
 
@@ -51,18 +51,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v5
         with:
-          version: "0.5.18"
           enable-cache: true
 
       - name: Sync dependencies
         run: uv sync --locked --all-extras --dev
 
-      # ── Integriteitscontroles ──────────────────────────────────
+      # ── Integrity checks ──────────────────────────────────
       - name: Verify version matches pyproject.toml
         run: |
           PACKAGE_VERSION=$(uv run python -c \
@@ -95,14 +94,14 @@ jobs:
           fi
           echo "✅ Tag $TAG does not exist yet"
 
-      # ── Kwaliteitsgate ─────────────────────────────────────────
+      # ── Quality gates ─────────────────────────────────────────
       - name: Ruff lint
         run: uv run ruff check .
 
       - name: Run tests
         run: uv run pytest -q
 
-      # ── Bouwen ─────────────────────────────────────────────────
+      # ── Build ─────────────────────────────────────────────────
       - name: Build wheel and sdist
         run: uv build --out-dir release/python
 
@@ -160,7 +159,7 @@ jobs:
           path: release/
           retention-days: 90
   # ═════════════════════════════════════════════════════════════════
-  #  publish-github  — tag + GitHub Release (downloadt bundle)
+  #  publish-github  — tag + GitHub Release (downloads bundle)
   # ═════════════════════════════════════════════════════════════════
   publish-github:
     name: Publish to GitHub Release
@@ -171,7 +170,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Download release bundle
         uses: actions/download-artifact@v4
@@ -199,7 +198,7 @@ jobs:
             release/SHA256SUMS.txt
 
   # ═════════════════════════════════════════════════════════════════
-  #  publish-pypi  — PyPI publicatie (downloadt van GitHub Release)
+  #  publish-pypi  — PyPI publish (downloads from GitHub Release)
   # ═════════════════════════════════════════════════════════════════
   publish-pypi:
     name: Publish to PyPI
