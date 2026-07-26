@@ -985,6 +985,63 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     status_parser.set_defaults(func=_run_status)
 
+    # --- plan (v1.0) ----------------------------------------------------------
+    plan_parser_cmd = subparsers.add_parser(
+        "plan",
+        help="Manage BOUND plans.",
+        description=(
+            "Create, review, and inspect plan snapshots. A reviewed plan "
+            "is required before supervised agent execution."
+        ),
+    )
+    plan_sub = plan_parser_cmd.add_subparsers(
+        dest="plan_command",
+        metavar="<plan command>",
+        required=True,
+    )
+    plan_review = plan_sub.add_parser(
+        "review",
+        help="Review and approve a plan before execution.",
+        description=(
+            "Read plan.md, create an immutable snapshot, and record a manual "
+            "review gate.  Use --approve to mark the plan ready for execution."
+        ),
+    )
+    plan_review.add_argument(
+        "--plan",
+        default="plan.md",
+        help="Path to the plan file. Defaults to plan.md.",
+    )
+    plan_review.add_argument(
+        "--reviewer",
+        default="user",
+        help="Name or identifier of the reviewer. Defaults to 'user'.",
+    )
+    plan_review.add_argument(
+        "--approve",
+        action="store_true",
+        default=False,
+        help="Approve the plan for execution.",
+    )
+    plan_review.add_argument(
+        "--reject",
+        action="store_true",
+        default=False,
+        help="Reject the plan (blocks execution).",
+    )
+    plan_review.add_argument(
+        "--comment",
+        default=None,
+        help="Optional review comment or reason.",
+    )
+    plan_review.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit review as JSON.",
+    )
+    plan_review.set_defaults(func=_run_plan_review)
+
     # --- adapter (v0.9.5) ------------------------------------------------------
     adapter_parser = subparsers.add_parser(
         "adapter",
@@ -1529,6 +1586,56 @@ def _run_status(args: argparse.Namespace) -> int:
         print("  bound ui")
 
     return 0
+def _run_plan_review(args: argparse.Namespace) -> int:
+    """Execute ``bound plan review`` — manual review gate before execution."""
+    import json
+    from pathlib import Path
+
+    from bound.plan_model import create_plan_version, find_or_create_plan, review_plan
+
+    plan_path = Path(args.plan)
+    if not plan_path.exists():
+        print(f"error: plan file not found: {plan_path}", file=sys.stderr)
+        return 1
+
+    content = plan_path.read_text(encoding="utf-8")
+
+    # Create immutable snapshot.
+    plan = find_or_create_plan(
+        project_id=str(plan_path.parent.resolve()),
+        source_path=str(plan_path),
+        content=content,
+    )
+    version = create_plan_version(plan=plan, content=content, source="file")
+
+    # Record the review.
+    approved = args.approve and not args.reject
+    review = review_plan(
+        plan=plan,
+        plan_version=version,
+        reviewer=args.reviewer,
+        approved=approved,
+        comment=args.comment,
+    )
+
+    if args.json:
+        print(json.dumps(review.model_dump(mode="json"), indent=2, default=str))
+    else:
+        status = "APPROVED" if review.approved else "REJECTED"
+        print(f"Plan review: {status}")
+        print(f"  Plan:       {plan.plan_id}")
+        print(f"  Version:    {version.version}")
+        print(f"  Content:    {version.content_hash[:12]}… ({len(content)} bytes)")
+        print(f"  Reviewer:   {review.reviewer}")
+        if review.comment:
+            print(f"  Comment:    {review.comment}")
+        print()
+        if review.approved:
+            print("Next: bound run --plan plan.md \"your task\"")
+        else:
+            print("Plan rejected. Revise plan.md and run `bound plan review --approve` when ready.")
+
+    return 0 if approved else 1
 
 def _run_run_current(args: argparse.Namespace) -> int:
     """Execute ``bound run current``."""

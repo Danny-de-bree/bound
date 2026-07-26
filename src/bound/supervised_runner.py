@@ -8,18 +8,30 @@ from __future__ import annotations
 
 import logging
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from bound.agent_discovery import detect_agent
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class SupervisedRunResult:
-    """Result of a supervised agent run."""
-    decision: str
+class SupervisedRunResult(BaseModel):
+    """Result of a supervised agent run.
+
+    Attributes:
+        decision: Final BOUND decision (ACCEPT, RETRY, REPLAN, ROLLBACK, FAILED).
+        run_id: The lineage run identifier.
+        attempts: Number of attempts made.
+        retries: Number of retries executed.
+        replans: Number of replans executed.
+        final_output: Last output from the agent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str = "ACCEPT"
     run_id: str = ""
     attempts: int = 0
     retries: int = 0
@@ -27,11 +39,23 @@ class SupervisedRunResult:
     final_output: str = ""
 
 
-@dataclass
-class SupervisedConfig:
-    """Configuration for a supervised run."""
+class SupervisedConfig(BaseModel):
+    """Configuration for a supervised run.
+
+    Attributes:
+        agent_id: Agent identifier (``"claude-code"``, ``"codex"``, etc.).
+        project_dir: Project root directory.
+        policy_path: Path to the policy YAML file.
+        max_retries: Maximum retry attempts before forcing REPLAN.
+        max_replans: Maximum replan attempts before giving up.
+        max_candidates: Maximum candidate branches.
+        no_worktree: If True, skip worktree isolation.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     agent_id: str = "claude-code"
-    project_dir: Path = field(default_factory=Path.cwd)
+    project_dir: Path = Field(default_factory=Path.cwd)
     policy_path: str = "bound-policy.yaml"
     max_retries: int = 2
     max_replans: int = 2

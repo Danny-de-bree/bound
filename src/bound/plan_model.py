@@ -99,6 +99,32 @@ class RunPlanLink(BaseModel):
     current_plan_version: int
 
 
+class PlanReview(BaseModel):
+    """A manual review gate on a plan version.
+
+    Before BOUND executes a plan, a human (or designated reviewer) can submit
+    a review that snapshots the plan content, records the reviewer identity,
+    and optionally blocks execution until approved.
+
+    Attributes:
+        plan_id: The plan under review.
+        version: The plan version being reviewed.
+        reviewer: Who performed the review (name, email, or identifier).
+        approved: ``True`` when the plan is approved for execution.
+        comment: Optional review comment or reason.
+        reviewed_at: UTC instant the review was recorded.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    plan_id: str
+    version: int
+    reviewer: str
+    approved: bool = False
+    comment: str | None = None
+    reviewed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 # ---------------------------------------------------------------------------
 # Plan identity resolution
 # ---------------------------------------------------------------------------
@@ -429,8 +455,41 @@ def require_replan(
     )
 
 
+def review_plan(
+    plan: Plan,
+    plan_version: PlanVersion,
+    reviewer: str,
+    approved: bool = True,
+    comment: str | None = None,
+) -> PlanReview:
+    """Record a manual review gate on a plan before execution.
+
+    A plan should be reviewed by a human before an agent executes it.
+    This creates an immutable :class:`PlanReview` record that can be
+    checked before ``bound run`` proceeds.
+
+    Args:
+        plan: The :class:`Plan` being reviewed.
+        plan_version: The specific :class:`PlanVersion` under review.
+        reviewer: Who performed the review (name, email, or identifier).
+        approved: ``True`` to approve for execution, ``False`` to block.
+        comment: Optional review comment or reason.
+
+    Returns:
+        A frozen :class:`PlanReview` record.
+    """
+    return PlanReview(
+        plan_id=plan.plan_id,
+        version=plan_version.version,
+        reviewer=reviewer,
+        approved=approved,
+        comment=comment,
+    )
+
+
 __all__ = [
     "Plan",
+    "PlanReview",
     "PlanVersion",
     "RunPlanLink",
     "compute_plan_hash",
@@ -439,4 +498,5 @@ __all__ = [
     "find_or_create_plan",
     "require_replan",
     "resolve_plan_id",
+    "review_plan",
 ]
