@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 
 from bound.cli import _RunAuditIndex
 from bound.display import (
@@ -466,6 +467,22 @@ header .brand svg{flex-shrink:0}
 .stat-card.failed .stat-value{color:#f85149}
 .stat-card.total .stat-value{color:#e6edf3}
 
+.filter-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.filter-btn{padding:5px 14px;border-radius:16px;font-size:0.72rem;font-weight:500;
+  color:#8b949e;background:#161b22;border:1px solid #30363d;text-decoration:none;
+  transition:all .15s}
+.filter-btn:hover{color:#e6edf3;border-color:#58a6ff}
+.filter-btn.active{background:#1f6feb;color:#fff;border-color:#1f6feb}
+.search-form{flex:1;min-width:180px;margin-left:auto}
+.search-input{width:100%;padding:5px 12px;border-radius:16px;border:1px solid #30363d;
+  background:#0d1117;color:#e6edf3;font-size:0.72rem;outline:none}
+.search-input:focus{border-color:#58a6ff}
+.search-input::placeholder{color:#484f58}
+.task-group-header{display:flex;align-items:center;gap:6px;padding:8px 0;margin-top:8px;
+  font-size:0.72rem;color:#8b949e;grid-column:1/-1;border-bottom:1px solid #21262d}
+.task-group-header .task-group-count{color:#484f58;font-size:0.65rem}
+.task-group-icon{font-size:0.85rem}
+
 .section-head{display:flex;align-items:center;justify-content:space-between;
   margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #21262d}
 .section-head h2{font-size:0.82rem;color:#8b949e;font-weight:500;
@@ -792,11 +809,14 @@ def _render_overview_page(
     summaries: list[RunSummary],
     store_path: str,
     decisions: dict[str, dict[str, Any]] | None = None,
+    filter_status: str = "all",
+    search_q: str = "",
 ) -> str:
     """Render the dashboard overview with active runs as cards and historical as table.
 
     Active runs (incomplete/started) appear as cards at the top.
     Historical runs (completed/failed) appear in a compact table below.
+    Runs sharing the same task name are grouped under a common header.
     No run appears in both sections.
     """
     total = len(summaries)
@@ -805,6 +825,12 @@ def _render_overview_page(
     active_count = len(active_summaries)
     completed = sum(1 for s in historical_summaries if str(s.status).lower() == "completed")
     failed = len(historical_summaries) - completed
+
+    # Group active runs by task name
+    task_groups: dict[str, list[RunSummary]] = {}
+    for s in active_summaries:
+        key = s.task or "(untitled)"
+        task_groups.setdefault(key, []).append(s)
 
     # SVG icons (no emoji)
     bound_icon = (
@@ -863,48 +889,81 @@ def _render_overview_page(
         parts.append(f"<div class='stat-card failed'><div class='stat-value'>{failed}</div><div class='stat-label'>Failed / Int.</div></div>")
         parts.append("</div>")
 
-        # Active runs cards
+        # --- Filter bar ---
+        filter_options = [
+            ("all", "All"),
+            ("active", "Active"),
+            ("completed", "Completed"),
+            ("failed", "Failed"),
+        ]
+        parts.append("<div class='filter-bar'>")
+        for val, label in filter_options:
+            active_cls = " active" if filter_status == val else ""
+            escaped_q = html_escape(search_q).replace("'", "&#39;") if search_q else ""
+            q_param = f"&amp;q={escaped_q}" if search_q else ""
+            parts.append(
+                f"<a href='/?filter={val}{q_param}'"
+                f" class='filter-btn{active_cls}'>{label}</a>"
+            )
+        parts.append(
+            f"<form method='get' action='/' class='search-form'>"
+            f"<input type='hidden' name='filter' value='{html_escape(filter_status)}'>"
+            f"<input type='search' name='q' placeholder='Search tasks...'"
+            f" value='{html_escape(search_q)}' class='search-input'>"
+            f"</form>"
+        )
+        parts.append("</div>")
+
+        # Active runs cards grouped by task
         if active_summaries:
             parts.append(
                 "<div class='section-head'>"
                 "<h2>Active Runs "
                 "<span class='sse-status' id='sse-status'>"
                 f"{live_dot_svg} live</span></h2>"
-                f"<span class='count'>{active_count} active</span>"
+                f"<span class='count'>{active_count} active in {len(task_groups)} task{'' if len(task_groups) == 1 else 's'}</span>"
                 "</div>"
             )
             parts.append("<div class='active-cards'>")
-            for s in active_summaries:
-                d = decisions.get(s.run_id, {}) if decisions else {}
-                decision = d.get("decision", "—") if d else "—"
-                task_display = html_escape((s.task or "(untitled)")[:120])
-                status_str = "incomplete" if s.incomplete else sv(s.status)
-                # Step info + candidate count placeholder
-                candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
-                step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
-                # Decision class for colored badge
-                dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
-                dec_class = f" decision-{dec_css}" if dec_css else ""
-                run_id_short = html_escape(_short_id(s.run_id, 20))
+            for task_name, group_runs in sorted(task_groups.items()):
+                if len(group_runs) > 1:
+                    parts.append(
+                        f"<div class='task-group-header'>"
+                        f"<span>{html_escape(task_name[:100])}</span>"
+                        f"<span class='task-group-count'>{len(group_runs)} runs</span>"
+                        f"</div>"
+                    )
+                for s in group_runs:
+                    d = decisions.get(s.run_id, {}) if decisions else {}
+                    decision = d.get("decision", "—") if d else "—"
+                    task_display = html_escape((s.task or "(untitled)")[:120])
+                    status_str = "incomplete" if s.incomplete else sv(s.status)
+                    # Step info + candidate count placeholder
+                    candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
+                    step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
+                    # Decision class for colored badge
+                    dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
+                    dec_class = f" decision-{dec_css}" if dec_css else ""
+                    run_id_short = html_escape(_short_id(s.run_id, 20))
 
-                parts.append(
-                    f"<a href='/run/{html_escape(s.run_id)}' class='active-card'>"
-                    f"<div class='card-top'>"
-                    f"<div class='card-task' title='{task_display}'>{task_display}</div>"
-                    f"<div class='card-badges'>"
-                    f"{_status_badge(status_str, _RUN_STATUS_COLORS)}"
-                    f"<span class='badge{dec_class}'>{html_escape(decision)}</span>"
-                    f"</div></div>"
-                    f"<div class='card-step'>"
-                    f"<span class='live-dot-sm'></span>"
-                    f"{step_info}"
-                    f"</div>"
-                    f"<div class='card-footer'>"
-                    f"<span class='mono'>{run_id_short}</span>"
-                    f"<span>{fmt_dt(s.started_at)}</span>"
-                    f"</div>"
-                    f"</a>"
-                )
+                    parts.append(
+                        f"<a href='/run/{html_escape(s.run_id)}' class='active-card'>"
+                        f"<div class='card-top'>"
+                        f"<div class='card-task' title='{task_display}'>{task_display}</div>"
+                        f"<div class='card-badges'>"
+                        f"{_status_badge(status_str, _RUN_STATUS_COLORS)}"
+                        f"<span class='badge{dec_class}'>{html_escape(decision)}</span>"
+                        f"</div></div>"
+                        f"<div class='card-step'>"
+                        f"<span class='live-dot-sm'></span>"
+                        f"{step_info}"
+                        f"</div>"
+                        f"<div class='card-footer'>"
+                        f"<span class='mono'>{run_id_short}</span>"
+                        f"<span>{fmt_dt(s.started_at)}</span>"
+                        f"</div>"
+                        f"</a>"
+                    )
             parts.append("</div>")
 
         # Historical runs table
@@ -1948,9 +2007,27 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     # --- Handlers ---
 
     def _handle_overview(self) -> None:
+        query = {}
+        if "?" in (self.path or ""):
+            query = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1]).items()}
+        filter_status = query.get("filter", "all")
+        search_q = query.get("q", "").strip().lower()
         summaries = self._get_runs()
+        # Apply filter
+        if filter_status == "active":
+            summaries = [s for s in summaries if s.incomplete or str(s.status).lower() == "started"]
+        elif filter_status == "completed":
+            summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() == "completed"]
+        elif filter_status == "failed":
+            summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() in ("failed", "interrupted")]
+        # Apply search
+        if search_q:
+            summaries = [s for s in summaries if search_q in (s.task or "").lower() or search_q in s.run_id.lower()]
         decisions = _get_overview_decisions(summaries, self._store)
-        html = _render_overview_page(summaries, str(self._store.base_dir), decisions=decisions)
+        html = _render_overview_page(
+            summaries, str(self._store.base_dir), decisions=decisions,
+            filter_status=filter_status, search_q=query.get("q", ""),
+        )
         self._send_html(html)
 
     def _handle_run_detail(self, run_id: str) -> None:
