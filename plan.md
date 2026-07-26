@@ -6,7 +6,21 @@ Deliver a production-ready deterministic execution harness that any coding
 agent can use. BOUND evaluates completed work and emits one of four decisions:
 ACCEPT, RETRY, REPLAN, or ROLLBACK.
 
-## Plan
+## v1.0 Phases (from todo.md § 22.1)
+
+- [x] **Phase A: Inspection & gap analysis** — `gap_analysis.md` created. 24 implemented, 9 partial, 2 config-only, 14 planned.
+- [ ] **Phase B: Data model & configuration** — `.bound/config.yaml` schema, `ProjectConfig`, `AgentConfig`, capability model
+- [ ] **Phase C: Agent discovery & explicit overrides** — detect Cline/Claude Code/Codex, `--agent`/`--agent-command` flags
+- [ ] **Phase D: `bound use` / `bound status` / `bound doctor`** — UX commands
+- [ ] **Phase E: Plan model & snapshots** — `PlanVersion`, immutable snapshots, plan→run links
+- [ ] **Phase F: Runtime event linkage** — plan-step-started/completed events
+- [ ] **Phase G: Cline zero-friction integration** — `bound use cline` full flow
+- [ ] **Phase H: First supervised agent** — real agent execution
+- [ ] **Phase I: UI plan/run navigation** — plan vs reality views
+- [ ] **Phase J: Worktrees & candidates** — candidate branching
+- [ ] **Phase K: Docs & E2E validation** — README, CHANGELOG, capability matrix
+
+## Legacy Plan (v0.9.x)
 
 ### PHASE-001: Dashboard UX
 
