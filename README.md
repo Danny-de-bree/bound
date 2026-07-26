@@ -3,19 +3,17 @@
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/v/bound-policy.svg?cacheSeconds=300" alt="PyPI version"></a>
   <a href="https://pypi.org/project/bound-policy/"><img src="https://img.shields.io/pypi/pyversions/bound-policy.svg" alt="Python versions"></a>
   <a href="https://github.com/Danny-de-bree/bound/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Danny-de-bree/bound.svg" alt="License"></a>
-  <a href="https://skills.sh/Danny-de-bree/bound"><img src="https://img.shields.io/badge/skills.sh-install_BOUND-black" alt="Install BOUND from skills.sh"></a>
 </p>
 
-# BOUND
+# BOUND — Deterministic Agent Execution Runtime
 
-BOUND is a deterministic decision harness for coding agents. The agent does the
-work; BOUND decides whether to continue, retry, replan, or rollback. No LLM as
-judge, no telemetry, no network. Language-neutral — works with any project,
-any agent, any language. **The model proposes. The harness decides.**
+BOUND is a deterministic control harness for coding agents. Use the coding
+agent already installed on your machine. BOUND adds evidence-based acceptance,
+retries, replanning, checkpoints, rollback, candidate isolation, and replay.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Danny-de-bree/bound/main/assets/bound-agent-workflow.png" alt="A coding agent executes work, BOUND collects evidence and emits a deterministic control decision" width="100%">
-</p>
+**The agent proposes changes. BOUND controls what happens next.**
+
+No LLM as judge, no telemetry, no network required.
 
 ## The four decisions
 
@@ -26,85 +24,66 @@ any agent, any language. **The model proposes. The harness decides.**
 | **REPLAN** | The current strategy is no longer the right path. | Choose a materially different approach and derive a new step contract. |
 | **ROLLBACK** | A hard risk boundary was exceeded. | Restore a previously confirmed safe checkpoint, then replan. |
 
-BOUND emits the signal; the agent performs the action.
-
-## Quickstart — use BOUND with your agent today
-
-Pick your agent:
-
-### Cline
+## Quickstart
 
 ```bash
 pip install bound-policy
-bound adapter install cline  # generates .cline/mcp/bound.json
-cline                        # Cline auto-discovers BOUND's MCP tools
+cd your-project
+bound use cline       # auto-detects Cline, installs MCP config
+bound ui              # → http://127.0.0.1:8765
 ```
 
-Cline sees `bound_evaluate`, `bound_checkpoint`, `bound_rollback` as tools.
-No prompt needed — Cline calls BOUND automatically during execution.
-
-### Codex
+For agents with a CLI:
 
 ```bash
-pip install bound-policy
-bound adapter install codex   # validates Codex CLI, generates MCP config
-npx @openai/codex exec "your task"   # Codex calls BOUND tools during exec
+bound run --agent claude "Fix the failing validation tests"
 ```
 
-Requires `OPENAI_API_KEY` or `codex login` for authentication.
+### Control modes
 
-### Claude Code
+| Mode | Session owner | Description |
+| --- | --- | --- |
+| **Integrated** | The agent | Agent calls BOUND via MCP tools. Fastest compatibility. |
+| **Supervised** | BOUND | BOUND starts agent as child process, reads structured output, evaluates independently. |
+| **Controlled** | BOUND | BOUND owns a bidirectional session with interrupt, resume, and candidate branching. |
 
-```bash
-pip install bound-policy
-bound adapter install claude  # validates claude-code CLI
-npx @anthropic-ai/claude-code -p "your task"  # use --print for non-interactive
-```
+## Agent capability matrix
 
-Requires `claude login` for authentication. Use `--output-format stream-json`
-for structured events that BOUND can evaluate.
+| Agent | Detection | Integration | Events | Process | Interrupt | Resume |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cline | ✅ tested | MCP tools | ✅ partial | ❌ editor-managed | ❌ | ❌ |
+| Claude Code | ✅ tested | subprocess | ✅ structured | ✅ tested | ❌ planned | ❌ planned |
+| Codex | ✅ tested | MCP + CLI | ✅ structured | ✅ planned | ✅ planned | ✅ planned |
+| Generic | ✅ tested | ACP via --agent-command | config-based | config-based | config-based | config-based |
 
-### Any other agent (prompt-based)
+### Capability status key
 
-```bash
-pip install bound-policy
-bound setup --agent generic
-cat .bound/integration-prompt.md   # paste into your agent
-```
+- ✅ **tested** — implemented and verified with real agent
+- ⬜ **planned** — design exists, implementation pending
+- ❌ **unsupported** — cannot be provided (e.g., Cline has no process API)
 
-### Watch it live
+## CLI reference
 
-```bash
-bound ui   # → http://127.0.0.1:8765
-```
+| Command | Description | Status |
+| --- | --- | --- |
+| `bound use <agent>` | Configure agent as project default | ✅ v1.0 |
+| `bound status` | Show project config and agent detection | ✅ v1.0 |
+| `bound run --agent <agent> "task"` | Start a supervised run | ✅ v1.0 |
+| `bound doctor` | Diagnose project and agent setup | ✅ existing |
+| `bound ui` | Local dashboard (http://127.0.0.1:8765) | ✅ existing |
+| `bound evaluate` | Evaluate action with pre-supplied scores | ✅ existing |
+| `bound checkpoint` | Git-based checkpoint management | ✅ existing |
+| `bound policy` | Validate, explain, or hash policy files | ✅ existing |
+| `bound mcp` | Start stdio MCP server for agent tools | ✅ existing |
 
-### Adjust the policy mid-run
+## Guides
 
-Edit `bound-policy.yaml` anytime — the agent's next `bound evaluate` picks up
-the new policy automatically.
-
-```bash
-bound policy explain bound-policy.yaml   # see what your policy does
-```
-
-### Three integration modes
-
-| Mode | How |
-|---|---|
-| **Prompt** | Agent reads instructions from `bound setup`, calls `bound evaluate` |
-| **MCP** | Agent uses BOUND tools via MCP server (`bound mcp`) |
-| **Adapter** | BOUND spawns agent as child, controls loop via JSONL |
+- **[Architecture & scoring model](architecture/README.md)** — how the bounded-utility formula works
+- **[Decision lineage](docs/lineage.md)** — run history, evidence provenance, inspection
+- **[Default policy](bound-policy.yaml)** — a fully documented starting point
+- **[Agent integration guides](integrations/)** — Cline, Codex, Claude Code, and generic
+- **[BOUND skill](skills/bound/SKILL.md)** — the agent-ready skill prompt
 
 ## License
 
 MIT © Danny de Bree. See [LICENSE](LICENSE).
-
-## Guides
-
-- **[Python & CLI reference](docs/python-usage.md)** — install, `bound setup`, `bound doctor`, `bound init`, collectors, Python API
-- **[Architecture & scoring model](architecture/README.md)** — how the bounded-utility formula works
-- **[Decision lineage](docs/lineage.md)** — run history, evidence provenance, inspection
-- **[Default policy](src/bound/default_policy.yaml)** — a fully documented starting point
-- **[Agent integration guides](integrations/)** — Cline, Codex, Claude Code, Kilo Code, Hermes, and generic
-- **[BOUND skill](skills/bound/SKILL.md)** — the agent-ready skill prompt
-- **[Demo scenario](docs/demo-scenario.md)** — canonical end-to-end walkthrough
