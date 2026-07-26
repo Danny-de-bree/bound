@@ -509,11 +509,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="TCP port (default 8765).",
     )
     ui.add_argument(
-        "--open",
-        action="store_true",
-        default=False,
+        "--no-open",
+        action="store_false",
+        default=True,
         dest="open_browser",
-        help="Open the dashboard URL in the default browser after startup.",
+        help="Do not open the dashboard in the browser (headless mode).",
     )
     ui.set_defaults(func=_run_ui)
 
