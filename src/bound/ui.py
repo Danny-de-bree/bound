@@ -299,6 +299,7 @@ table.run-table tr:hover{background:#1c2333}
   background:#3fb950;animation:live-pulse 1.5s infinite;margin-right:4px}
 @keyframes live-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(63,185,80,0.4)}
   50%{opacity:0.6;box-shadow:0 0 0 6px rgba(63,185,80,0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 .live-label{color:#3fb950;font-size:0.7rem;font-weight:600;
   text-transform:uppercase;letter-spacing:0.5px}
 
@@ -651,7 +652,13 @@ def _render_run_detail(log: RunLog) -> str:
     action_desc = "Run in progress"
     action_ctx = ""
     action_class = "running"
-    if latest_decision:
+
+    if is_active and not log.steps:
+        # Active run with no steps yet — agent hasn't started working
+        task_text = html_escape((run.task or "unknown task")[:80])
+        action_desc = f"Waiting for agent &mdash; {task_text}"
+        action_ctx = "No steps recorded yet"
+    elif latest_decision:
         if latest_decision == "ACCEPT":
             action_icon = "&#x2705;"
             action_desc = "ACCEPT &mdash; step passed"
@@ -1020,6 +1027,16 @@ def _render_run_detail(log: RunLog) -> str:
     )
     parts.append("<div id='timeline-items'>")
     parts.extend(timeline_rows)
+    if is_active and not log.steps:
+        parts.append(
+            "<div class='tl-entry tl-waiting' style='display:flex;align-items:center;gap:8px;"
+            "padding:10px 0;color:#8b949e;font-style:italic'>"
+            "<span class='tl-dot live' style='width:8px;height:8px;border-radius:50%;"
+            "background:#58a6ff;animation:pulse 1.5s infinite;display:inline-block'></span>"
+            "Waiting for agent to begin execution &mdash; "
+            "this page will auto-update when steps are recorded..."
+            "</div>"
+        )
     parts.append("</div></div>")  # close timeline
     parts.append("</div>")  # close timeline-panel
 
