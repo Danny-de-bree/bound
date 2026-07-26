@@ -96,10 +96,7 @@ def fmt_dt(dt: datetime | None) -> str:
 def html_escape(text: str) -> str:
     """Escape a string for safe inclusion in HTML text content."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 

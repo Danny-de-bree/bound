@@ -219,7 +219,9 @@ def test_evaluate_decisions_perfect() -> None:
     """All correct → A grade, 100% accuracy."""
     evaluator = ControllerEvaluator()
     records = [
-        DecisionRecord(step_index=0, bound_decision="ACCEPT", ground_truth="ACCEPT", is_correct=True),
+        DecisionRecord(
+            step_index=0, bound_decision="ACCEPT", ground_truth="ACCEPT", is_correct=True
+        ),
         DecisionRecord(step_index=1, bound_decision="RETRY", ground_truth="RETRY", is_correct=True),
     ]
     health = evaluator.evaluate_decisions(records)
@@ -236,10 +238,24 @@ def test_evaluate_decisions_mixed() -> None:
     """Mixed results compute correct rates."""
     evaluator = ControllerEvaluator()
     records = [
-        DecisionRecord(step_index=0, bound_decision="ACCEPT", ground_truth="ACCEPT", is_correct=True),
-        DecisionRecord(step_index=1, bound_decision="ACCEPT", ground_truth="RETRY", is_correct=False, false_accept=True),
+        DecisionRecord(
+            step_index=0, bound_decision="ACCEPT", ground_truth="ACCEPT", is_correct=True
+        ),
+        DecisionRecord(
+            step_index=1,
+            bound_decision="ACCEPT",
+            ground_truth="RETRY",
+            is_correct=False,
+            false_accept=True,
+        ),
         DecisionRecord(step_index=2, bound_decision="RETRY", ground_truth="RETRY", is_correct=True),
-        DecisionRecord(step_index=3, bound_decision="ROLLBACK", ground_truth="RETRY", is_correct=False, false_rollback=True),
+        DecisionRecord(
+            step_index=3,
+            bound_decision="ROLLBACK",
+            ground_truth="RETRY",
+            is_correct=False,
+            false_rollback=True,
+        ),
     ]
     health = evaluator.evaluate_decisions(records)
 

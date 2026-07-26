@@ -28,9 +28,7 @@ def test_escape_greater_than() -> None:
 
 def test_escape_combined() -> None:
     """Multiple special chars are all escaped."""
-    assert _escape("<script>&</script>") == (
-        "&lt;script&gt;&amp;&lt;/script&gt;"
-    )
+    assert _escape("<script>&</script>") == ("&lt;script&gt;&amp;&lt;/script&gt;")
 
 
 def test_escape_no_special_chars() -> None:
@@ -124,7 +122,7 @@ def test_render_html_no_external_css() -> None:
     assert 'href="http' not in html
     assert 'src="http' not in html
     assert "<link" not in html
-    assert '<script src' not in html
+    assert "<script src" not in html
 
 
 def test_render_html_includes_aggregate_metrics() -> None:

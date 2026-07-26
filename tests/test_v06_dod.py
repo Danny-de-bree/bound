@@ -131,9 +131,7 @@ def test_decision_mapping_not_duplicated_in_runtime() -> None:
     assert integration_spec()["decision_to_control"] == _DECISION_TO_ACTION
     # The canonical mapping module carries exactly one decision->action mapping
     # literal: no duplicated/competing table making decisions independently of BOUND.
-    decisions_source = (REPO_ROOT / "src" / "bound" / "decisions.py").read_text(
-        encoding="utf-8"
-    )
+    decisions_source = (REPO_ROOT / "src" / "bound" / "decisions.py").read_text(encoding="utf-8")
     assert decisions_source.count('"ROLLBACK": "rollback"') == 1
     # evaluate_agent_step is the single public runtime path that consumes it.
     integration_source = (REPO_ROOT / "src" / "bound" / "integration.py").read_text(

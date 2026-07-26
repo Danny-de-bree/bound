@@ -104,13 +104,21 @@ class SupervisedRunner:
 
     def _invoke_agent(self, project_dir: Path, task: str) -> str:
         cmd = [
-            "npx", "@anthropic-ai/claude-code", "-p", "--verbose",
-            "--dangerously-skip-permissions", "--output-format", "stream-json", task,
+            "npx",
+            "@anthropic-ai/claude-code",
+            "-p",
+            "--verbose",
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "stream-json",
+            task,
         ]
         try:
             r = subprocess.run(
                 cmd,
-                capture_output=True, text=True, timeout=600,
+                capture_output=True,
+                text=True,
+                timeout=600,
                 cwd=str(project_dir),
             )
             return r.stdout.strip()
@@ -119,8 +127,13 @@ class SupervisedRunner:
 
     def _collect_evidence(self, project_dir: Path) -> bool:
         try:
-            r = subprocess.run(["pytest", "tests/", "-x", "-q"],
-                               capture_output=True, text=True, timeout=120, cwd=str(project_dir))
+            r = subprocess.run(
+                ["pytest", "tests/", "-x", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=str(project_dir),
+            )
             return r.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return True

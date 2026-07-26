@@ -31,20 +31,24 @@ from pydantic import BaseModel, ConfigDict
 # Canonical type constants
 # ---------------------------------------------------------------------------
 
-EVENT_TYPES: frozenset[str] = frozenset({
-    "task.started",
-    "step.completed",
-    "evidence.collected",
-    "evaluation.requested",
-})
+EVENT_TYPES: frozenset[str] = frozenset(
+    {
+        "task.started",
+        "step.completed",
+        "evidence.collected",
+        "evaluation.requested",
+    }
+)
 
-COMMAND_TYPES: frozenset[str] = frozenset({
-    "continue",
-    "retry",
-    "replan",
-    "rollback",
-    "shutdown",
-})
+COMMAND_TYPES: frozenset[str] = frozenset(
+    {
+        "continue",
+        "retry",
+        "replan",
+        "rollback",
+        "shutdown",
+    }
+)
 
 ALL_TYPES: frozenset[str] = EVENT_TYPES | COMMAND_TYPES
 
@@ -84,6 +88,8 @@ class ACPMessage:
 
     def __repr__(self) -> str:
         return f"ACPMessage(type={self.type!r})"
+
+
 # ---------------------------------------------------------------------------
 # Serialization helpers
 # ---------------------------------------------------------------------------
@@ -121,9 +127,7 @@ def parse_line(line: str) -> ACPMessage:
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON in ACP line: {exc}") from exc
     if not isinstance(data, dict):
-        raise ValueError(
-            f"ACP message must be a JSON object, got {type(data).__name__}"
-        )
+        raise ValueError(f"ACP message must be a JSON object, got {type(data).__name__}")
     return ACPMessage(data)
 
 
@@ -177,8 +181,7 @@ def make_command(
     """
     if cmd_type not in COMMAND_TYPES:
         raise ValueError(
-            f"Unknown command type {cmd_type!r}; expected one of "
-            f"{sorted(COMMAND_TYPES)}"
+            f"Unknown command type {cmd_type!r}; expected one of {sorted(COMMAND_TYPES)}"
         )
     msg: dict[str, Any] = {
         "type": cmd_type,

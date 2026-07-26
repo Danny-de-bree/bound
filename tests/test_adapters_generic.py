@@ -25,7 +25,7 @@ def _write_script(script: str) -> str:
     return tmp.name
 
 
-ECHO_AGENT = '''\
+ECHO_AGENT = """\
 import sys, json
 line = sys.stdin.readline()
 start = json.loads(line)
@@ -47,9 +47,9 @@ for _ in range(100):
         pass
     else:
         sys.exit(1)
-'''
+"""
 
-SLOW_AGENT = '''\
+SLOW_AGENT = """\
 import sys, json, time
 sys.stdin.readline()
 time.sleep(0.5)
@@ -58,9 +58,9 @@ for _ in range(100):
     cmd = json.loads(sys.stdin.readline())
     if cmd["type"] == "shutdown":
         break
-'''
+"""
 
-MULTI_EVENT_AGENT = '''\
+MULTI_EVENT_AGENT = """\
 import sys, json
 sys.stdin.readline()
 print(json.dumps({"type": "evidence.collected", "evidence": {"tests": 3}}), flush=True)
@@ -69,13 +69,13 @@ for _ in range(100):
     cmd = json.loads(sys.stdin.readline())
     if cmd["type"] == "shutdown":
         break
-'''
+"""
 
-CRASH_AGENT = '''\
+CRASH_AGENT = """\
 import sys
 sys.stdin.readline()
 sys.exit(1)
-'''
+"""
 
 
 # ---------------------------------------------------------------------------

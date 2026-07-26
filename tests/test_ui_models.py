@@ -31,6 +31,8 @@ from bound.ui_models import (
 def _utc(year: int, month: int, day: int, hour: int = 0) -> datetime:
     """Create a timezone-aware UTC datetime."""
     return datetime(year, month, day, hour, tzinfo=UTC)
+
+
 # =============================================================================
 # Enum tests
 # =============================================================================
@@ -69,6 +71,8 @@ class TestPlanDivergenceType:
         assert PlanDivergenceType.REORDERED.value == "reordered"
         assert PlanDivergenceType.REPEATED.value == "repeated"
         assert PlanDivergenceType.FAILED.value == "failed"
+
+
 # =============================================================================
 # PlanStep model
 # =============================================================================
@@ -132,6 +136,8 @@ class TestPlanStep:
         assert b.linked_runtime_step_ids == []
         assert PlanDivergenceType.SKIPPED.value == "skipped"
         assert PlanDivergenceType.ROLLBACK.value == "rollback"
+
+
 # =============================================================================
 # PlanProgress model
 # =============================================================================
@@ -152,9 +158,7 @@ class TestPlanProgress:
             PlanStep(step_id="2", title="B", status=PlanStepStatus.COMPLETED),
             PlanStep(step_id="3", title="C", status=PlanStepStatus.PENDING),
         ]
-        progress = PlanProgress(
-            plan_steps=steps, total_steps=3, completed_steps=2, failed_steps=0
-        )
+        progress = PlanProgress(plan_steps=steps, total_steps=3, completed_steps=2, failed_steps=0)
         assert progress.progress_ratio == 2.0 / 3.0
 
     def test_progress_ratio_all_completed(self) -> None:

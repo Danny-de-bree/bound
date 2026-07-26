@@ -146,9 +146,7 @@ class AgentAdapter(ABC):
         ...
 
     @abstractmethod
-    def wait_for_event(
-        self, timeout: float | None = None
-    ) -> AdapterEvent | None:
+    def wait_for_event(self, timeout: float | None = None) -> AdapterEvent | None:
         """Block until an ACP event arrives or time runs out.
 
         Args:
@@ -220,6 +218,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Lazy imports — keep provider-specific adapters out of the critical path.
 # ---------------------------------------------------------------------------
+
 
 def __getattr__(name: str) -> object:
     """Lazy-load adapter classes to avoid importing provider modules at startup.

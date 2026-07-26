@@ -1948,6 +1948,8 @@ class CheckpointService:
             run_id=request.run_id,
             checkpoint_ids=checkpoint_ids,
         )
+
+
 # ---------------------------------------------------------------------------
 # v1.0 Session lifecycle service
 # ---------------------------------------------------------------------------
@@ -2076,12 +2078,12 @@ class DecideResponse(BaseModel):
     decision: str = Field(description="One of: ACCEPT, RETRY, REPLAN, ROLLBACK.")
     reason: str = Field(description="Human-readable reason for the decision.")
     required_action: str = Field(description="What the agent should do next.")
-    next_boundary: str = Field(
-        default="", description="When the agent should next evaluate."
-    )
+    next_boundary: str = Field(default="", description="When the agent should next evaluate.")
     run_id: str
     step_id: str
     candidate_id: str = Field(default="")
+
+
 class SessionService:
     """Service for BOUND session lifecycle (v1.0)."""
 
@@ -2096,9 +2098,7 @@ class SessionService:
     @staticmethod
     def finish(request: SessionFinishRequest) -> SessionFinishResponse:
         """Finish a session."""
-        return SessionFinishResponse(
-            session_id=request.session_id, status=request.status
-        )
+        return SessionFinishResponse(session_id=request.session_id, status=request.status)
 
     @staticmethod
     def record_plan(request: PlanRecordRequest) -> PlanRecordResponse:
@@ -2107,9 +2107,7 @@ class SessionService:
 
         plan = Plan(plan_id=request.run_id, project_id="")
         content_hash = compute_plan_hash(request.content)
-        version = create_plan_version(
-            plan=plan, content=request.content, source="agent_submitted"
-        )
+        version = create_plan_version(plan=plan, content=request.content, source="agent_submitted")
         return PlanRecordResponse(
             plan_id=plan.plan_id,
             version=version.version,
@@ -2119,7 +2117,7 @@ class SessionService:
     @staticmethod
     def decide(request: DecideRequest) -> DecideResponse:
         """Evaluate a step and return a BOUND decision."""
-        score = (request.acceptance + request.influence - request.risk - request.cost)
+        score = request.acceptance + request.influence - request.risk - request.cost
 
         if score >= 0.7:
             decision = "ACCEPT"

@@ -37,9 +37,7 @@ class TestSupervisedRunResult:
         assert r.replans == 0
 
     def test_full_result(self) -> None:
-        r = SupervisedRunResult(
-            decision="RETRY", run_id="run-1", attempts=3, retries=2, replans=0
-        )
+        r = SupervisedRunResult(decision="RETRY", run_id="run-1", attempts=3, retries=2, replans=0)
         assert r.decision == "RETRY"
         assert r.attempts == 3
         assert r.retries == 2
@@ -49,8 +47,10 @@ class TestSupervisedRunner:
     def test_accept_on_evidence_pass(self) -> None:
         cfg = SupervisedConfig(max_retries=1, max_replans=1)
         runner = SupervisedRunner(cfg)
-        with patch.object(runner, "_invoke_agent", return_value="output"), \
-             patch.object(runner, "_collect_evidence", return_value=True):
+        with (
+            patch.object(runner, "_invoke_agent", return_value="output"),
+            patch.object(runner, "_collect_evidence", return_value=True),
+        ):
             result = runner.run("Test task")
             assert result.decision == "ACCEPT"
             assert result.attempts == 1
@@ -58,8 +58,10 @@ class TestSupervisedRunner:
     def test_retry_on_evidence_fail(self) -> None:
         cfg = SupervisedConfig(max_retries=2, max_replans=1)
         runner = SupervisedRunner(cfg)
-        with patch.object(runner, "_invoke_agent", return_value="output"), \
-             patch.object(runner, "_collect_evidence", side_effect=[False, True]):
+        with (
+            patch.object(runner, "_invoke_agent", return_value="output"),
+            patch.object(runner, "_collect_evidence", side_effect=[False, True]),
+        ):
             result = runner.run("Test task")
             assert result.decision == "ACCEPT"
             assert result.retries == 1
@@ -67,8 +69,10 @@ class TestSupervisedRunner:
     def test_replan_after_retries_exhausted(self) -> None:
         cfg = SupervisedConfig(max_retries=1, max_replans=2)
         runner = SupervisedRunner(cfg)
-        with patch.object(runner, "_invoke_agent", return_value="output"), \
-             patch.object(runner, "_collect_evidence", side_effect=[False, False, True]):
+        with (
+            patch.object(runner, "_invoke_agent", return_value="output"),
+            patch.object(runner, "_collect_evidence", side_effect=[False, False, True]),
+        ):
             result = runner.run("Test task")
             assert result.decision == "ACCEPT"
             assert result.replans >= 1
@@ -76,8 +80,10 @@ class TestSupervisedRunner:
     def test_failed_when_all_budgets_exhausted(self) -> None:
         cfg = SupervisedConfig(max_retries=2, max_replans=2)
         runner = SupervisedRunner(cfg)
-        with patch.object(runner, "_invoke_agent", return_value="output"), \
-             patch.object(runner, "_collect_evidence", return_value=False):
+        with (
+            patch.object(runner, "_invoke_agent", return_value="output"),
+            patch.object(runner, "_collect_evidence", return_value=False),
+        ):
             result = runner.run("Test task")
             assert result.decision == "FAILED"
 

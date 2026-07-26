@@ -93,14 +93,16 @@ class TestLoadProjectConfig:
         bound_dir.mkdir()
         config_file = bound_dir / "config.yaml"
         config_file.write_text(
-            yaml.dump({
-                "agent": {
-                    "name": "claude-code",
-                    "executable": "/usr/local/bin/claude",
-                },
-                "plan": {"path": "tasks/plan.md", "required": True},
-                "workspace": {"mode": "worktree"},
-            }),
+            yaml.dump(
+                {
+                    "agent": {
+                        "name": "claude-code",
+                        "executable": "/usr/local/bin/claude",
+                    },
+                    "plan": {"path": "tasks/plan.md", "required": True},
+                    "workspace": {"mode": "worktree"},
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -153,7 +155,8 @@ class TestLoadProjectConfig:
             "workspace": {"mode": "inplace"},
         }
         (bound_dir / "config.yaml").write_text(
-            yaml.dump(original), encoding="utf-8",
+            yaml.dump(original),
+            encoding="utf-8",
         )
 
         cfg = load_project_config(tmp_path)
@@ -290,9 +293,11 @@ class TestNoCredentialsInConfig:
         bound_dir = tmp_path / ".bound"
         bound_dir.mkdir()
         (bound_dir / "config.yaml").write_text(
-            yaml.dump({
-                "agent": {"name": "cline", "api_key": "sk-should-not-survive"},
-            }),
+            yaml.dump(
+                {
+                    "agent": {"name": "cline", "api_key": "sk-should-not-survive"},
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -306,12 +311,14 @@ class TestNoCredentialsInConfig:
         bound_dir = tmp_path / ".bound"
         bound_dir.mkdir()
         (bound_dir / "config.yaml").write_text(
-            yaml.dump({
-                "agent": {
-                    "name": "cline",
-                    "auth_token": "secret-token-123",
-                },
-            }),
+            yaml.dump(
+                {
+                    "agent": {
+                        "name": "cline",
+                        "auth_token": "secret-token-123",
+                    },
+                }
+            ),
             encoding="utf-8",
         )
 

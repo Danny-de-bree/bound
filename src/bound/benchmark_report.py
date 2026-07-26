@@ -28,7 +28,8 @@ def _render_task_rows(tasks: list) -> str:
         tokens = str(t.tokens_saved) if t.tokens_saved is not None else "n/a"
         runtime = f"{t.runtime_saved:.1f}s" if t.runtime_saved is not None else "n/a"
         tests = (
-            "n/a" if t.tests_pass_at_bound_stop is None
+            "n/a"
+            if t.tests_pass_at_bound_stop is None
             else ("yes" if t.tests_pass_at_bound_stop else "no")
         )
         regr = str(t.regressions_after_accept)
@@ -56,32 +57,37 @@ def _render_health_section(health: ControllerHealth | None) -> str:
         return f"{v * 100:.1f}%"
 
     grade_color = {
-        "A": "#2e7d32", "B": "#558b2f", "C": "#f9a825",
-        "D": "#e65100", "F": "#c62828",
+        "A": "#2e7d32",
+        "B": "#558b2f",
+        "C": "#f9a825",
+        "D": "#e65100",
+        "F": "#c62828",
     }.get(health.grade, "#666")
 
     parts: list[str] = []
     parts.append('<div class="health-card">')
     parts.append(
-        f'<h3>Controller Health: '
+        f"<h3>Controller Health: "
         f'<span style="color:{grade_color};font-size:2em;">{health.grade}</span>'
-        f'</h3>'
+        f"</h3>"
     )
-    parts.append('<table>')
-    parts.append('<tr><th>Metric</th><th>Value</th></tr>')
-    parts.append(f'<tr><td>Total Decisions</td><td>{health.total_decisions}</td></tr>')
-    parts.append(f'<tr><td>Correct</td><td>{health.correct_decisions}</td></tr>')
-    parts.append(f'<tr><td>Overall Accuracy</td><td>{_pct(health.overall_accuracy)}</td></tr>')
-    parts.append(f'<tr><td>False ACCEPT Rate</td><td>{_pct(health.false_accept_rate)}</td></tr>')
-    parts.append(f'<tr><td>False RETRY Rate</td><td>{_pct(health.false_retry_rate)}</td></tr>')
-    parts.append(f'<tr><td>False REPLAN Rate</td><td>{_pct(health.false_replan_rate)}</td></tr>')
-    parts.append(f'<tr><td>False ROLLBACK Rate</td><td>{_pct(health.false_rollback_rate)}</td></tr>')
+    parts.append("<table>")
+    parts.append("<tr><th>Metric</th><th>Value</th></tr>")
+    parts.append(f"<tr><td>Total Decisions</td><td>{health.total_decisions}</td></tr>")
+    parts.append(f"<tr><td>Correct</td><td>{health.correct_decisions}</td></tr>")
+    parts.append(f"<tr><td>Overall Accuracy</td><td>{_pct(health.overall_accuracy)}</td></tr>")
+    parts.append(f"<tr><td>False ACCEPT Rate</td><td>{_pct(health.false_accept_rate)}</td></tr>")
+    parts.append(f"<tr><td>False RETRY Rate</td><td>{_pct(health.false_retry_rate)}</td></tr>")
+    parts.append(f"<tr><td>False REPLAN Rate</td><td>{_pct(health.false_replan_rate)}</td></tr>")
+    parts.append(
+        f"<tr><td>False ROLLBACK Rate</td><td>{_pct(health.false_rollback_rate)}</td></tr>"
+    )
     replay = "&#x2705; Passed" if health.deterministic_replay_passed else "&#x274C; Failed"
     consist = "&#x2705; Passed" if health.policy_consistency_passed else "&#x274C; Failed"
-    parts.append(f'<tr><td>Deterministic Replay</td><td>{replay}</td></tr>')
-    parts.append(f'<tr><td>Policy Consistency</td><td>{consist}</td></tr>')
-    parts.append('</table>')
-    parts.append('</div>')
+    parts.append(f"<tr><td>Deterministic Replay</td><td>{replay}</td></tr>")
+    parts.append(f"<tr><td>Policy Consistency</td><td>{consist}</td></tr>")
+    parts.append("</table>")
+    parts.append("</div>")
     return "\n".join(parts)
 
 
@@ -93,7 +99,7 @@ def _render_html_template(
     """Render the full HTML document template."""
     a = run.aggregate
     generated = datetime.now(UTC).isoformat()
-    return f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -212,7 +218,7 @@ def _render_html_template(
 </div>
 
 </body>
-</html>'''
+</html>"""
 
 
 def render_html(

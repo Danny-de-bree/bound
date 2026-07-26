@@ -38,9 +38,7 @@ class TestPlan:
 
     def test_plan_creation_with_source(self) -> None:
         """Plan with explicit source_path."""
-        plan = Plan(
-            plan_id="plan-xyz", project_id="/proj", source_path="plan.md"
-        )
+        plan = Plan(plan_id="plan-xyz", project_id="/proj", source_path="plan.md")
         assert plan.source_path == "plan.md"
 
     def test_plan_auto_datetime(self) -> None:
@@ -96,25 +94,19 @@ class TestPlanVersion:
 
     def test_version_is_frozen(self) -> None:
         """PlanVersion dataclass is immutable."""
-        pv = PlanVersion(
-            plan_id="p1", version=1, content_hash="abc", content="# P\n"
-        )
+        pv = PlanVersion(plan_id="p1", version=1, content_hash="abc", content="# P\n")
         with pytest.raises(ValidationError):
             pv.version = 2  # type: ignore[misc]
 
     def test_version_auto_datetime(self) -> None:
         """PlanVersion.created_at is auto-populated."""
-        pv = PlanVersion(
-            plan_id="p1", version=1, content_hash="abc", content="# P\n"
-        )
+        pv = PlanVersion(plan_id="p1", version=1, content_hash="abc", content="# P\n")
         assert isinstance(pv.created_at, datetime)
         assert pv.created_at.tzinfo == UTC
 
     def test_version_parsed_steps_default(self) -> None:
         """parsed_steps defaults to None."""
-        pv = PlanVersion(
-            plan_id="p1", version=1, content_hash="abc", content="# P\n"
-        )
+        pv = PlanVersion(plan_id="p1", version=1, content_hash="abc", content="# P\n")
         assert pv.parsed_steps is None
 
     def test_version_triggering_decision_id(self) -> None:
@@ -284,9 +276,7 @@ class TestCreatePlanVersion:
         """Second version increments from parent."""
         plan = Plan(plan_id="plan-1", project_id="/proj")
         parent = create_plan_version(plan=plan, content="# V1", source="file")
-        child = create_plan_version(
-            plan=plan, content="# V2", source="replan", parent=parent
-        )
+        child = create_plan_version(plan=plan, content="# V2", source="replan", parent=parent)
         assert child.version == 2
         assert child.parent_version == 1
         assert child.source == "replan"
@@ -314,17 +304,13 @@ class TestCreatePlanVersion:
     def test_reason_propagated(self) -> None:
         """Reason is stored on the version."""
         plan = Plan(plan_id="p1", project_id="/p")
-        pv = create_plan_version(
-            plan, "# P", "replan", reason="New strategy needed"
-        )
+        pv = create_plan_version(plan, "# P", "replan", reason="New strategy needed")
         assert pv.reason == "New strategy needed"
 
     def test_triggering_decision_propagated(self) -> None:
         """triggering_decision_id is stored."""
         plan = Plan(plan_id="p1", project_id="/p")
-        pv = create_plan_version(
-            plan, "# P", "replan", triggering_decision_id="dec-42"
-        )
+        pv = create_plan_version(plan, "# P", "replan", triggering_decision_id="dec-42")
         assert pv.triggering_decision_id == "dec-42"
 
     def test_plan_id_matches(self) -> None:
@@ -344,9 +330,7 @@ class TestFindOrCreatePlan:
 
     def test_creates_plan_with_source(self) -> None:
         """Creates a Plan with source_path."""
-        plan = find_or_create_plan(
-            project_id="/proj", source_path="plan.md", content="# Plan"
-        )
+        plan = find_or_create_plan(project_id="/proj", source_path="plan.md", content="# Plan")
         assert plan.project_id == "/proj"
         assert plan.source_path == "plan.md"
         assert plan.plan_id.startswith("plan-")
@@ -440,15 +424,11 @@ class TestExtractFrontMatter:
 
     def test_unclosed_front_matter_returns_empty(self) -> None:
         """Returns empty dict when opening --- has no closing ---."""
-        assert (
-            extract_front_matter("---\nbound:\n  plan_id: x\n# No close") == {}
-        )
+        assert extract_front_matter("---\nbound:\n  plan_id: x\n# No close") == {}
 
     def test_invalid_yaml_returns_empty(self) -> None:
         """Returns empty dict for unparseable YAML."""
-        assert (
-            extract_front_matter("---\n:invalid: yaml: !!bad\n---\n# Plan") == {}
-        )
+        assert extract_front_matter("---\n:invalid: yaml: !!bad\n---\n# Plan") == {}
 
     def test_front_matter_with_leading_whitespace(self) -> None:
         """Content with leading whitespace before --- still parses."""

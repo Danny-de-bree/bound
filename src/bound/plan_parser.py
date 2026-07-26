@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from bound.ui_models import PlanStep, PlanStepStatus
+from bound.ui_models import PlanStep
 
 logger = logging.getLogger("bound.plan_parser")
 
@@ -134,10 +134,15 @@ def _parse_steps(raw: str) -> list[PlanStep]:
                 ordinal += 1
                 step_id = _derive_step_id(title, ordinal)
                 current_phase_id = step_id
-                steps.append(PlanStep(
-                    step_id=step_id, title=title, ordinal=ordinal,
-                    depth=0, source_line=idx,
-                ))
+                steps.append(
+                    PlanStep(
+                        step_id=step_id,
+                        title=title,
+                        ordinal=ordinal,
+                        depth=0,
+                        source_line=idx,
+                    )
+                )
             continue
 
         # ### heading = sub-step
@@ -146,11 +151,16 @@ def _parse_steps(raw: str) -> list[PlanStep]:
             if not in_acceptance_section:
                 ordinal += 1
                 step_id = _derive_step_id(title, ordinal)
-                steps.append(PlanStep(
-                    step_id=step_id, title=title, ordinal=ordinal,
-                    depth=1, source_line=idx,
-                    parent_step_id=current_phase_id,
-                ))
+                steps.append(
+                    PlanStep(
+                        step_id=step_id,
+                        title=title,
+                        ordinal=ordinal,
+                        depth=1,
+                        source_line=idx,
+                        parent_step_id=current_phase_id,
+                    )
+                )
             continue
 
         # # heading = goal, skip
@@ -178,7 +188,13 @@ def _parse_steps(raw: str) -> list[PlanStep]:
 
         # Plain list item → acceptance check
         list_match = _LIST_ITEM_RE.match(stripped)
-        if list_match and not in_acceptance_section and not checkbox_match and steps and current_phase_id:
+        if (
+            list_match
+            and not in_acceptance_section
+            and not checkbox_match
+            and steps
+            and current_phase_id
+        ):
             title = list_match.group(1).strip()
             steps[-1].acceptance_checks.append(f"☐ {title}")
             continue
@@ -281,15 +297,17 @@ def parse_plan_steps(content: str) -> list[dict]:
             ordinal += 1
             step_id = _derive_step_id(title, ordinal)
             current_phase = title
-            steps.append({
-                "step_id": step_id,
-                "title": title,
-                "ordinal": ordinal,
-                "depth": 0,
-                "status": "pending",
-                "phase": None,
-                "source_line": idx,
-            })
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "title": title,
+                    "ordinal": ordinal,
+                    "depth": 0,
+                    "status": "pending",
+                    "phase": None,
+                    "source_line": idx,
+                }
+            )
             continue
 
         # ### heading = sub-step
@@ -297,15 +315,17 @@ def parse_plan_steps(content: str) -> list[dict]:
             title = heading_match.group(2).strip()
             ordinal += 1
             step_id = _derive_step_id(title, ordinal)
-            steps.append({
-                "step_id": step_id,
-                "title": title,
-                "ordinal": ordinal,
-                "depth": 1,
-                "status": "pending",
-                "phase": current_phase,
-                "source_line": idx,
-            })
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "title": title,
+                    "ordinal": ordinal,
+                    "depth": 1,
+                    "status": "pending",
+                    "phase": current_phase,
+                    "source_line": idx,
+                }
+            )
             continue
 
         # Checkbox items: - [ ] / - [x]  → acceptance check

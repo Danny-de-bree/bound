@@ -90,8 +90,22 @@ def _make_result(
 def test_from_experiment_results_basic() -> None:
     """Builds a BenchmarkRun with correct aggregate metrics."""
     results = [
-        _make_result("task-a", accepted=True, steps_saved=2, tool_calls_saved=5, tokens_saved=1000, runtime_saved=10.0),
-        _make_result("task-b", accepted=True, steps_saved=3, tool_calls_saved=8, tokens_saved=2000, runtime_saved=15.0),
+        _make_result(
+            "task-a",
+            accepted=True,
+            steps_saved=2,
+            tool_calls_saved=5,
+            tokens_saved=1000,
+            runtime_saved=10.0,
+        ),
+        _make_result(
+            "task-b",
+            accepted=True,
+            steps_saved=3,
+            tool_calls_saved=8,
+            tokens_saved=2000,
+            runtime_saved=15.0,
+        ),
     ]
     run = BenchmarkRun.from_experiment_results("test-suite", results)
 
@@ -111,7 +125,14 @@ def test_from_experiment_results_mixed_acceptance() -> None:
     """Some tasks accepted, some not — acceptance rate is fractional."""
     results = [
         _make_result("task-a", accepted=True),
-        _make_result("task-b", accepted=False, steps_saved=None, tool_calls_saved=None, tokens_saved=None, runtime_saved=None),
+        _make_result(
+            "task-b",
+            accepted=False,
+            steps_saved=None,
+            tool_calls_saved=None,
+            tokens_saved=None,
+            runtime_saved=None,
+        ),
     ]
     run = BenchmarkRun.from_experiment_results("mixed", results)
 

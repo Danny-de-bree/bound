@@ -149,8 +149,7 @@ class TestAcceptanceCriteria:
             assert "All tests pass" in checks[1] or any("All tests pass" in c for c in checks)
 
     def test_criteria_header_variants(self) -> None:
-        for header in ("## Acceptance", "## Criteria", "## Checks",
-                        "## Acceptance Criteria"):
+        for header in ("## Acceptance", "## Criteria", "## Checks", "## Acceptance Criteria"):
             with tempfile.TemporaryDirectory() as td:
                 content = f"# G\n\n## Phase\n- [ ] T\n\n{header}\n- Check\n"
                 _write_plan(Path(td), content)

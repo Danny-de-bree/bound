@@ -92,10 +92,12 @@ def test_parse_assistant_message() -> None:
     """Assistant messages map to step.completed events."""
     adapter = ClaudeCodeAdapter()
     adapter._candidate_id = "cand-001"
-    line = json.dumps({
-        "type": "assistant",
-        "message": {"content": [{"type": "text", "text": "I'll write tests."}]},
-    })
+    line = json.dumps(
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "I'll write tests."}]},
+        }
+    )
     event = adapter._parse_claude_line(line)
     assert event is not None
     assert event.type == "step.completed"
@@ -108,11 +110,13 @@ def test_parse_tool_use() -> None:
     """Tool use events map to evidence.collected events."""
     adapter = ClaudeCodeAdapter()
     adapter._candidate_id = "cand-001"
-    line = json.dumps({
-        "type": "tool_use",
-        "tool": "execute_command",
-        "input": {"command": "pytest"},
-    })
+    line = json.dumps(
+        {
+            "type": "tool_use",
+            "tool": "execute_command",
+            "input": {"command": "pytest"},
+        }
+    )
     event = adapter._parse_claude_line(line)
     assert event is not None
     assert event.type == "evidence.collected"
@@ -125,11 +129,13 @@ def test_parse_tool_result() -> None:
     """Tool result events map to evidence.collected events."""
     adapter = ClaudeCodeAdapter()
     adapter._candidate_id = "cand-001"
-    line = json.dumps({
-        "type": "tool_result",
-        "tool": "execute_command",
-        "output": "tests passed",
-    })
+    line = json.dumps(
+        {
+            "type": "tool_result",
+            "tool": "execute_command",
+            "output": "tests passed",
+        }
+    )
     event = adapter._parse_claude_line(line)
     assert event is not None
     assert event.type == "evidence.collected"
@@ -141,10 +147,12 @@ def test_parse_user_message() -> None:
     """User messages map to evidence.collected events."""
     adapter = ClaudeCodeAdapter()
     adapter._candidate_id = "cand-001"
-    line = json.dumps({
-        "type": "user",
-        "message": "What should I do next?",
-    })
+    line = json.dumps(
+        {
+            "type": "user",
+            "message": "What should I do next?",
+        }
+    )
     event = adapter._parse_claude_line(line)
     assert event is not None
     assert event.type == "evidence.collected"

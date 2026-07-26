@@ -199,4 +199,5 @@ def test_cline_mcp_config_rel_path() -> None:
 def test_cline_adapter_is_not_generic_process_adapter() -> None:
     """ClineMCPAdapter does not extend GenericProcessAdapter."""
     from bound.adapters.generic import GenericProcessAdapter
+
     assert not issubclass(ClineMCPAdapter, GenericProcessAdapter)

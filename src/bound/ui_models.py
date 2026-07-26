@@ -80,6 +80,8 @@ class PlanDivergenceType(StrEnum):
     FAILED = "failed"
     SKIPPED = "skipped"
     ROLLBACK = "rollback"
+
+
 # =============================================================================
 # Plan step view model
 # =============================================================================
@@ -130,6 +132,8 @@ class PlanStep(BaseModel):
     decision: str | None = None
     attempt_count: int = Field(default=0, ge=0)
     acceptance_checks: list[str] = Field(default_factory=list)
+
+
 # =============================================================================
 # Plan progress
 # =============================================================================
@@ -212,6 +216,8 @@ class PlanVsReality(BaseModel):
     original_steps: list[PlanStep] = Field(default_factory=list)
     current_steps: list[PlanStep] = Field(default_factory=list)
     divergences: list[PlanDivergence] = Field(default_factory=list)
+
+
 # =============================================================================
 # Home screen models
 # =============================================================================

@@ -87,6 +87,7 @@ def default_redactor(text: str) -> str:
     """
     return SECRET_PATTERN.sub(lambda m: f"{m.group(1)}=***REDACTED***", text)
 
+
 def _truncate_text(text: str, cap: int | None) -> tuple[str, bool]:
     """Truncate *text* to at most *cap* UTF-8 bytes.
 

@@ -42,6 +42,7 @@ __all__ = [
 
 logger = logging.getLogger("bound.lineage_api")
 
+
 def next_action_for(decision: Decision | str) -> NextAction:
     """Map a BOUND decision to its framework-neutral control action.
 

@@ -398,9 +398,7 @@ def discover_plan(
                     source_path=str(candidate),
                     content=content,
                 )
-                version = create_plan_version(
-                    plan=plan, content=content, source="file"
-                )
+                version = create_plan_version(plan=plan, content=content, source="file")
                 return plan, version, True
 
     # 3. implicit fallback
@@ -409,9 +407,7 @@ def discover_plan(
         source_path=None,
         content=_IMPLICIT_PLAN_CONTENT,
     )
-    version = create_plan_version(
-        plan=plan, content=_IMPLICIT_PLAN_CONTENT, source="implicit"
-    )
+    version = create_plan_version(plan=plan, content=_IMPLICIT_PLAN_CONTENT, source="implicit")
     return plan, version, True
 
 

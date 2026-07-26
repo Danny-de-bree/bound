@@ -116,9 +116,7 @@ class ClaudeCodeAdapter(GenericProcessAdapter):
         working_dir = self.config.working_dir or "."
 
         if not Path(working_dir).is_dir():
-            raise RuntimeError(
-                f"Working directory does not exist: {working_dir}"
-            )
+            raise RuntimeError(f"Working directory does not exist: {working_dir}")
 
         try:
             self._process = subprocess.Popen(
@@ -132,8 +130,7 @@ class ClaudeCodeAdapter(GenericProcessAdapter):
             )
         except FileNotFoundError as exc:
             raise RuntimeError(
-                f"Claude Code CLI not found: {cmd[0]}. "
-                f"Is @anthropic-ai/claude-code installed?"
+                f"Claude Code CLI not found: {cmd[0]}. Is @anthropic-ai/claude-code installed?"
             ) from exc
 
         self._running = True
@@ -257,8 +254,7 @@ class ClaudeCodeAdapter(GenericProcessAdapter):
 
         if cmd_type in ("retry", "replan", "rollback"):
             logger.warning(
-                "Claude Code does not support '%s' via stdin. "
-                "Use adapter signals instead.",
+                "Claude Code does not support '%s' via stdin. Use adapter signals instead.",
                 cmd_type,
             )
 

@@ -214,17 +214,19 @@ def load_project_config(project_dir: Path | None = None) -> ProjectConfig:
 # Helpers
 # ---------------------------------------------------------------------------
 
-_CREDENTIAL_KEYS: frozenset[str] = frozenset({
-    "api_key",
-    "api_secret",
-    "token",
-    "password",
-    "secret",
-    "credential",
-    "auth_token",
-    "access_key",
-    "private_key",
-})
+_CREDENTIAL_KEYS: frozenset[str] = frozenset(
+    {
+        "api_key",
+        "api_secret",
+        "token",
+        "password",
+        "secret",
+        "credential",
+        "auth_token",
+        "access_key",
+        "private_key",
+    }
+)
 
 
 def _scrub_credentials(data: dict) -> None:

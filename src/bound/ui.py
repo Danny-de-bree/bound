@@ -806,6 +806,7 @@ header .brand svg{flex-shrink:0}
 }
 """
 
+
 def _evidence_row(
     check_id: str | None,
     collector: str | None,
@@ -819,10 +820,14 @@ def _evidence_row(
     pcolor = PROVENANCE_COLORS.get(prov, "#9e9e9e")
     label = check_id or collector or "?"
     trigger_svg = (
-        '<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle">'
-        '<path d="M8.22 1.754a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368L8.22 1.754z"'
-        ' fill="#d29922"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#0d1117">!</text></svg>'
-    ) if is_trigger else ""
+        (
+            '<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle">'
+            '<path d="M8.22 1.754a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368L8.22 1.754z"'
+            ' fill="#d29922"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#0d1117">!</text></svg>'
+        )
+        if is_trigger
+        else ""
+    )
     return (
         f"<div class='evidence-row'>"
         f"<span class='badge' style='background:{pcolor}'"
@@ -851,8 +856,6 @@ def _decision_badge(decision: str) -> str:
     )
 
 
-
-
 def _derive_plan_step_status(
     plan_step: dict,
     runtime_steps: list,
@@ -876,6 +879,7 @@ def _derive_plan_step_status(
 
     # Derive a normalized phase key from the plan title (e.g. "phase 0 — scope" → "phase-000")
     import re as _re3
+
     _phase_match = _re3.match(r"phase\s*(\d+)", plan_title)
     plan_phase_key = f"phase-{int(_phase_match.group(1)):03d}" if _phase_match else None
 
@@ -955,8 +959,7 @@ def _render_plan_section(
     )
     if plan_source:
         parts.append(
-            f"<span style='font-size:0.65rem;color:#484f58'>"
-            f"{html_escape(plan_source)}</span>"
+            f"<span style='font-size:0.65rem;color:#484f58'>{html_escape(plan_source)}</span>"
         )
     parts.append("</div>")
 
@@ -1146,8 +1149,7 @@ def _render_plan_tab(
     )
     if plan_source:
         parts.append(
-            f"<code style='font-size:0.65rem;color:#484f58'>"
-            f"{html_escape(plan_source)}</code>"
+            f"<code style='font-size:0.65rem;color:#484f58'>{html_escape(plan_source)}</code>"
         )
     parts.append("</div>")
 
@@ -1168,15 +1170,13 @@ def _render_plan_tab(
     for step in plan_steps:
         if step.get("depth", 0) == 0:
             if current_phase is not None:
-                _render_plan_tab_phase(parts, current_phase, phase_steps,
-                                       runtime_steps)
+                _render_plan_tab_phase(parts, current_phase, phase_steps, runtime_steps)
             current_phase = step
             phase_steps = []
         else:
             phase_steps.append(step)
     if current_phase is not None:
-        _render_plan_tab_phase(parts, current_phase, phase_steps,
-                               runtime_steps)
+        _render_plan_tab_phase(parts, current_phase, phase_steps, runtime_steps)
 
     # Legend
     parts.append(
@@ -1316,6 +1316,7 @@ def _render_plan_tab_phase(
         )
     parts.append("</div>")
 
+
 def _render_overview_page(
     summaries: list[RunSummary],
     store_path: str,
@@ -1359,7 +1360,7 @@ def _render_overview_page(
         '<circle cx="5" cy="4" r="2.5" stroke="#58a6ff" stroke-width="1.5"/>'
         '<circle cx="11" cy="12" r="2.5" stroke="#8b5cf6" stroke-width="1.5"/>'
         '<path d="M7 5.5L9.5 10.5" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/>'
-        '</svg>'
+        "</svg>"
     )
     empty_icon = (
         '<svg width="48" height="48" viewBox="0 0 16 16">'
@@ -1377,7 +1378,8 @@ def _render_overview_page(
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         "<meta http-equiv='refresh' content='15'>",
         "<title>BOUND \u00b7 Dashboard</title>",
-        "<style>", _CSS,
+        "<style>",
+        _CSS,
         "</style></head><body>",
         "<header>",
         f"<div class='brand'>{bound_icon}"
@@ -1385,8 +1387,7 @@ def _render_overview_page(
         "<div class='sub'>Execution Dashboard \u00b7 v0.9.1</div></div></div>",
         "<div class='sub' style='text-align:right'>",
         f"{html_escape(store_path)}<br>{total} run{'' if total == 1 else 's'}",
-        "<span id='sse-ind' class='sse-indicator'>"
-        "<span class='sse-dot'></span>live</span>",
+        "<span id='sse-ind' class='sse-indicator'><span class='sse-dot'></span>live</span>",
         "</div></header>",
         "<div class='container'>",
     ]
@@ -1404,10 +1405,18 @@ def _render_overview_page(
     else:
         # Stats bar
         parts.append("<div class='stats-bar'>")
-        parts.append(f"<div class='stat-card total'><div class='stat-value'>{total}</div><div class='stat-label'>Total Runs</div></div>")
-        parts.append(f"<div class='stat-card active'><div class='stat-value'>{active_count}</div><div class='stat-label'>Active</div></div>")
-        parts.append(f"<div class='stat-card completed'><div class='stat-value'>{completed}</div><div class='stat-label'>Completed</div></div>")
-        parts.append(f"<div class='stat-card failed'><div class='stat-value'>{failed}</div><div class='stat-label'>Failed / Int.</div></div>")
+        parts.append(
+            f"<div class='stat-card total'><div class='stat-value'>{total}</div><div class='stat-label'>Total Runs</div></div>"
+        )
+        parts.append(
+            f"<div class='stat-card active'><div class='stat-value'>{active_count}</div><div class='stat-label'>Active</div></div>"
+        )
+        parts.append(
+            f"<div class='stat-card completed'><div class='stat-value'>{completed}</div><div class='stat-label'>Completed</div></div>"
+        )
+        parts.append(
+            f"<div class='stat-card failed'><div class='stat-value'>{failed}</div><div class='stat-label'>Failed / Int.</div></div>"
+        )
         parts.append("</div>")
 
         # --- Filter bar ---
@@ -1423,8 +1432,7 @@ def _render_overview_page(
             escaped_q = html_escape(search_q).replace("'", "&#39;") if search_q else ""
             q_param = f"&amp;q={escaped_q}" if search_q else ""
             parts.append(
-                f"<a href='/?filter={val}{q_param}'"
-                f" class='filter-btn{active_cls}'>{label}</a>"
+                f"<a href='/?filter={val}{q_param}' class='filter-btn{active_cls}'>{label}</a>"
             )
         parts.append(
             f"<form method='get' action='/' class='search-form'>"
@@ -1464,10 +1472,18 @@ def _render_overview_page(
                     if plan_step_text:
                         step_info = plan_step_text
                     else:
-                        candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
-                        step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
+                        candidate_info = (
+                            f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
+                        )
+                        step_info = (
+                            f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
+                        )
                     # Decision class for colored badge
-                    dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
+                    dec_css = (
+                        decision.lower()
+                        if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK")
+                        else ""
+                    )
                     dec_class = f" decision-{dec_css}" if dec_css else ""
                     run_id_short = html_escape(_short_id(s.run_id, 20))
 
@@ -1519,7 +1535,11 @@ def _render_overview_page(
                     dur = "running"
                 else:
                     dur = "—"
-                dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
+                dec_css = (
+                    decision.lower()
+                    if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK")
+                    else ""
+                )
                 dec_class = f" decision-{dec_css}" if dec_css else ""
                 parts.append(
                     f"<tr>"
@@ -1541,7 +1561,9 @@ def _render_overview_page(
         "</div>"
     )
 
-    parts.append("<div class='page-footer'>BOUND v0.9.1 \u00b7 local read-only view. No data leaves your machine.</div>")
+    parts.append(
+        "<div class='page-footer'>BOUND v0.9.1 \u00b7 local read-only view. No data leaves your machine.</div>"
+    )
     parts.append("</div>")
 
     # SSE script for connection status
@@ -1565,7 +1587,6 @@ def _render_overview_page(
 
     parts.append("</body></html>")
     return "\n".join(parts)
-
 
 
 def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str:
@@ -1610,7 +1631,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
 
     # Decision reason text
     reason_text = ""
-    if latest_eval and hasattr(latest_eval, 'reason_code') and latest_eval.reason_code:
+    if latest_eval and hasattr(latest_eval, "reason_code") and latest_eval.reason_code:
         rc = sv(latest_eval.reason_code)
         reason_map = {
             "ALL_CHECKS_PASSED": "All checks passed successfully",
@@ -1624,7 +1645,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
 
     # Next action
     next_action = ""
-    if latest_outcome and hasattr(latest_outcome, 'next_action') and latest_outcome.next_action:
+    if latest_outcome and hasattr(latest_outcome, "next_action") and latest_outcome.next_action:
         next_action = sv(latest_outcome.next_action)
 
     # Plan progress from steps
@@ -1687,23 +1708,23 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
         '<svg width="20" height="20" viewBox="0 0 16 16">'
         '<circle cx="8" cy="8" r="6" stroke="#30363d" stroke-width="2" fill="none"/>'
         '<path d="M8 2a6 6 0 0 1 6 6" stroke="#58a6ff" stroke-width="2" fill="none" stroke-linecap="round"/>'
-        '</svg>'
+        "</svg>"
     )
 
     # Compact recent activity (last 5 events)
     activity_rows: list[str] = []
     for ev in log.events[-5:]:
-        ev_type = getattr(ev, 'event', 'unknown')
-        ts = getattr(ev, 'timestamp', None)
+        ev_type = getattr(ev, "event", "unknown")
+        ts = getattr(ev, "timestamp", None)
         time_str = ts.strftime("%H:%M:%S") if ts else "--:--:--"
         kind = ev_type.replace("_", " ").replace("event", "").strip()[:20]
         # Extract a short summary
         summary = ""
-        if hasattr(ev, 'description'):
+        if hasattr(ev, "description"):
             summary = str(ev.description)[:80]
-        elif hasattr(ev, 'decision'):
+        elif hasattr(ev, "decision"):
             summary = str(ev.decision)[:80]
-        elif hasattr(ev, 'task'):
+        elif hasattr(ev, "task"):
             summary = str(ev.task)[:80]
         activity_rows.append(
             f"<div class='activity-item'>"
@@ -1716,12 +1737,12 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     # --- Timeline rows for Replay tab ---
     timeline_rows: list[str] = []
     for ev in log.events:
-        ev_type = getattr(ev, 'event', 'unknown')
-        ts = getattr(ev, 'timestamp', None)
+        ev_type = getattr(ev, "event", "unknown")
+        ts = getattr(ev, "timestamp", None)
         time_str = ts.strftime("%H:%M:%S") if ts else "--:--:--"
         kind = ev_type.replace("_", " ").replace("event", "").strip()[:25]
         detail = ""
-        for attr in ('description', 'decision', 'task', 'step_id', 'reason_code'):
+        for attr in ("description", "decision", "task", "step_id", "reason_code"):
             val = getattr(ev, attr, None)
             if val:
                 detail = str(val)[:100]
@@ -1759,16 +1780,16 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     policy_ver = html_escape(str(cfg.policy_version)) if cfg and cfg.policy_version else "&mdash;"
     policy_hash = html_escape(str(cfg.policy_hash)[:20]) if cfg and cfg.policy_hash else "&mdash;"
     if cfg:
-        ws = getattr(cfg, 'workspace', None)
+        ws = getattr(cfg, "workspace", None)
         workspace = html_escape(str(ws)) if ws else "&mdash;"
     else:
         workspace = "&mdash;"
 
     checkpoint_ids: list[str] = []
     for ev in log.events:
-        ev_event = getattr(ev, 'event', '')
-        if ev_event and 'checkpoint' in str(ev_event).lower():
-            checkpoint_ids.append(getattr(ev, 'event_id', '?'))
+        ev_event = getattr(ev, "event", "")
+        if ev_event and "checkpoint" in str(ev_event).lower():
+            checkpoint_ids.append(getattr(ev, "event_id", "?"))
     if not checkpoint_ids:
         checkpoint_ids.append("none recorded")
 
@@ -1786,7 +1807,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
         '<circle cx="5" cy="4" r="2.5" stroke="#58a6ff" stroke-width="1.5"/>'
         '<circle cx="11" cy="12" r="2.5" stroke="#8b5cf6" stroke-width="1.5"/>'
         '<path d="M7 5.5L9.5 10.5" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/>'
-        '</svg>'
+        "</svg>"
     )
 
     parts: list[str] = [
@@ -1794,7 +1815,8 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
         "<html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         f"<title>BOUND run {html_escape(_short_id(run.run_id, 20))}</title>",
-        "<style>", _CSS,
+        "<style>",
+        _CSS,
         "</style>",
         "</head><body>",
         "<header>",
@@ -1850,15 +1872,14 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
 
     # -- Plan Section (from plan.md snapshot) --
     if plan_steps:
-        _render_plan_section(parts, plan_steps, plan_goal, plan_source,
-                             steps, is_active)
+        _render_plan_section(parts, plan_steps, plan_goal, plan_source, steps, is_active)
 
     # Plan Progress circles (from runtime step events)
     if steps and not plan_steps:
         parts.append("<div class='plan-progress'>")
         for i, step in enumerate(steps):
-            desc = html_escape((step.description or f"Step {i+1}")[:20])
-            status_v = step.status.value if hasattr(step.status, 'value') else str(step.status)
+            desc = html_escape((step.description or f"Step {i + 1}")[:20])
+            status_v = step.status.value if hasattr(step.status, "value") else str(step.status)
             circle_class = ""
             if status_v == "completed":
                 circle_class = " completed"
@@ -1870,9 +1891,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
 
             parts.append("<div class='plan-step'>")
             parts.append(
-                f"<div class='plan-step-circle{circle_class}'"
-                f" title='{desc}'>"
-                f"{i + 1}</div>"
+                f"<div class='plan-step-circle{circle_class}' title='{desc}'>{i + 1}</div>"
             )
             parts.append(f"<span class='plan-step-label{label_class}'>{desc}</span>")
             parts.append("</div>")
@@ -1884,8 +1903,8 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
         # Runtime steps exist but plan snapshot doesn't — show compact
         parts.append("<div class='plan-progress'>")
         for i, step in enumerate(steps[:8]):
-            desc = html_escape((step.description or f"Step {i+1}")[:20])
-            status_v = step.status.value if hasattr(step.status, 'value') else str(step.status)
+            desc = html_escape((step.description or f"Step {i + 1}")[:20])
+            status_v = step.status.value if hasattr(step.status, "value") else str(step.status)
             circle_class = ""
             if status_v == "completed":
                 circle_class = " completed"
@@ -1896,9 +1915,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
             label_class = " active" if i == current_step_idx else ""
             parts.append("<div class='plan-step'>")
             parts.append(
-                f"<div class='plan-step-circle{circle_class}'"
-                f" title='{desc}'>"
-                f"{i + 1}</div>"
+                f"<div class='plan-step-circle{circle_class}' title='{desc}'>{i + 1}</div>"
             )
             parts.append(f"<span class='plan-step-label{label_class}'>{desc}</span>")
             parts.append("</div>")
@@ -1920,7 +1937,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     parts.append(f"<div class='action-desc'>{current_action_text}</div>")
     if steps and current_step_idx >= 0:
         current_step = steps[current_step_idx]
-        step_status_str = sv(current_step.status) if hasattr(current_step, 'status') else "unknown"
+        step_status_str = sv(current_step.status) if hasattr(current_step, "status") else "unknown"
         parts.append(
             f"<div class='action-step'>"
             f"Status: {step_status_str} \u00b7 "
@@ -1951,7 +1968,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
                 f"</div>"
             )
         # Score info if available
-        if latest_eval and hasattr(latest_eval, 'score') and latest_eval.score is not None:
+        if latest_eval and hasattr(latest_eval, "score") and latest_eval.score is not None:
             score_pct = f"{float(latest_eval.score) * 100:.0f}%"
             parts.append(
                 f"<div style='margin-top:4px;font-size:0.72rem;color:#8b949e'>"
@@ -2003,34 +2020,44 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     # Plan vs Reality diff already rendered above when plan_snapshot exists.
     # For backward compat: show replan section when no plan_snapshot but replan detected
     has_replan = not plan_steps and any(
-        getattr(ev, 'decision', '') == 'REPLAN' or 'replan' in str(getattr(ev, 'event', '')).lower()
+        getattr(ev, "decision", "") == "REPLAN" or "replan" in str(getattr(ev, "event", "")).lower()
         for ev in log.events
     )
     if has_replan:
-        parts.append("<div class='replan-section' style='margin-top:16px;background:#161b22;"
-                     "border:1px solid #30363d;border-radius:8px;padding:14px 16px'>")
-        parts.append("<h3 style='font-size:0.82rem;color:#8b5cf6;margin-bottom:8px'>"
-                     f"{_icon('decision_replan', w=14, h=14)} Replan Detected</h3>")
-        parts.append("<p style='font-size:0.75rem;color:#8b949e;margin-bottom:10px'>"
-                     "The original plan was modified during execution. "
-                     "See the Replay tab for full event timeline.</p>")
+        parts.append(
+            "<div class='replan-section' style='margin-top:16px;background:#161b22;"
+            "border:1px solid #30363d;border-radius:8px;padding:14px 16px'>"
+        )
+        parts.append(
+            "<h3 style='font-size:0.82rem;color:#8b5cf6;margin-bottom:8px'>"
+            f"{_icon('decision_replan', w=14, h=14)} Replan Detected</h3>"
+        )
+        parts.append(
+            "<p style='font-size:0.75rem;color:#8b949e;margin-bottom:10px'>"
+            "The original plan was modified during execution. "
+            "See the Replay tab for full event timeline.</p>"
+        )
         # Show which steps were affected
         replan_steps = [
-            ev for ev in log.events
-            if getattr(ev, 'decision', '') == 'REPLAN'
-            or 'replan' in str(getattr(ev, 'event', '')).lower()
+            ev
+            for ev in log.events
+            if getattr(ev, "decision", "") == "REPLAN"
+            or "replan" in str(getattr(ev, "event", "")).lower()
         ]
         for rev in replan_steps[:5]:
-            step_id = getattr(rev, 'step_id', '') or getattr(rev, 'event_id', '') or 'unknown'
-            reason = getattr(rev, 'reason_code', '') or getattr(rev, 'description', '') or ''
+            step_id = getattr(rev, "step_id", "") or getattr(rev, "event_id", "") or "unknown"
+            reason = getattr(rev, "reason_code", "") or getattr(rev, "description", "") or ""
             parts.append(
                 f"<div class='replan-step' style='display:flex;align-items:center;gap:8px;"
                 f"padding:6px 8px;background:#0d1117;border-radius:4px;margin-bottom:4px;"
                 f"font-size:0.75rem'>"
                 f"<span>{_icon('diff_modified', w=12, h=12)}</span>"
                 f"<code style='color:#8b5cf6'>{html_escape(str(step_id))}</code>"
-                + (f"<span style='color:#8b949e'>{html_escape(str(reason)[:100])}</span>"
-                   if reason else "")
+                + (
+                    f"<span style='color:#8b949e'>{html_escape(str(reason)[:100])}</span>"
+                    if reason
+                    else ""
+                )
                 + "</div>"
             )
         parts.append("</div>")
@@ -2072,21 +2099,33 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
             f"<div class='ev-progress'><div class='ev-progress-fill'"
             f" style='width:{verified_pct}%;background:#2e7d32'></div></div>"
             f"</div>"
-            + (f"<div class='ev-group'><span class='risk-badge' style='background:#c62828'>"
-               f"{failures_count} failure(s)</span></div>" if failures_count else "")
+            + (
+                f"<div class='ev-group'><span class='risk-badge' style='background:#c62828'>"
+                f"{failures_count} failure(s)</span></div>"
+                if failures_count
+                else ""
+            )
             + "</div>"
         )
 
     # Verification checks list
     if all_collected:
-        parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:12px 0 6px'>"
-                     "Verification Checks</h3>")
+        parts.append(
+            "<h3 style='font-size:0.8rem;color:#8b949e;margin:12px 0 6px'>Verification Checks</h3>"
+        )
         parts.append("<div class='ev-checks'>")
         for ev in all_collected[:50]:
-            check_id = html_escape(str(ev.check_id) if hasattr(ev, 'check_id') and ev.check_id
-                                   else (getattr(ev, 'source', None) or "unnamed"))
-            status_str = (ev.status.value if hasattr(ev.status, 'value') else str(ev.status)).lower()
-            prov_str = (ev.provenance.value if hasattr(ev.provenance, 'value') else str(ev.provenance)).lower()
+            check_id = html_escape(
+                str(ev.check_id)
+                if hasattr(ev, "check_id") and ev.check_id
+                else (getattr(ev, "source", None) or "unnamed")
+            )
+            status_str = (
+                ev.status.value if hasattr(ev.status, "value") else str(ev.status)
+            ).lower()
+            prov_str = (
+                ev.provenance.value if hasattr(ev.provenance, "value") else str(ev.provenance)
+            ).lower()
             # Status icon
             if status_str in ("verified", "passed", "true", "ok"):
                 status_icon = _icon("evidence_passed")
@@ -2123,15 +2162,17 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
         parts.append("</div>")
 
     # Score breakdown panel (from latest evaluation)
-    if latest_eval and hasattr(latest_eval, 'scores') and latest_eval.scores:
+    if latest_eval and hasattr(latest_eval, "scores") and latest_eval.scores:
         scores = latest_eval.scores
-        acceptance = getattr(scores, 'acceptance', None)
-        influence = getattr(scores, 'influence', None)
-        risk = getattr(scores, 'risk', None)
-        cost = getattr(scores, 'cost', None)
-        threshold = getattr(latest_eval, 'threshold', None)
-        parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>"
-                     "Score Breakdown (A/I/R/C)</h3>")
+        acceptance = getattr(scores, "acceptance", None)
+        influence = getattr(scores, "influence", None)
+        risk = getattr(scores, "risk", None)
+        cost = getattr(scores, "cost", None)
+        threshold = getattr(latest_eval, "threshold", None)
+        parts.append(
+            "<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>"
+            "Score Breakdown (A/I/R/C)</h3>"
+        )
         parts.append("<div class='score-grid'>")
         for label, val, color in [
             ("Acceptance", acceptance, "#3fb950"),
@@ -2152,32 +2193,33 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
                 )
         if threshold is not None:
             t_val = int(threshold * 100) if isinstance(threshold, (int, float)) else threshold
-            parts.append(
-                f"<div class='score-threshold'>Threshold: {t_val}%</div>"
-            )
+            parts.append(f"<div class='score-threshold'>Threshold: {t_val}%</div>")
         parts.append("</div>")
 
     # Collector details
-    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>"
-                 "Collectors</h3>")
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>Collectors</h3>")
     parts.append("<div class='collector-list'>")
     seen_collectors = set()
     for ev in all_collected:
-        coll = getattr(ev, 'collector', None) or getattr(ev, 'source', None) or "unknown"
+        coll = getattr(ev, "collector", None) or getattr(ev, "source", None) or "unknown"
         if coll not in seen_collectors:
             seen_collectors.add(coll)
-            coll_ver = getattr(ev, 'collector_version', None) or ""
+            coll_ver = getattr(ev, "collector_version", None) or ""
             parts.append(
                 f"<div class='collector-row'>"
                 f"{_icon('run', w=14, h=14)} "
                 f"<span class='collector-name'>{html_escape(str(coll))}</span>"
-                + (f"<span class='collector-ver'>v{html_escape(str(coll_ver))}</span>"
-                   if coll_ver else "")
+                + (
+                    f"<span class='collector-ver'>v{html_escape(str(coll_ver))}</span>"
+                    if coll_ver
+                    else ""
+                )
                 + "</div>"
             )
     if not seen_collectors:
-        parts.append("<div class='collector-row' style='color:#484f58'>"
-                     "No collectors recorded</div>")
+        parts.append(
+            "<div class='collector-row' style='color:#484f58'>No collectors recorded</div>"
+        )
     parts.append("</div>")
 
     # Missing evidence empty state
@@ -2198,8 +2240,10 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     parts.append("<div class='tab-panel' id='tab-artifacts'>")
 
     # Checkpoints section
-    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin-bottom:8px'>"
-                 f"{_icon('checkpoint', w=14, h=14)} Checkpoints ({len(checkpoint_ids)})</h3>")
+    parts.append(
+        "<h3 style='font-size:0.8rem;color:#8b949e;margin-bottom:8px'>"
+        f"{_icon('checkpoint', w=14, h=14)} Checkpoints ({len(checkpoint_ids)})</h3>"
+    )
     if checkpoint_ids and checkpoint_ids[0] != "none recorded":
         parts.append("<div class='checkpoint-list'>")
         for cpid in checkpoint_ids[:10]:
@@ -2211,16 +2255,19 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
             )
         parts.append("</div>")
     else:
-        parts.append("<div class='cp-row' style='color:#484f58;padding:8px;font-size:0.75rem'>"
-                     "No checkpoints recorded</div>")
+        parts.append(
+            "<div class='cp-row' style='color:#484f58;padding:8px;font-size:0.75rem'>"
+            "No checkpoints recorded</div>"
+        )
 
     # Workspace / worktree info
-    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
-                 f"{_icon('artifact', w=14, h=14)} Workspace</h3>")
+    parts.append(
+        "<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
+        f"{_icon('artifact', w=14, h=14)} Workspace</h3>"
+    )
     parts.append("<div class='ws-info'>")
     parts.append(
-        f"<div class='ws-row'><span class='ws-label'>Path</span>"
-        f"<code>{workspace}</code></div>"
+        f"<div class='ws-row'><span class='ws-label'>Path</span><code>{workspace}</code></div>"
     )
     parts.append(
         f"<div class='ws-row'><span class='ws-label'>Policy</span>"
@@ -2233,13 +2280,15 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     parts.append("</div>")
 
     # Generated files / events
-    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
-                 f"{_icon('run', w=14, h=14)} Events ({artifact_count})</h3>")
+    parts.append(
+        "<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
+        f"{_icon('run', w=14, h=14)} Events ({artifact_count})</h3>"
+    )
     if log.events:
         parts.append("<div class='event-file-list'>")
         seen_types: set[str] = set()
         for ev in log.events[:20]:
-            ev_type = getattr(ev, 'event', 'unknown')
+            ev_type = getattr(ev, "event", "unknown")
             if ev_type not in seen_types:
                 seen_types.add(ev_type)
                 parts.append(
@@ -2250,14 +2299,18 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
                 )
         parts.append("</div>")
     else:
-        parts.append("<div style='color:#484f58;padding:8px;font-size:0.75rem'>"
-                     "No events recorded</div>")
+        parts.append(
+            "<div style='color:#484f58;padding:8px;font-size:0.75rem'>No events recorded</div>"
+        )
 
     # Diff/patch placeholder
-    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
-                 "Diffs & Patches</h3>")
-    parts.append("<div style='color:#484f58;padding:8px;font-size:0.75rem'>"
-                 "Diffs will appear here when checkpoints with artifact diffs are available.</div>")
+    parts.append(
+        "<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>Diffs & Patches</h3>"
+    )
+    parts.append(
+        "<div style='color:#484f58;padding:8px;font-size:0.75rem'>"
+        "Diffs will appear here when checkpoints with artifact diffs are available.</div>"
+    )
 
     parts.append("</div>")  # end tab-artifacts
 
@@ -2302,10 +2355,7 @@ def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str
     parts.append(f"<dt>Policy</dt><dd>{policy_id} @ {policy_ver}</dd>")
     parts.append(f"<dt>Policy hash</dt><dd><code>{policy_hash}</code></dd>")
     parts.append(f"<dt>Workspace</dt><dd>{workspace}</dd>")
-    parts.append(
-        f"<dt>Checkpoints</dt>"
-        f"<dd>{html_escape(', '.join(checkpoint_ids[:3]))}</dd>"
-    )
+    parts.append(f"<dt>Checkpoints</dt><dd>{html_escape(', '.join(checkpoint_ids[:3]))}</dd>")
     parts.append(f"<dt>Artifacts</dt><dd>{artifact_count} event(s)</dd>")
     parts.append(f"<dt>Run ID</dt><dd><code>{html_escape(run_id)}</code></dd>")
     parts.append(
@@ -2624,16 +2674,26 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if filter_status == "active":
             summaries = [s for s in summaries if s.incomplete or str(s.status).lower() == "started"]
         elif filter_status == "completed":
-            summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() == "completed"]
+            summaries = [
+                s for s in summaries if not s.incomplete and str(s.status).lower() == "completed"
+            ]
         elif filter_status == "failed":
-            summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() in ("failed", "interrupted")]
+            summaries = [
+                s
+                for s in summaries
+                if not s.incomplete and str(s.status).lower() in ("failed", "interrupted")
+            ]
         # Hide empty runs (only run_started event, no real work) by default
         hide_empty = query.get("hide_empty", "1") != "0"
         if hide_empty:
             summaries = [s for s in summaries if s.event_count > 1]
         # Apply search
         if search_q:
-            summaries = [s for s in summaries if search_q in (s.task or "").lower() or search_q in s.run_id.lower()]
+            summaries = [
+                s
+                for s in summaries
+                if search_q in (s.task or "").lower() or search_q in s.run_id.lower()
+            ]
         decisions = _get_overview_decisions(summaries, self._store)
         # Collect plan progress for active runs
         plan_progress = _collect_plan_progress(
@@ -2641,8 +2701,11 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             self._store,
         )
         html = _render_overview_page(
-            summaries, str(self._store.base_dir), decisions=decisions,
-            filter_status=filter_status, search_q=query.get("q", ""),
+            summaries,
+            str(self._store.base_dir),
+            decisions=decisions,
+            filter_status=filter_status,
+            search_q=query.get("q", ""),
             plan_progress=plan_progress,
         )
         self._send_html(html)
@@ -2667,10 +2730,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             "</style></head><body>"
         ]
         parts.append(
-            '<div class="nav">'
-            '<a href="/">Runs</a>'
-            '<a href="/plans" class="active">Plans</a>'
-            "</div>"
+            '<div class="nav"><a href="/">Runs</a><a href="/plans" class="active">Plans</a></div>'
         )
         parts.append("<h1>Plans</h1>")
         store_path = html_escape(str(self._store.base_dir))
@@ -2681,22 +2741,29 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         for s in summaries:
             plan_key = html_escape(s.task[:50] if s.task else "(untitled)")
             if plan_key not in plans:
-                plans[plan_key] = {"key": plan_key, "runs": 0, "latest_id": "", "latest_status": "none"}
+                plans[plan_key] = {
+                    "key": plan_key,
+                    "runs": 0,
+                    "latest_id": "",
+                    "latest_status": "none",
+                }
             plans[plan_key]["runs"] += 1
             if s.run_id:
                 plans[plan_key]["latest_id"] = html_escape(s.run_id)
                 plans[plan_key]["latest_status"] = str(s.status)
 
         if not plans:
-            parts.append('<div class="empty"><p>No runs found.</p><p>Start with <code>bound run "task"</code></p></div>')
+            parts.append(
+                '<div class="empty"><p>No runs found.</p><p>Start with <code>bound run "task"</code></p></div>'
+            )
         else:
             for key, pdata in sorted(plans.items()):
                 parts.append(
                     f'<div class="card">'
                     f'<a href="/run/{pdata["latest_id"]}">{key}</a>'
                     f'<div class="meta">Runs: {pdata["runs"]} | '
-                    f'Latest: {pdata["latest_status"]}</div>'
-                    f'</div>'
+                    f"Latest: {pdata['latest_status']}</div>"
+                    f"</div>"
                 )
         parts.append("</body></html>")
         self._send_html("\n".join(parts))
@@ -2713,6 +2780,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     def _get_run_plan(self, run_id: str) -> dict | None:
         """Load plan snapshot metadata from run.json, returning None if absent."""
         import json
+
         meta_path = self._store._meta_path(run_id)
         if not meta_path.exists():
             return None
@@ -2812,6 +2880,7 @@ def serve(
         plan_path: Optional explicit path to a plan.md file. When set, the
             plan is pre-loaded for use across runs.
     """
+
     class _SilentHTTPServer(HTTPServer):
         """HTTPServer that suppresses socket-level tracebacks."""
 

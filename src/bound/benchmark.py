@@ -289,9 +289,7 @@ class BenchmarkRunner:
             if not path.exists():
                 raise FileNotFoundError(f"Trajectory fixture not found: {path}")
 
-            trajectory = AgentTrajectory.model_validate_json(
-                path.read_text(encoding="utf-8")
-            )
+            trajectory = AgentTrajectory.model_validate_json(path.read_text(encoding="utf-8"))
             result = run_experiment(trajectory, criteria, normalization)
             results.append(result)
             logger.debug(
@@ -320,7 +318,9 @@ class BenchmarkRunner:
         """
         return {
             name: self.run_suite(
-                name, criteria=criteria, normalization=normalization,
+                name,
+                criteria=criteria,
+                normalization=normalization,
             )
             for name in BUILTIN_SUITES
         }

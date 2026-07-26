@@ -1198,10 +1198,13 @@ class ContractEvaluator:
             influence = float(self._influence_override)
             return influence, [
                 ScoreEvidence(
-                    source="external", value=influence, contribution=influence,
+                    source="external",
+                    value=influence,
+                    contribution=influence,
                     description="influence supplied externally at construction.",
                     provenance=EvidenceProvenance.EVALUATED,
-                    raw_value=influence, effective_value=influence,
+                    raw_value=influence,
+                    effective_value=influence,
                 ),
             ]
 
@@ -1212,7 +1215,7 @@ class ContractEvaluator:
         ev = getattr(self, "_last_evidence", None)
         if ev is not None:
             quality_ids = {"coverage", "lint-clean", "tests-added", "typecheck-clean"}
-            for ce in (ev.acceptance if hasattr(ev, "acceptance") else []):
+            for ce in ev.acceptance if hasattr(ev, "acceptance") else []:
                 cid = getattr(ce, "check_id", "")
                 if cid in quality_ids:
                     passed = getattr(ce, "passed", False)
@@ -1225,8 +1228,7 @@ class ContractEvaluator:
                             value=1.0 if passed else 0.0,
                             contribution=contrib,
                             description=(
-                                f"{'✓' if passed else '✗'} {cid}: "
-                                f"contributes {contrib:.2f} to I"
+                                f"{'✓' if passed else '✗'} {cid}: contributes {contrib:.2f} to I"
                             ),
                             provenance=getattr(ce, "provenance", EvidenceProvenance.CLAIMED),
                         ),
@@ -1236,24 +1238,30 @@ class ContractEvaluator:
             influence = min(total, 1.0)
             records.append(
                 ScoreEvidence(
-                    source="summary", value=influence, contribution=influence,
+                    source="summary",
+                    value=influence,
+                    contribution=influence,
                     description=f"I={influence:.4f} from {count} quality signal(s).",
                     provenance=EvidenceProvenance.EVALUATED,
-                    raw_value=influence, effective_value=influence,
+                    raw_value=influence,
+                    effective_value=influence,
                 ),
             )
             return influence, records
 
         return 0.0, [
             ScoreEvidence(
-                source="default", value=0.0, contribution=0.0,
+                source="default",
+                value=0.0,
+                contribution=0.0,
                 description=(
                     "I=0.0: no influence evidence (coverage, lint-clean, "
                     "tests-added, typecheck-clean) and no override. "
                     "Honesty over fabrication."
                 ),
                 provenance=EvidenceProvenance.DEFAULTED,
-                raw_value=None, effective_value=0.0,
+                raw_value=None,
+                effective_value=0.0,
                 reason="policy neutral value; no evidence source",
             ),
         ]

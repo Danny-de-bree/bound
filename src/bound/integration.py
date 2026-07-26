@@ -21,6 +21,7 @@ logger = logging.getLogger("bound.integration")
 
 NextAction = Literal["continue", "retry", "replan", "rollback"]
 
+
 class AgentControlResult(BaseModel):
     """A BOUND decision translated into a framework-neutral agent instruction.
 

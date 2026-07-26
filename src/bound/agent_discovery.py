@@ -186,9 +186,7 @@ def _detect_claude_code(project_dir: Path) -> AgentInstallation | None:
             timeout=10,
         )
         if result.returncode == 0:
-            supports_stream_json = (
-                "stream-json" in result.stdout or "--print" in result.stdout
-            )
+            supports_stream_json = "stream-json" in result.stdout or "--print" in result.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
 
@@ -301,7 +299,7 @@ def _detect_codex(project_dir: Path) -> AgentInstallation | None:
     # Check for .codex/ project config alongside CLI.
     config_paths: tuple[Path, ...] = ()
     if codex_dir.is_dir():
-        config_paths = ((mcp_config,) if mcp_config.exists() else ())
+        config_paths = (mcp_config,) if mcp_config.exists() else ()
         if mcp_config.exists():
             installation_type = "mcp"
 
@@ -490,16 +488,14 @@ def detect_all_agents(
                 results.append(result)
         except Exception:
             logger.debug(
-                "Detection failed for %s in %s", agent_key, resolved,
+                "Detection failed for %s in %s",
+                agent_key,
+                resolved,
                 exc_info=True,
             )
 
     # Sort: verified first, then probable.
-    results.sort(
-        key=lambda a: {"verified": 0, "probable": 1, "possible": 2}.get(
-            a.confidence, 3
-        )
-    )
+    results.sort(key=lambda a: {"verified": 0, "probable": 1, "possible": 2}.get(a.confidence, 3))
 
     return results
 
@@ -539,13 +535,9 @@ def agent_selection_help(agents: list[AgentInstallation]) -> str:
     lines.append("Select explicitly:")
     for agent in agents:
         if agent.agent_id == "generic":
-            lines.append(
-                '  bound run --agent generic --agent-command "<cmd>" "..."'
-            )
+            lines.append('  bound run --agent generic --agent-command "<cmd>" "..."')
         else:
-            lines.append(
-                f'  bound run --agent {agent.agent_id} "..."'
-            )
+            lines.append(f'  bound run --agent {agent.agent_id} "..."')
 
     lines.append("")
     lines.append("Or save a project default:")

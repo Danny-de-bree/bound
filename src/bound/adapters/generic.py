@@ -95,7 +95,8 @@ class GenericProcessAdapter(AgentAdapter):
         self._condition: threading.Condition = threading.Condition(self._lock)
         self._checkpoints: dict[str, dict[str, Any]] = {}
         self._candidate_id: str | None = None
-# ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -110,11 +111,7 @@ class GenericProcessAdapter(AgentAdapter):
             raise RuntimeError("Adapter already running; call terminate() first")
 
         self._candidate_id = candidate_id
-        cwd = (
-            Path(self.config.working_dir).resolve()
-            if self.config.working_dir
-            else Path.cwd()
-        )
+        cwd = Path(self.config.working_dir).resolve() if self.config.working_dir else Path.cwd()
         cmd = self.config.agent_command
 
         logger.info("Launching agent: %s (cwd=%s, candidate=%s)", cmd, cwd, candidate_id)
@@ -164,9 +161,7 @@ class GenericProcessAdapter(AgentAdapter):
         logger.debug("Sending command: %s", line)
         self._write_line(line)
 
-    def wait_for_event(
-        self, timeout: float | None = None
-    ) -> AdapterEvent | None:
+    def wait_for_event(self, timeout: float | None = None) -> AdapterEvent | None:
         """Block until an ACP event arrives or time runs out."""
         deadline = time.monotonic() + (
             timeout if timeout is not None else self.config.timeout_seconds
@@ -180,8 +175,7 @@ class GenericProcessAdapter(AgentAdapter):
                     return event
 
                 if not self._running or (
-                    self._process is not None
-                    and self._process.poll() is not None
+                    self._process is not None and self._process.poll() is not None
                 ):
                     rc = self._process.returncode if self._process else None
                     raise RuntimeError(f"Agent process exited unexpectedly (rc={rc})")
@@ -238,11 +232,13 @@ class GenericProcessAdapter(AgentAdapter):
         }
 
         try:
-            self.send_command({
-                "type": "checkpoint.capture",
-                "checkpoint_id": cp_id,
-                "timestamp": checkpoint["timestamp"],
-            })
+            self.send_command(
+                {
+                    "type": "checkpoint.capture",
+                    "checkpoint_id": cp_id,
+                    "timestamp": checkpoint["timestamp"],
+                }
+            )
             event = self.wait_for_event(timeout=5.0)
             if event is not None and event.type == "checkpoint.captured":
                 checkpoint.update(event.model_dump(exclude={"type"}))
@@ -259,16 +255,17 @@ class GenericProcessAdapter(AgentAdapter):
             raise RuntimeError("Agent is not running")
         if checkpoint_id not in self._checkpoints:
             raise KeyError(
-                f"Checkpoint {checkpoint_id!r} not found; "
-                f"available: {list(self._checkpoints)}"
+                f"Checkpoint {checkpoint_id!r} not found; available: {list(self._checkpoints)}"
             )
         cp = self._checkpoints[checkpoint_id]
-        self.send_command({
-            "type": "checkpoint.restore",
-            "checkpoint_id": checkpoint_id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "data": cp,
-        })
+        self.send_command(
+            {
+                "type": "checkpoint.restore",
+                "checkpoint_id": checkpoint_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "data": cp,
+            }
+        )
         logger.info("Checkpoint %s restore command sent", checkpoint_id)
 
     # ------------------------------------------------------------------
@@ -305,9 +302,7 @@ class GenericProcessAdapter(AgentAdapter):
                     type=acp_msg.type,
                     evidence=acp_msg.data.get("evidence"),
                     decision=acp_msg.data.get("decision"),
-                    candidate_id=(
-                        acp_msg.data.get("candidate_id") or self._candidate_id
-                    ),
+                    candidate_id=(acp_msg.data.get("candidate_id") or self._candidate_id),
                 )
                 with self._condition:
                     self._events.append(event)

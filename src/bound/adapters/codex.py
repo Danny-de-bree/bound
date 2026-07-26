@@ -97,9 +97,7 @@ class CodexAdapter(GenericProcessAdapter):
         working_dir = self.config.working_dir or "."
 
         if not Path(working_dir).is_dir():
-            raise RuntimeError(
-                f"Working directory does not exist: {working_dir}"
-            )
+            raise RuntimeError(f"Working directory does not exist: {working_dir}")
 
         try:
             self._process = subprocess.Popen(
@@ -113,8 +111,7 @@ class CodexAdapter(GenericProcessAdapter):
             )
         except FileNotFoundError as exc:
             raise RuntimeError(
-                f"Codex CLI not found: {cmd[0]}. "
-                f"Is @openai/codex installed?"
+                f"Codex CLI not found: {cmd[0]}. Is @openai/codex installed?"
             ) from exc
 
         self._running = True

@@ -158,8 +158,10 @@ class IndependentVerifier:
 
         # All gates green → ACCEPT.
         if (
-            isinstance(tpr, (int, float)) and tpr >= 1.0
-            and isinstance(rcp, (int, float)) and rcp >= 1.0
+            isinstance(tpr, (int, float))
+            and tpr >= 1.0
+            and isinstance(rcp, (int, float))
+            and rcp >= 1.0
             and lint is True
         ):
             return "ACCEPT"
@@ -267,8 +269,7 @@ class ControllerEvaluator:
         """
         if len(decisions) != len(signals_list):
             raise ValueError(
-                f"Length mismatch: {len(decisions)} decisions vs "
-                f"{len(signals_list)} signal dicts."
+                f"Length mismatch: {len(decisions)} decisions vs {len(signals_list)} signal dicts."
             )
 
         records: list[DecisionRecord] = []
@@ -335,7 +336,9 @@ class ControllerEvaluator:
         for key, decisions in decisions_by_input.items():
             if len(decisions) > 1 and len(set(decisions)) > 1:
                 logger.warning(
-                    "Policy inconsistency for key '%s': got %s", key, decisions,
+                    "Policy inconsistency for key '%s': got %s",
+                    key,
+                    decisions,
                 )
                 return False
         return True

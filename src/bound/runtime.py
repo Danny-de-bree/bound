@@ -284,15 +284,10 @@ class BoundRuntime:
         """
         if project_root is None and policy_path is None:
             raise ValueError(
-                "Either project_root or policy_path must be provided "
-                "for from_config()"
+                "Either project_root or policy_path must be provided for from_config()"
             )
 
-        pp = (
-            Path(policy_path)
-            if policy_path
-            else Path.cwd() / "bound-policy.yaml"
-        )
+        pp = Path(policy_path) if policy_path else Path.cwd() / "bound-policy.yaml"
         runtime = cls(
             policy_path=pp,
             project_root=project_root,
@@ -520,7 +515,7 @@ class BoundRuntime:
 
         return response.result
 
-# ------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Adapter control loop
     # ------------------------------------------------------------------
 
@@ -610,20 +605,25 @@ class BoundRuntime:
             decision = result.decision
             decisions.append(decision)
 
-            steps.append({
-                "step": step_idx,
-                "attempt": attempt,
-                "step_id": step_id,
-                "event_type": event.type,
-                "decision": decision,
-                "score": result.score,
-                "reason_code": result.reason_code,
-                "threshold": result.threshold,
-            })
+            steps.append(
+                {
+                    "step": step_idx,
+                    "attempt": attempt,
+                    "step_id": step_id,
+                    "event_type": event.type,
+                    "decision": decision,
+                    "score": result.score,
+                    "reason_code": result.reason_code,
+                    "threshold": result.threshold,
+                }
+            )
 
             _logger.info(
                 "Step %d decision: %s (score=%.4f, threshold=%.4f)",
-                step_idx, decision, result.score, result.threshold,
+                step_idx,
+                decision,
+                result.score,
+                result.threshold,
             )
 
             # Map decision to control action.
@@ -653,7 +653,9 @@ class BoundRuntime:
 
         _logger.info(
             "Control loop finished: %d steps, final=%s, score=%.4f",
-            len(steps), final_decision, final_score,
+            len(steps),
+            final_decision,
+            final_score,
         )
 
         return {
@@ -663,6 +665,7 @@ class BoundRuntime:
             "final_score": final_score,
             "decisions": decisions,
         }
+
     # ------------------------------------------------------------------
     # Outcome recording
     # ------------------------------------------------------------------

@@ -110,6 +110,7 @@ def calculate_components(
         total=total,
     )
 
+
 def normalize_capped(value: float, cap: float) -> float:
     """Normalize ``value`` against ``cap`` into ``[0.0, 1.0]``.
 
@@ -127,4 +128,3 @@ def normalize_capped(value: float, cap: float) -> float:
     if cap <= 0:
         return 1.0 if value > 0 else 0.0
     return min(value / cap, 1.0)
-

@@ -165,9 +165,7 @@ class ClineMCPAdapter:
         Returns:
             ``True`` if the file was removed, ``False`` if it did not exist.
         """
-        config_path = (
-            Path(project_dir).resolve() / CLINE_MCP_CONFIG_REL_PATH
-        )
+        config_path = Path(project_dir).resolve() / CLINE_MCP_CONFIG_REL_PATH
         if config_path.exists():
             config_path.unlink()
             logger.info("Cline MCP config removed from %s", config_path)
@@ -184,9 +182,7 @@ class ClineMCPAdapter:
         Returns:
             ``True`` if ``.cline/mcp/bound.json`` exists.
         """
-        return (
-            Path(project_dir).resolve() / CLINE_MCP_CONFIG_REL_PATH
-        ).exists()
+        return (Path(project_dir).resolve() / CLINE_MCP_CONFIG_REL_PATH).exists()
 
 
 __all__ = [

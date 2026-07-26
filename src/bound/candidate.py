@@ -68,8 +68,7 @@ def _git_require(*args: str, cwd: Path | None = None) -> str:
     proc = _git(*args, cwd=cwd)
     if proc.returncode != 0:
         raise RuntimeError(
-            f"git {' '.join(args)} failed (exit {proc.returncode}): "
-            f"{proc.stderr.strip()}"
+            f"git {' '.join(args)} failed (exit {proc.returncode}): {proc.stderr.strip()}"
         )
     return proc.stdout.strip()
 
@@ -157,13 +156,9 @@ class Candidate:
         """
         self._project_root = Path(project_root).resolve()
         if not self._project_root.is_dir():
-            raise FileNotFoundError(
-                f"Project root not found: {self._project_root}"
-            )
+            raise FileNotFoundError(f"Project root not found: {self._project_root}")
         if not (self._project_root / ".git").exists():
-            raise FileNotFoundError(
-                f"Project root is not a git repository: {self._project_root}"
-            )
+            raise FileNotFoundError(f"Project root is not a git repository: {self._project_root}")
 
         self._task = task
         self._base_commit = base_commit
@@ -302,14 +297,11 @@ class Candidate:
                 )
             except Exception:
                 logger.exception(
-                    "Failed to remove git worktree %s; falling back "
-                    "to manual removal.",
+                    "Failed to remove git worktree %s; falling back to manual removal.",
                     self._workspace,
                 )
                 try:
-                    _git_require(
-                        "worktree", "prune", cwd=self._project_root
-                    )
+                    _git_require("worktree", "prune", cwd=self._project_root)
                     shutil.rmtree(self._workspace, ignore_errors=True)
                 except Exception:
                     logger.exception(
@@ -344,9 +336,7 @@ class Candidate:
             RuntimeError: If the candidate is not active.
         """
         if not self.is_active:
-            raise RuntimeError(
-                "Candidate is not active — use as context manager."
-            )
+            raise RuntimeError("Candidate is not active — use as context manager.")
 
         from bound.evidence import (
             ExecutionEvidence,
@@ -394,9 +384,7 @@ class Candidate:
             RuntimeError: If the candidate is not active.
         """
         if not self.is_active:
-            raise RuntimeError(
-                "Candidate is not active — use as context manager."
-            )
+            raise RuntimeError("Candidate is not active — use as context manager.")
 
         from bound.bound_workflow import BoundWorkflow
         from bound.models import BoundCriteria as _BoundCriteria
@@ -404,9 +392,7 @@ class Candidate:
         criteria = criteria or _BoundCriteria(threshold=0.5)
 
         workflow = BoundWorkflow()
-        result = workflow.evaluate_step(
-            contract, evidence, criteria=criteria
-        )
+        result = workflow.evaluate_step(contract, evidence, criteria=criteria)
 
         now_utc = datetime.now(UTC).isoformat()
         self._decisions.append(
@@ -415,11 +401,7 @@ class Candidate:
                 decision=str(result.decision),
                 score=result.score,
                 threshold=result.threshold,
-                reason_code=(
-                    str(result.reason_code)
-                    if result.reason_code
-                    else "OK"
-                ),
+                reason_code=(str(result.reason_code) if result.reason_code else "OK"),
                 timestamp=now_utc,
                 evaluation_id=getattr(result, "evaluation_id", None),
             )
@@ -452,9 +434,7 @@ class Candidate:
                 cannot be captured safely.
         """
         if not self.is_active:
-            raise RuntimeError(
-                "Candidate is not active — use as context manager."
-            )
+            raise RuntimeError("Candidate is not active — use as context manager.")
         assert self._workspace is not None
 
         checkpoint = _capture_checkpoint_impl(
@@ -481,9 +461,7 @@ class Candidate:
         )
         return checkpoint
 
-    def restore_checkpoint(
-        self, checkpoint_id: str
-    ) -> CheckpointModel:
+    def restore_checkpoint(self, checkpoint_id: str) -> CheckpointModel:
         """Restore the worktree to a previously captured checkpoint.
 
         The worktree's files are restored to the state recorded in the
@@ -501,9 +479,7 @@ class Candidate:
                 diverged.
         """
         if not self.is_active:
-            raise RuntimeError(
-                "Candidate is not active — use as context manager."
-            )
+            raise RuntimeError("Candidate is not active — use as context manager.")
         assert self._workspace is not None
 
         if checkpoint_id not in self._checkpoints:
@@ -511,15 +487,12 @@ class Candidate:
                 cp = load_checkpoint(
                     self._run_id,
                     checkpoint_id,
-                    base_dir=(
-                        self._project_root / ".bound/checkpoints"
-                    ),
+                    base_dir=(self._project_root / ".bound/checkpoints"),
                 )
                 self._checkpoints[checkpoint_id] = cp
             except FileNotFoundError:
                 raise KeyError(
-                    f"Checkpoint {checkpoint_id} not found in "
-                    f"candidate {self._candidate_id}"
+                    f"Checkpoint {checkpoint_id} not found in candidate {self._candidate_id}"
                 ) from None
 
         checkpoint = self._checkpoints[checkpoint_id]
@@ -536,8 +509,7 @@ class Candidate:
             )
 
         logger.info(
-            "Checkpoint %s restored for candidate %s "
-            "(%d files restored)",
+            "Checkpoint %s restored for candidate %s (%d files restored)",
             checkpoint_id,
             self._candidate_id,
             len(restored),
