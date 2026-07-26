@@ -87,6 +87,92 @@ bound run --agent claude-code "task"
   → repeats until accepted or budgets exhausted
 ```
 
+## How weights and evidence work
+
+BOUND never trusts agent self-reports. Every score is backed by a
+**collector** — an independent process that actually runs commands, checks
+exit codes, counts tests, and measures resource usage.
+
+### The scoring formula
+
+```
+S = (W_A × A) + (W_I × I) - (W_R × R) - (W_C × C)
+```
+
+| Symbol | Meaning | Source |
+| --- | --- | --- |
+| **A** | Acceptance | PytestCollector, JUnitCollector — were tests green? |
+| **I** | Influence | Did the change improve coverage/material quality? |
+| **R** | Risk | GitCollector — unexpected files? secrets in diff? |
+| **C** | Cost | BudgetCollector — tool calls, tokens, runtime consumed? |
+
+Weights (`W_A`, `W_I`, `W_R`, `W_C`) come from your `bound-policy.yaml`.
+
+### Real evidence example
+
+```python
+from bound.command_collector import PytestCollector, CommandCollector, CommandSpec
+from bound.contracts import AcceptanceCheck, StepContract
+from bound.evidence import CheckEvidence, ExecutionEvidence
+from bound.bound_workflow import BoundWorkflow
+from bound.models import BoundCriteria
+
+# 1. Run real verification (not agent self-report!)
+runner = CommandCollector({
+    "pytest": CommandSpec(argv=["uv", "run", "pytest", "-q"], timeout=60),
+    "ruff":   CommandSpec(argv=["uv", "run", "ruff", "check", "."], timeout=30),
+})
+pytest_collector = PytestCollector(runner, command_name="pytest")
+
+# 2. Collect evidence — BOUND executes the commands
+test_evidence = pytest_collector.collect()
+# test_evidence.passed = True/False
+# test_evidence.provenance = VERIFIED (not CLAIMED!)
+
+lint_result = runner.collect("ruff")
+# lint_result.exit_code = 0 → clean
+
+# 3. Build a contract
+contract = StepContract(
+    id="PHASE-003",
+    description="Feature calculation",
+    goal="Compute 14 features per card from real DB data",
+    acceptance_checks=[
+        AcceptanceCheck(
+            id="tests-pass",
+            description="40 tests pass",
+            required=True,
+            accepted_provenance=["verified", "observed"],
+        ),
+    ],
+)
+
+# 4. Evidence from real measurements
+evidence = ExecutionEvidence(acceptance=[
+    CheckEvidence(
+        check_id="tests-pass",
+        passed=test_evidence.passed,
+        source="uv run pytest -q",
+        provenance=test_evidence.provenance,
+    ),
+])
+
+# 5. BOUND scores from evidence, not hardcoded
+wf = BoundWorkflow()
+result = wf.evaluate_step(
+    contract=contract,
+    evidence=evidence,
+    criteria=BoundCriteria(threshold=0.70),
+)
+# result.decision → ACCEPT (when tests pass) or RETRY (when they don't)
+```
+
+### What the agent must NOT do
+
+- ❌ Pass `--acceptance 1.0 --influence 0.0 --risk 0.0 --cost 0.0` — that's a rubber stamp
+- ❌ Claim `provenance=VERIFIED` — the agent can only `CLAIM`
+- ❌ Invent test counts, token usage, or runtime — `None` means unmeasured
+
 ## Agent capability matrix
 
 | Agent | Detection | MCP tools | Process control | Evidence | RETRY | REPLAN |
