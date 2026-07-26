@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -55,6 +55,7 @@ from bound.services import (
 )
 
 if TYPE_CHECKING:
+    from bound.adapters import AgentAdapter
     from bound.candidate import Candidate
     from bound.policy_schema import BoundPolicyConfig
 
@@ -519,6 +520,149 @@ class BoundRuntime:
 
         return response.result
 
+# ------------------------------------------------------------------
+    # Adapter control loop
+    # ------------------------------------------------------------------
+
+    def run_with_adapter(
+        self,
+        adapter: AgentAdapter,
+        task: str,
+        plan: dict[str, Any] | None = None,
+        criteria: BoundCriteria | None = None,
+    ) -> dict[str, Any]:
+        """Run the full BOUND control loop with an agent adapter.
+
+        Launches the agent, then loops: wait for step-completion events,
+        evaluate the evidence against the policy, send the decision back
+        as a command.  The loop terminates when the adapter reports
+        ``task.completed``, BOUND decides ``ROLLBACK``, or max steps are
+        reached.
+
+        Args:
+            adapter: A configured :class:`~bound.adapters.AgentAdapter`.
+            task: Human-readable task description.
+            plan: Optional structured plan dict.
+            criteria: Optional :class:`BoundCriteria` override; defaults
+                to ``threshold=0.5``.
+
+        Returns:
+            A summary dict with keys: ``task``, ``steps``, ``final_decision``,
+            ``final_score``, ``decisions``.
+
+        Raises:
+            RuntimeError: If the agent crashes or times out.
+        """
+
+        import logging
+
+        _logger = logging.getLogger(__name__)
+
+        criteria = criteria or BoundCriteria(threshold=0.5)
+        max_steps = 50
+        decisions: list[str] = []
+        steps: list[dict[str, Any]] = []
+        attempt = 1
+
+        adapter.launch(task=task, plan=plan)
+
+        for step_idx in range(1, max_steps + 1):
+            _logger.info("Step %d / %d (attempt %d)", step_idx, max_steps, attempt)
+
+            # Wait for the agent to report a step completion.
+            try:
+                event = adapter.wait_for_event(timeout=adapter.config.timeout_seconds)
+            except RuntimeError:
+                _logger.exception("Agent crashed during step %d", step_idx)
+                adapter.terminate()
+                break
+
+            if event is None:
+                _logger.warning("Step %d timed out", step_idx)
+                adapter.send_command({"type": "retry"})
+                attempt += 1
+                continue
+
+            # Handle terminal events.
+            if event.type == "task.completed":
+                _logger.info("Agent reported task completed")
+                decisions.append("ACCEPT")
+                break
+
+            if event.type == "task.failed":
+                _logger.warning("Agent reported task failure")
+                decisions.append("ROLLBACK")
+                break
+
+            # Evaluate the step through BOUND.
+            step_id = f"PHASE-{step_idx:03d}"
+
+            ctx = EvaluationContext(
+                task_id=task[:64],
+                step_id=step_id,
+                attempt=attempt,
+                action=f"Step {step_idx}: {event.type}",
+                criteria=criteria,
+                metadata={"adapter_event": event.type},
+            )
+
+            result = self.evaluate(ctx)
+            decision = result.decision
+            decisions.append(decision)
+
+            steps.append({
+                "step": step_idx,
+                "attempt": attempt,
+                "step_id": step_id,
+                "event_type": event.type,
+                "decision": decision,
+                "score": result.score,
+                "reason_code": result.reason_code,
+                "threshold": result.threshold,
+            })
+
+            _logger.info(
+                "Step %d decision: %s (score=%.4f, threshold=%.4f)",
+                step_idx, decision, result.score, result.threshold,
+            )
+
+            # Map decision to control action.
+            if decision == "ACCEPT":
+                adapter.send_command({"type": "continue"})
+                attempt = 1
+            elif decision == "RETRY":
+                adapter.send_command({"type": "retry"})
+                attempt += 1
+            elif decision == "REPLAN":
+                adapter.send_command({"type": "replan"})
+                attempt += 1
+            elif decision == "ROLLBACK":
+                adapter.send_command({"type": "rollback"})
+                adapter.terminate()
+                break
+            else:
+                _logger.error("Unknown decision: %s", decision)
+                adapter.send_command({"type": "shutdown"})
+                adapter.terminate()
+                break
+
+        adapter.terminate()
+
+        final_decision = decisions[-1] if decisions else "UNKNOWN"
+        final_score = steps[-1]["score"] if steps else 0.0
+
+        _logger.info(
+            "Control loop finished: %d steps, final=%s, score=%.4f",
+            len(steps), final_decision, final_score,
+        )
+
+        return {
+            "task": task,
+            "steps": steps,
+            "final_decision": final_decision,
+            "final_score": final_score,
+            "decisions": decisions,
+        }
     # ------------------------------------------------------------------
     # Outcome recording
     # ------------------------------------------------------------------

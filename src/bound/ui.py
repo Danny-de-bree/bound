@@ -433,6 +433,55 @@ def _get_overview_decisions(
     return result
 
 
+def _collect_plan_progress(
+    active_summaries: list[RunSummary],
+    store: LineageStore,
+) -> dict[str, str]:
+    """Build plan progress strings for active run cards.
+
+    Reads the ``plan_snapshot`` from each active run's ``run.json`` and
+    computes a human-readable progress string like ``"Step 2/5: Write tests"``.
+
+    Args:
+        active_summaries: Active runs to check for plan snapshots.
+        store: The lineage store for reading metadata.
+
+    Returns:
+        Dict mapping ``run_id`` -> progress string. Runs without a plan
+        snapshot are omitted from the result.
+    """
+    result: dict[str, str] = {}
+    for s in active_summaries:
+        meta = store._read_run_meta(s.run_id) or {}
+        ps = meta.get("plan_snapshot")
+        if not ps:
+            continue
+        steps = ps.get("steps", [])
+        if not steps:
+            continue
+        # Find current step: first incomplete non-phase step, or first phase
+        completed = 0
+        current_title = ""
+        total = len(steps)
+        for step in steps:
+            orig_status = step.get("status", "")
+            depth = step.get("depth", 0)
+            title = step.get("title", "")
+            if orig_status == "completed":
+                completed += 1
+            elif not current_title and depth == 1:
+                # First non-completed sub-step is the current active
+                current_title = title
+        if not current_title:
+            # Use the last phase name as fallback
+            for step in steps:
+                if step.get("depth", 0) == 0:
+                    current_title = step.get("title", "")
+        if current_title:
+            result[s.run_id] = f"Step {completed + 1}/{total}: {current_title[:30]}"
+    return result
+
+
 # =========================================================================
 # CSS (inline, no external assets)
 # =========================================================================
@@ -804,6 +853,453 @@ def _decision_badge(decision: str) -> str:
 
 
 
+def _derive_plan_step_status(
+    plan_step: dict,
+    runtime_steps: list,
+    log_events: list,
+) -> tuple[str, str]:
+    """Derive the status and CSS class for a plan step.
+
+    Compares a plan step (from plan.md snapshot) against runtime lineage steps
+    to determine whether it is completed, active, skipped, replanned, or pending.
+
+    Args:
+        plan_step: Single step dict from plan_snapshot.
+        runtime_steps: Step objects from the run log.
+        log_events: All lineage events from the run log.
+
+    Returns:
+        A ``(status_label, css_class)`` pair.
+    """
+    plan_title = (plan_step.get("title") or "").lower().strip()
+    plan_id = plan_step.get("step_id", "")
+
+    matched = None
+    for rs in runtime_steps:
+        rs_desc = (getattr(rs, "description", None) or "").lower().strip()
+        rs_id = getattr(rs, "step_id", "")
+        if rs_id and plan_id and rs_id.startswith(plan_id[:8]):
+            matched = rs
+            break
+        if plan_title and rs_desc and (
+            plan_title in rs_desc or rs_desc in plan_title
+        ):
+            matched = rs
+            break
+
+    if matched is not None:
+        rs_status = getattr(matched, "status", None)
+        rs_status_v = getattr(rs_status, "value", None) if rs_status else ""
+        if rs_status_v in ("completed",):
+            return ("completed", "completed")
+        if rs_status_v in ("started", "in_progress"):
+            return ("active", "active")
+        if rs_status_v in ("failed",):
+            return ("failed", "failed")
+        if rs_status_v in ("replanned",):
+            return ("replanned", "replanned")
+        return ("in_progress", "active")
+
+    orig_status = plan_step.get("status", "")
+    if orig_status == "completed":
+        return ("completed", "completed")
+    if plan_step.get("status") == "skipped":
+        return ("skipped", "skipped")
+
+    return ("pending", "")
+
+
+def _status_to_color(status: str) -> str:
+    """Map a status label to a hex colour code."""
+    return {
+        "completed": "3fb950",
+        "active": "58a6ff",
+        "failed": "f85149",
+        "replanned": "8b5cf6",
+        "skipped": "484f58",
+        "pending": "30363d",
+    }.get(status, "8b949e")
+
+
+def _render_plan_section(
+    parts: list[str],
+    plan_steps: list[dict],
+    plan_goal: str | None,
+    plan_source: str | None,
+    runtime_steps: list,
+    is_active: bool,
+) -> None:
+    """Render the plan snapshot section in the Execution tab."""
+    parts.append("<div class='plan-section'>")
+    parts.append(
+        "<div class='plan-header' style='display:flex;align-items:center;"
+        "justify-content:space-between;margin-bottom:10px'>"
+        "<span style='font-size:0.82rem;font-weight:600;color:#8b949e;"
+        "text-transform:uppercase;letter-spacing:.5px'>"
+        f"{_icon('run', w=14, h=14)} Plan</span>"
+    )
+    if plan_source:
+        parts.append(
+            f"<span style='font-size:0.65rem;color:#484f58'>"
+            f"{html_escape(plan_source)}</span>"
+        )
+    parts.append("</div>")
+
+    if plan_goal:
+        parts.append(
+            f"<div style='font-size:0.78rem;color:#c9d1d9;margin-bottom:10px;"
+            f"padding:6px 10px;background:#161b22;border-radius:4px;"
+            f"border-left:3px solid #58a6ff'>"
+            f"{html_escape(plan_goal)}"
+            f"</div>"
+        )
+
+    completed = 0
+    total = len([s for s in plan_steps if s.get("depth", 0) == 0])
+    if total == 0:
+        total = len(plan_steps)
+
+    for step in plan_steps:
+        depth = step.get("depth", 0)
+        title = step.get("title", "Untitled")
+        status_label, _css = _derive_plan_step_status(step, runtime_steps, [])
+        if status_label == "completed":
+            completed += 1
+        ordinal = step.get("ordinal", 0)
+        is_phase = depth == 0
+
+        if status_label == "completed":
+            status_icon = _icon("evidence_passed", w=14, h=14)
+        elif status_label == "active":
+            status_icon = (
+                "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                "<circle cx='8' cy='8' r='5' fill='none' stroke='#58a6ff'"
+                " stroke-width='2' stroke-dasharray='8 4'/>"
+                "<circle cx='8' cy='8' r='2' fill='#58a6ff'/></svg>"
+            )
+        elif status_label in ("failed", "replanned"):
+            status_icon = _icon("evidence_failed", w=14, h=14)
+        elif status_label == "skipped":
+            status_icon = (
+                "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                "<circle cx='8' cy='8' r='5' fill='none' stroke='#484f58'"
+                " stroke-width='1.5'/>"
+                "<path d='M5.5 8h5' stroke='#484f58' stroke-width='1.5'"
+                " stroke-linecap='round'/></svg>"
+            )
+        else:
+            status_icon = (
+                "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                "<circle cx='8' cy='8' r='5' fill='none' stroke='#30363d'"
+                " stroke-width='1.5'/></svg>"
+            )
+
+        indent = 24 if depth == 1 else 0
+        font_size = "0.78rem" if is_phase else "0.72rem"
+        font_weight = "600" if is_phase else "400"
+        color = "#e6edf3" if is_phase else "#8b949e"
+
+        parts.append(
+            f"<div style='display:flex;align-items:center;gap:8px;"
+            f"padding:5px 0;margin-left:{indent}px'>"
+            f"{status_icon}"
+            f"<span style='font-size:{font_size};font-weight:{font_weight};"
+            f"color:{color};flex:1'>{html_escape(title)}</span>"
+        )
+        if is_phase:
+            parts.append(
+                f"<span style='font-size:0.6rem;color:#484f58;"
+                f"background:#21262d;padding:1px 6px;border-radius:3px'>"
+                f"PHASE-{ordinal:03d}</span>"
+            )
+        elif status_label != "pending":
+            parts.append(
+                f"<span style='font-size:0.6rem;"
+                f"color:#{_status_to_color(status_label)};"
+                f"text-transform:uppercase'>{status_label}</span>"
+            )
+        parts.append("</div>")
+
+    if total > 0:
+        pct = int(completed / total * 100)
+        parts.append(
+            f"<div style='margin-top:8px;font-size:0.68rem;color:#8b949e'>"
+            f"Progress: {completed}/{total} steps completed ({pct}%)"
+            f"</div>"
+        )
+
+    parts.append("</div>")
+
+
+def _render_plan_vs_reality(
+    parts: list[str],
+    plan_steps: list[dict],
+    runtime_steps: list,
+    log: object,
+) -> None:
+    """Render a Plan vs Reality comparison section."""
+    parts.append(
+        "<div class='plan-vs-reality' style='margin-top:16px;"
+        "background:#161b22;border:1px solid #30363d;border-radius:8px;"
+        "padding:14px 16px'>"
+    )
+    parts.append(
+        "<h3 style='font-size:0.82rem;color:#8b5cf6;margin-bottom:10px'>"
+        f"{_icon('decision_replan', w=14, h=14)} Plan vs Reality</h3>"
+    )
+
+    mismatches = 0
+    for ps in plan_steps:
+        title = ps.get("title", "Untitled")
+        status_label, _css = _derive_plan_step_status(ps, runtime_steps, [])
+
+        if status_label == "completed":
+            icon = _icon("evidence_passed", w=12, h=12)
+            row_color = "#3fb950"
+            bg = "#0d3320"
+        elif status_label == "active":
+            icon = _icon("run", w=12, h=12)
+            row_color = "#58a6ff"
+            bg = "#0d1f33"
+        elif status_label == "failed":
+            icon = _icon("evidence_failed", w=12, h=12)
+            row_color = "#f85149"
+            bg = "#330d0d"
+        elif status_label == "replanned":
+            icon = _icon("decision_replan", w=12, h=12)
+            row_color = "#8b5cf6"
+            bg = "#1a0d33"
+        elif status_label == "skipped":
+            icon = (
+                "<svg width='12' height='12' viewBox='0 0 16 16'>"
+                "<path d='M5.5 8h5' stroke='#484f58' stroke-width='2'"
+                " stroke-linecap='round'/></svg>"
+            )
+            row_color = "#484f58"
+            bg = "#161b22"
+        else:
+            icon = (
+                "<svg width='12' height='12' viewBox='0 0 16 16'>"
+                "<circle cx='8' cy='8' r='5' fill='none' stroke='#30363d'"
+                " stroke-width='1.5'/></svg>"
+            )
+            row_color = "#30363d"
+            bg = "#0d1117"
+            mismatches += 1
+
+        parts.append(
+            f"<div style='display:flex;align-items:center;gap:8px;"
+            f"padding:5px 8px;background:{bg};border-radius:4px;"
+            f"margin-bottom:3px;font-size:0.72rem;"
+            f"border-left:3px solid {row_color}'>"
+            f"{icon}"
+            f"<span style='flex:1;color:#c9d1d9'>{html_escape(title)}</span>"
+            f"<span style='color:{row_color};font-size:0.65rem;"
+            f"text-transform:uppercase'>{status_label}</span>"
+            f"</div>"
+        )
+
+    plan_total = len(plan_steps)
+    rt_total = len(runtime_steps)
+    parts.append(
+        f"<div style='margin-top:8px;font-size:0.68rem;color:#8b949e;"
+        f"display:flex;gap:16px'>"
+        f"<span>Plan: {plan_total} steps</span>"
+        f"<span>Runtime: {rt_total} step{'s' if rt_total != 1 else ''}</span>"
+        f"<span>Unmatched: {mismatches}</span>"
+        f"</div>"
+    )
+    parts.append("</div>")
+
+
+def _render_plan_tab(
+    parts: list[str],
+    plan_steps: list[dict],
+    plan_goal: str | None,
+    plan_source: str | None,
+    runtime_steps: list,
+    log: object,
+) -> None:
+    """Render the full Plan tab with status overlays."""
+    parts.append("<div style='max-width:900px;margin:0 auto'>")
+    parts.append(
+        "<div style='display:flex;align-items:center;"
+        "justify-content:space-between;margin-bottom:16px;"
+        "padding-bottom:8px;border-bottom:1px solid #21262d'>"
+        "<h3 style='font-size:0.9rem;color:#e6edf3;margin:0'>"
+        f"{_icon('run', w=16, h=16)} Plan Execution Status</h3>"
+    )
+    if plan_source:
+        parts.append(
+            f"<code style='font-size:0.65rem;color:#484f58'>"
+            f"{html_escape(plan_source)}</code>"
+        )
+    parts.append("</div>")
+
+    if plan_goal:
+        parts.append(
+            f"<div style='margin-bottom:16px;padding:10px 14px;"
+            f"background:#161b22;border-radius:6px;"
+            f"border-left:3px solid #58a6ff'>"
+            f"<div style='font-size:0.65rem;color:#8b949e;"
+            f"text-transform:uppercase;margin-bottom:4px'>Goal</div>"
+            f"<div style='font-size:0.85rem;color:#e6edf3'>"
+            f"{html_escape(plan_goal)}</div>"
+            f"</div>"
+        )
+
+    current_phase: dict | None = None
+    phase_steps: list[dict] = []
+    for step in plan_steps:
+        if step.get("depth", 0) == 0:
+            if current_phase is not None:
+                _render_plan_tab_phase(parts, current_phase, phase_steps,
+                                       runtime_steps)
+            current_phase = step
+            phase_steps = []
+        else:
+            phase_steps.append(step)
+    if current_phase is not None:
+        _render_plan_tab_phase(parts, current_phase, phase_steps,
+                               runtime_steps)
+
+    # Legend
+    parts.append(
+        "<div style='margin-top:20px;padding:12px;background:#161b22;"
+        "border-radius:6px;display:flex;gap:20px;flex-wrap:wrap;"
+        "font-size:0.65rem;color:#8b949e'>"
+        f"<span>{_icon('evidence_passed', w=12, h=12)} completed</span>"
+        "<span><svg width='12' height='12' viewBox='0 0 16 16'>"
+        "<circle cx='8' cy='8' r='5' fill='none' stroke='#58a6ff'"
+        " stroke-width='2' stroke-dasharray='8 4'/>"
+        "<circle cx='8' cy='8' r='2' fill='#58a6ff'/></svg> active</span>"
+        f"<span>{_icon('evidence_failed', w=12, h=12)} failed</span>"
+        f"<span>{_icon('decision_replan', w=12, h=12)} replanned</span>"
+        "<span><svg width='12' height='12' viewBox='0 0 16 16'>"
+        "<circle cx='8' cy='8' r='5' fill='none' stroke='#484f58'"
+        " stroke-width='1.5'/>"
+        "<path d='M5.5 8h5' stroke='#484f58' stroke-width='1.5'"
+        " stroke-linecap='round'/></svg> skipped</span>"
+        "<span><svg width='12' height='12' viewBox='0 0 16 16'>"
+        "<circle cx='8' cy='8' r='5' fill='none' stroke='#30363d'"
+        " stroke-width='1.5'/></svg> pending</span>"
+        "</div>"
+    )
+    parts.append("</div>")
+
+
+def _render_plan_tab_phase(
+    parts: list[str],
+    phase: dict,
+    sub_steps: list[dict],
+    runtime_steps: list,
+) -> None:
+    """Render one phase block in the Plan tab."""
+    title = phase.get("title", "Untitled Phase")
+    ordinal = phase.get("ordinal", 0)
+    status_label, _css = _derive_plan_step_status(phase, runtime_steps, [])
+
+    phase_bg = "#0d1117"
+    border_color = "#30363d"
+    if status_label == "completed":
+        border_color = "#3fb950"
+    elif status_label == "active":
+        border_color = "#58a6ff"
+    elif status_label == "failed":
+        border_color = "#f85149"
+
+    parts.append(
+        f"<div style='margin-bottom:12px;background:{phase_bg};"
+        f"border:1px solid {border_color};border-radius:8px;overflow:hidden'>"
+    )
+    parts.append(
+        f"<div style='display:flex;align-items:center;gap:8px;"
+        f"padding:10px 14px;background:#161b22;"
+        f"border-bottom:1px solid #21262d'>"
+        f"<span style='font-size:0.65rem;color:#484f58;"
+        f"background:#21262d;padding:2px 8px;border-radius:3px'>"
+        f"PHASE-{ordinal:03d}</span>"
+        f"<span style='font-size:0.82rem;font-weight:600;color:#e6edf3;flex:1'>"
+        f"{html_escape(title)}</span>"
+    )
+    if status_label != "pending":
+        color = _status_to_color(status_label)
+        parts.append(
+            f"<span style='font-size:0.6rem;color:#{color};"
+            f"background:#{color}1a;padding:2px 8px;border-radius:3px;"
+            f"text-transform:uppercase'>{status_label}</span>"
+        )
+    parts.append("</div>")
+
+    if sub_steps:
+        parts.append("<div style='padding:8px 14px'>")
+        for ss in sub_steps:
+            ss_title = ss.get("title", "Untitled")
+            ss_status, _css = _derive_plan_step_status(ss, runtime_steps, [])
+            acceptance = ss.get("acceptance_checks", [])
+
+            if ss_status == "completed":
+                icon = _icon("evidence_passed", w=14, h=14)
+                row_color = "#3fb950"
+            elif ss_status == "active":
+                icon = (
+                    "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                    "<circle cx='8' cy='8' r='5' fill='none' stroke='#58a6ff'"
+                    " stroke-width='2' stroke-dasharray='8 4'/>"
+                    "<circle cx='8' cy='8' r='2' fill='#58a6ff'/></svg>"
+                )
+                row_color = "#58a6ff"
+            elif ss_status in ("failed", "replanned"):
+                icon = _icon("evidence_failed", w=14, h=14)
+                row_color = "#f85149"
+            elif ss_status == "skipped":
+                icon = (
+                    "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                    "<circle cx='8' cy='8' r='5' fill='none' stroke='#484f58'"
+                    " stroke-width='1.5'/>"
+                    "<path d='M5.5 8h5' stroke='#484f58' stroke-width='1.5'"
+                    " stroke-linecap='round'/></svg>"
+                )
+                row_color = "#484f58"
+            else:
+                icon = (
+                    "<svg width='14' height='14' viewBox='0 0 16 16'>"
+                    "<circle cx='8' cy='8' r='5' fill='none' stroke='#30363d'"
+                    " stroke-width='1.5'/></svg>"
+                )
+                row_color = "#8b949e"
+
+            parts.append(
+                f"<div style='display:flex;align-items:center;gap:8px;"
+                f"padding:4px 0;font-size:0.72rem'>"
+                f"{icon}"
+                f"<span style='color:{row_color};flex:1'>"
+                f"{html_escape(ss_title)}</span>"
+            )
+            if ss_status != "pending":
+                parts.append(
+                    f"<span style='font-size:0.6rem;"
+                    f"color:#{_status_to_color(ss_status)};"
+                    f"text-transform:uppercase'>{ss_status}</span>"
+                )
+            parts.append("</div>")
+
+            if acceptance:
+                for ac in acceptance:
+                    ac_text = str(ac).lstrip("- ").strip()
+                    parts.append(
+                        f"<div style='margin-left:22px;font-size:0.65rem;"
+                        f"color:#484f58;padding:2px 0'>"
+                        f"check: {html_escape(ac_text)}"
+                        f"</div>"
+                    )
+        parts.append("</div>")
+    else:
+        parts.append(
+            "<div style='padding:8px 14px;font-size:0.68rem;"
+            "color:#484f58'>No sub-steps defined</div>"
+        )
+    parts.append("</div>")
 
 def _render_overview_page(
     summaries: list[RunSummary],
@@ -811,6 +1307,7 @@ def _render_overview_page(
     decisions: dict[str, dict[str, Any]] | None = None,
     filter_status: str = "all",
     search_q: str = "",
+    plan_progress: dict[str, str] | None = None,
 ) -> str:
     """Render the dashboard overview with active runs as cards and historical as table.
 
@@ -818,6 +1315,15 @@ def _render_overview_page(
     Historical runs (completed/failed) appear in a compact table below.
     Runs sharing the same task name are grouped under a common header.
     No run appears in both sections.
+
+    Args:
+        summaries: List of run summaries to display.
+        store_path: Path to the lineage store for display.
+        decisions: Optional pre-cached decision data keyed by run_id.
+        filter_status: Current filter selection.
+        search_q: Current search query string.
+        plan_progress: Optional dict mapping run_id to a plan progress string
+            like ``"Step 2/5: Write tests"``.
     """
     total = len(summaries)
     active_summaries = [s for s in summaries if s.incomplete or str(s.status).lower() == "started"]
@@ -938,9 +1444,13 @@ def _render_overview_page(
                     decision = d.get("decision", "—") if d else "—"
                     task_display = html_escape((s.task or "(untitled)")[:120])
                     status_str = "incomplete" if s.incomplete else sv(s.status)
-                    # Step info + candidate count placeholder
-                    candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
-                    step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
+                    # Use plan progress if available, otherwise fall back to step count
+                    plan_step_text = (plan_progress or {}).get(s.run_id)
+                    if plan_step_text:
+                        step_info = plan_step_text
+                    else:
+                        candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
+                        step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
                     # Decision class for colored badge
                     dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
                     dec_class = f" decision-{dec_css}" if dec_css else ""
@@ -1043,12 +1553,15 @@ def _render_overview_page(
 
 
 
-def _render_run_detail(log: RunLog) -> str:
+def _render_run_detail(log: RunLog, *, plan_snapshot: dict | None = None) -> str:
     """Render a single-run detail page with tab navigation.
 
-    Tabs: Execution (default) | Evidence | Artifacts | Replay.
+    Tabs: Execution (default) | Plan | Evidence | Artifacts | Replay.
     The Execution tab shows plan progress, current action,
     latest decision with reason, and recent activity.
+    When a plan_snapshot is available (from run.json metadata), the
+    Execution tab renders plan phases with status and a Plan vs Reality
+    diff. The Plan tab shows the full parsed plan with overlays.
     """
     run = log.run
     audit = _RunAuditIndex.from_log(log)
@@ -1299,6 +1812,7 @@ def _render_run_detail(log: RunLog) -> str:
     parts.append(
         "<nav class='tab-nav'>"
         "<button class='tab-btn active' data-tab='execution'>Execution</button>"
+        "<button class='tab-btn' data-tab='plan'>Plan</button>"
         "<button class='tab-btn' data-tab='evidence'>Evidence</button>"
         "<button class='tab-btn' data-tab='artifacts'>Artifacts</button>"
         "<button class='tab-btn' data-tab='replay'>Replay</button>"
@@ -1310,8 +1824,22 @@ def _render_run_detail(log: RunLog) -> str:
     # ================================================================
     parts.append("<div class='tab-panel active' id='tab-execution'>")
 
-    # Plan Progress
-    if steps:
+    # Parse plan snapshot into structured data when available
+    plan_steps: list[dict] = []
+    plan_goal: str | None = None
+    plan_source: str | None = None
+    if plan_snapshot:
+        plan_steps = plan_snapshot.get("steps", [])
+        plan_goal = plan_snapshot.get("goal")
+        plan_source = plan_snapshot.get("source_path")
+
+    # -- Plan Section (from plan.md snapshot) --
+    if plan_steps:
+        _render_plan_section(parts, plan_steps, plan_goal, plan_source,
+                             steps, is_active)
+
+    # Plan Progress circles (from runtime step events)
+    if steps and not plan_steps:
         parts.append("<div class='plan-progress'>")
         for i, step in enumerate(steps):
             desc = html_escape((step.description or f"Step {i+1}")[:20])
@@ -1337,6 +1865,36 @@ def _render_run_detail(log: RunLog) -> str:
                 connector_class = " completed" if status_v == "completed" else ""
                 parts.append(f"<div class='plan-connector{connector_class}'></div>")
         parts.append("</div>")
+    elif steps:
+        # Runtime steps exist but plan snapshot doesn't — show compact
+        parts.append("<div class='plan-progress'>")
+        for i, step in enumerate(steps[:8]):
+            desc = html_escape((step.description or f"Step {i+1}")[:20])
+            status_v = step.status.value if hasattr(step.status, 'value') else str(step.status)
+            circle_class = ""
+            if status_v == "completed":
+                circle_class = " completed"
+            elif status_v == "failed":
+                circle_class = " failed"
+            elif i == current_step_idx and is_active:
+                circle_class = " active"
+            label_class = " active" if i == current_step_idx else ""
+            parts.append("<div class='plan-step'>")
+            parts.append(
+                f"<div class='plan-step-circle{circle_class}'"
+                f" title='{desc}'>"
+                f"{i + 1}</div>"
+            )
+            parts.append(f"<span class='plan-step-label{label_class}'>{desc}</span>")
+            parts.append("</div>")
+            if i < min(len(steps), 8) - 1:
+                connector_class = " completed" if status_v == "completed" else ""
+                parts.append(f"<div class='plan-connector{connector_class}'></div>")
+        parts.append("</div>")
+
+    # Plan vs Reality diff (when plan_snapshot + runtime steps both exist)
+    if plan_steps and steps:
+        _render_plan_vs_reality(parts, plan_steps, steps, log)
 
     # Current action
     action_now = "In progress" if is_active else "Last action"
@@ -1427,9 +1985,9 @@ def _render_run_detail(log: RunLog) -> str:
         parts.append(html_escape(line))
     parts.append("</pre></details>")
 
-    # Plan vs Reality / Replan comparison
-    # Show if there are multiple plan versions or REPLAN decisions
-    has_replan = any(
+    # Plan vs Reality diff already rendered above when plan_snapshot exists.
+    # For backward compat: show replan section when no plan_snapshot but replan detected
+    has_replan = not plan_steps and any(
         getattr(ev, 'decision', '') == 'REPLAN' or 'replan' in str(getattr(ev, 'event', '')).lower()
         for ev in log.events
     )
@@ -1463,6 +2021,25 @@ def _render_run_detail(log: RunLog) -> str:
         parts.append("</div>")
 
     parts.append("</div>")  # end tab-execution
+
+    # ================================================================
+    # TAB: Plan
+    # ================================================================
+    parts.append("<div class='tab-panel' id='tab-plan'>")
+    if plan_steps:
+        _render_plan_tab(parts, plan_steps, plan_goal, plan_source, steps, log)
+    else:
+        parts.append(
+            "<div style='text-align:center;padding:40px 20px;color:#8b949e'>"
+            "<div style='margin-bottom:12px;opacity:0.3'>"
+            f"{_icon('run', w=32, h=32)}</div>"
+            "<h3 style='font-size:1rem;color:#e6edf3;margin-bottom:4px'>No Plan Loaded</h3>"
+            "<p style='font-size:0.78rem'>This run was started without a plan.md file. "
+            "Use <code>bound ui --plan plan.md</code> to pre-load a plan, or start a "
+            "new run with <code>load_plan_snapshot()</code>.</p>"
+            "</div>"
+        )
+    parts.append("</div>")  # end tab-plan
 
     # ================================================================
     # TAB: Evidence
@@ -1893,6 +2470,7 @@ class _DashboardHandler(BaseHTTPRequestHandler):
 
     lineage_store: LineageStore | None = None
     startup_redirect: str | None = None
+    plan_path_override: str | None = None
 
     # Quiet the default access-log spam; only log at DEBUG
     def log_message(self, fmt: str, *args: object) -> None:
@@ -2028,9 +2606,15 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if search_q:
             summaries = [s for s in summaries if search_q in (s.task or "").lower() or search_q in s.run_id.lower()]
         decisions = _get_overview_decisions(summaries, self._store)
+        # Collect plan progress for active runs
+        plan_progress = _collect_plan_progress(
+            [s for s in summaries if s.incomplete or str(s.status).lower() == "started"],
+            self._store,
+        )
         html = _render_overview_page(
             summaries, str(self._store.base_dir), decisions=decisions,
             filter_status=filter_status, search_q=query.get("q", ""),
+            plan_progress=plan_progress,
         )
         self._send_html(html)
 
@@ -2039,8 +2623,21 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         if log is None:
             self._send_404(f"Run {run_id!r} not found or corrupt")
             return
-        html = _render_run_detail(log)
+        plan = self._get_run_plan(run_id)
+        html = _render_run_detail(log, plan_snapshot=plan)
         self._send_html(html)
+
+    def _get_run_plan(self, run_id: str) -> dict | None:
+        """Load plan snapshot metadata from run.json, returning None if absent."""
+        import json
+        meta_path = self._store._meta_path(run_id)
+        if not meta_path.exists():
+            return None
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            return meta.get("plan_snapshot")
+        except (OSError, json.JSONDecodeError):
+            return None
 
     def _handle_api_runs(self) -> None:
         summaries = self._get_runs()
@@ -2117,6 +2714,7 @@ def serve(
     open_browser: bool = False,
     store: LineageStore | None = None,
     run_id: str | None = None,
+    plan_path: str | None = None,
 ) -> None:
     """Start the BOUND dashboard HTTP server.
 
@@ -2128,6 +2726,8 @@ def serve(
             store (``.bound/runs/`` under CWD) is used.
         run_id: Optional run id to redirect to after startup. When set, the
             dashboard opens directly to that run's detail page.
+        plan_path: Optional explicit path to a plan.md file. When set, the
+            plan is pre-loaded for use across runs.
     """
     class _SilentHTTPServer(HTTPServer):
         """HTTPServer that suppresses socket-level tracebacks."""
@@ -2140,6 +2740,8 @@ def serve(
         _DashboardHandler.lineage_store = store
     if run_id is not None:
         _DashboardHandler.startup_redirect = run_id
+    if plan_path is not None:
+        _DashboardHandler.plan_path_override = plan_path
 
     try:
         server = _SilentHTTPServer((host, port), _DashboardHandler)

@@ -81,6 +81,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/bound/ui.py" = ["E501"]
+"src/bound/benchmark_report.py" = ["E501"]
+"src/bound/controller_eval.py" = ["E501"]
+"tests/test_benchmark.py" = ["E501"]
+"tests/test_controller_eval.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
