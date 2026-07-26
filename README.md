@@ -218,6 +218,33 @@ Reference integrations for Cline, Codex, and Claude Code live in
 [`integrations/`](integrations/).  See also the tests at
 `tests/test_adapters_generic.py` for working examples.
 
+### Built-in native adapters
+
+```bash
+# One-command setup for any supported agent:
+bound adapter install cline     # generates .cline/mcp/bound.json MCP config
+bound adapter install claude    # validates claude-code CLI availability
+bound adapter install codex     # validates codex CLI availability
+```
+
+| Adapter | Agent | Mechanism | Module |
+|---|---|---|---|
+| **ClaudeCodeAdapter** | Claude Code | subprocess: `--print --output-format stream-json` | `adapters/claude_code.py` |
+| **CodexAdapter** | Codex | subprocess: `exec` + MCP | `adapters/codex.py` |
+| **ClineMCPAdapter** | Cline | MCP server config | `adapters/cline.py` |
+| **GenericProcessAdapter** | Any CLI | subprocess with ACP JSONL | `adapters/generic.py` |
+
+```python
+from bound.adapters.claude_code import ClaudeCodeAdapter
+from bound.runtime import BoundRuntime
+
+adapter = ClaudeCodeAdapter(model="claude-sonnet-4-20250514")
+runtime = BoundRuntime.from_policy("bound-policy.yaml")
+result = runtime.run_with_adapter(adapter, task="Fix validation bug")
+# → BOUND spawns Claude Code → reads stream-json events
+# → evaluates each step → sends ACCEPT/RETRY/REPLAN/ROLLBACK
+```
+
 ## License
 
 MIT © Danny de Bree. See [LICENSE](LICENSE).

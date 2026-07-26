@@ -35,6 +35,7 @@ DEFAULT_CLAUDE_COMMAND: list[str] = [
     "npx",
     "@anthropic-ai/claude-code",
     "-p",
+    "--verbose",
     "--dangerously-skip-permissions",
     "--output-format",
     "stream-json",
