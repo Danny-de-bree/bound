@@ -2536,6 +2536,8 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         try:
             if path == "" or path == "/":
                 self._handle_overview()
+            elif path == "/plans":
+                self._handle_plans()
             elif path.startswith("/run/"):
                 run_id = path[len("/run/") :]
                 self._handle_run_detail(run_id)
@@ -2629,6 +2631,60 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             plan_progress=plan_progress,
         )
         self._send_html(html)
+
+    def _handle_plans(self) -> None:
+        """Render the plans overview page showing runs grouped by plan."""
+        parts = [
+            "<!DOCTYPE html><html><head><title>BOUND - Plans</title>"
+            "<style>body{background:#0d1117;color:#e6edf3;font-family:sans-serif;"
+            "margin:0;padding:24px}"
+            ".nav{display:flex;gap:16px;margin-bottom:24px;border-bottom:2px solid #30363d;"
+            "padding-bottom:12px}"
+            ".nav a{color:#8b949e;text-decoration:none;font-size:0.85rem}"
+            ".nav a:hover,.nav a.active{color:#58a6ff}"
+            "h1{font-size:1.3rem;margin:0 0 4px}"
+            "h2{font-size:0.9rem;color:#8b949e;font-weight:400;margin:0 0 24px}"
+            ".card{background:#161b22;border:1px solid #30363d;border-radius:6px;"
+            "padding:16px;margin-bottom:12px}"
+            ".card a{color:#58a6ff;text-decoration:none;font-size:0.95rem;font-weight:500}"
+            ".meta{font-size:0.75rem;color:#8b949e;margin-top:4px}"
+            ".empty{text-align:center;padding:48px;color:#8b949e}"
+            "</style></head><body>"
+        ]
+        parts.append(
+            '<div class="nav">'
+            '<a href="/">Runs</a>'
+            '<a href="/plans" class="active">Plans</a>'
+            "</div>"
+        )
+        parts.append("<h1>Plans</h1>")
+        store_path = html_escape(str(self._store.base_dir))
+        parts.append(f"<h2>Store: {store_path}</h2>")
+
+        summaries = self._get_runs()
+        plans: dict[str, dict] = {}
+        for s in summaries:
+            plan_key = html_escape(s.task[:50] if s.task else "(untitled)")
+            if plan_key not in plans:
+                plans[plan_key] = {"key": plan_key, "runs": 0, "latest_id": "", "latest_status": "none"}
+            plans[plan_key]["runs"] += 1
+            if s.run_id:
+                plans[plan_key]["latest_id"] = html_escape(s.run_id)
+                plans[plan_key]["latest_status"] = str(s.status)
+
+        if not plans:
+            parts.append('<div class="empty"><p>No runs found.</p><p>Start with <code>bound run "task"</code></p></div>')
+        else:
+            for key, pdata in sorted(plans.items()):
+                parts.append(
+                    f'<div class="card">'
+                    f'<a href="/run/{pdata["latest_id"]}">{key}</a>'
+                    f'<div class="meta">Runs: {pdata["runs"]} | '
+                    f'Latest: {pdata["latest_status"]}</div>'
+                    f'</div>'
+                )
+        parts.append("</body></html>")
+        self._send_html("\n".join(parts))
 
     def _handle_run_detail(self, run_id: str) -> None:
         log = self._get_run_log(run_id)
