@@ -874,16 +874,31 @@ def _derive_plan_step_status(
     plan_title = (plan_step.get("title") or "").lower().strip()
     plan_id = plan_step.get("step_id", "")
 
+    # Derive a normalized phase key from the plan title (e.g. "phase 0 — scope" → "phase-000")
+    import re as _re3
+    _phase_match = _re3.match(r"phase\s*(\d+)", plan_title)
+    plan_phase_key = f"phase-{int(_phase_match.group(1)):03d}" if _phase_match else None
+
     matched = None
     for rs in runtime_steps:
         rs_desc = (getattr(rs, "description", None) or "").lower().strip()
         rs_id = getattr(rs, "step_id", "")
+        rs_contract = (getattr(rs, "contract_id", None) or "").lower().strip()
+
+        # Exact contract_id match (e.g. "phase-000" ↔ "phase-000")
+        if plan_phase_key and rs_contract == plan_phase_key:
+            matched = rs
+            break
+        # Plan title contains runtime contract or vice versa
+        if plan_title and rs_contract and (plan_title in rs_contract or rs_contract in plan_title):
+            matched = rs
+            break
+        # Step ID prefix match
         if rs_id and plan_id and rs_id.startswith(plan_id[:8]):
             matched = rs
             break
-        if plan_title and rs_desc and (
-            plan_title in rs_desc or rs_desc in plan_title
-        ):
+        # Description substring match
+        if plan_title and rs_desc and (plan_title in rs_desc or rs_desc in plan_title):
             matched = rs
             break
 
