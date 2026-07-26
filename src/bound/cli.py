@@ -866,7 +866,42 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.set_defaults(func=_run_doctor)
 
-# --- benchmark (v1.0.0) -------------------------------------------------
+    # --- adapter (v0.9.5) ------------------------------------------------------
+    adapter_parser = subparsers.add_parser(
+        "adapter",
+        help="Manage BOUND agent adapter integrations.",
+        description=(
+            "Install or remove agent adapter integrations. Supported agents: "
+            "cline, claude-code, codex."
+        ),
+    )
+    adapter_sub = adapter_parser.add_subparsers(
+        dest="adapter_command",
+        metavar="<adapter command>",
+        required=True,
+    )
+
+    adapter_install = adapter_sub.add_parser(
+        "install",
+        help="Install an agent adapter integration.",
+        description=(
+            "Install the MCP or adapter configuration for a specific agent. "
+            "Creates the required config files and directories."
+        ),
+    )
+    adapter_install.add_argument(
+        "agent",
+        choices=["cline", "claude-code", "codex"],
+        help="The agent to install the adapter for.",
+    )
+    adapter_install.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    adapter_install.set_defaults(func=_run_adapter_install)
+
+    # --- benchmark (v1.0.0) -------------------------------------------------
     bm_parser = subparsers.add_parser(
         "benchmark",
         help="Run BOUND benchmark suites and view reports.",
@@ -2692,6 +2727,67 @@ def _run_doctor(args: argparse.Namespace) -> int:
         print(summary)
 
     return report.recommended_exit_code
+
+
+def _run_adapter_install(args: argparse.Namespace) -> int:
+    """Execute ``bound adapter install``.
+
+    Installs the adapter integration config for the specified agent. For Cline
+    and Codex, writes the MCP server config file. For Claude Code, confirms
+    the adapter is importable (the CLI flags are embedded in the adapter class).
+
+    Args:
+        args: Parsed namespace with ``agent`` and ``project_dir``.
+
+    Returns:
+        ``0`` on success, ``1`` on failure.
+    """
+    agent = args.agent
+    project_dir = args.project_dir
+
+    if agent == "cline":
+        try:
+            from bound.adapters.cline import ClineMCPAdapter
+        except ImportError as exc:
+            print(f"error: cannot import ClineMCPAdapter: {exc}", file=sys.stderr)
+            return 1
+        try:
+            path = ClineMCPAdapter.install(project_dir=project_dir)
+            print(f"Cline MCP adapter installed: {path}")
+        except OSError as exc:
+            print(f"error: failed to install Cline adapter: {exc}", file=sys.stderr)
+            return 1
+    elif agent == "codex":
+        try:
+            from bound.adapters.codex import CodexMCPConfig
+        except ImportError as exc:
+            print(f"error: cannot import CodexMCPConfig: {exc}", file=sys.stderr)
+            return 1
+        try:
+            path = CodexMCPConfig.install(project_dir=project_dir)
+            print(f"Codex MCP adapter installed: {path}")
+        except OSError as exc:
+            print(f"error: failed to install Codex adapter: {exc}", file=sys.stderr)
+            return 1
+    elif agent == "claude-code":
+        try:
+            from bound.adapters.claude_code import ClaudeCodeAdapter
+        except ImportError as exc:
+            print(f"error: cannot import ClaudeCodeAdapter: {exc}", file=sys.stderr)
+            return 1
+        # Claude Code uses a subprocess adapter; validate the import works.
+        cmd = ' '.join(ClaudeCodeAdapter().config.agent_command)
+        print(f"Claude Code adapter is available (command: {cmd} <task>)")
+        print(
+            "Ensure @anthropic-ai/claude-code is installed: "
+            "npx @anthropic-ai/claude-code --version"
+        )
+    else:
+        print(f"error: unknown agent {agent!r}", file=sys.stderr)
+        return 1
+
+    return 0
+
 
 def _print_detection_summary(detections: ProjectDetections) -> None:
     """Print a human-readable summary of the detections to stderr.

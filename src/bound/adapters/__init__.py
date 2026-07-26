@@ -205,4 +205,41 @@ __all__ = [
     "AdapterConfig",
     "AdapterEvent",
     "AgentAdapter",
+    "ClaudeCodeAdapter",
+    "ClineMCPAdapter",
+    "CodexAdapter",
+    "CodexMCPConfig",
+    "GenericProcessAdapter",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Lazy imports — keep provider-specific adapters out of the critical path.
+# ---------------------------------------------------------------------------
+
+def __getattr__(name: str) -> object:
+    """Lazy-load adapter classes to avoid importing provider modules at startup.
+
+    Args:
+        name: The attribute name being accessed.
+
+    Returns:
+        The requested class or module-level object.
+
+    Raises:
+        AttributeError: If the name is not a lazy-loadable adapter.
+    """
+    _LAZY = {
+        "GenericProcessAdapter": "bound.adapters.generic",
+        "ClaudeCodeAdapter": "bound.adapters.claude_code",
+        "ClineMCPAdapter": "bound.adapters.cline",
+        "CodexAdapter": "bound.adapters.codex",
+        "CodexMCPConfig": "bound.adapters.codex",
+    }
+    if name in _LAZY:
+        module = __import__(_LAZY[name], fromlist=[name])
+        attr = getattr(module, name)
+        # Cache in the module's global namespace for future lookups.
+        globals()[name] = attr
+        return attr
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
