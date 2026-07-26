@@ -2149,6 +2149,13 @@ def serve(
 
     store_path = store.base_dir if store else Path(".bound/runs").resolve()
     url = f"http://{host}:{port}"
+
+    # Warm the cache so step counts and decisions are instant
+    use_store = store or _DashboardHandler.lineage_store or get_default_store()
+    cached = use_store.warm_cache()
+    if cached:
+        print(f"Cache warmed:     {cached} run(s) indexed")
+
     print(f"BOUND dashboard: {url}")
     print(f"Lineage store:   {store_path}")
 

@@ -1116,12 +1116,15 @@ class LineageStore:
             status = RunStatus(meta.get("status", RunStatus.STARTED.value))
             events_path = self._events_path(run_id)
             event_count = self._count_events(events_path) if events_path.exists() else 0
-            # Use cached values to avoid full replay
+            # Use cached values to avoid full replay; fall back when missing or zero
             step_count_raw = meta.get("step_count")
-            step_count = (
-                step_count_raw if "step_count" in meta
-                else self._count_steps(run_id)
-            )
+            if step_count_raw:
+                step_count = step_count_raw if isinstance(step_count_raw, int) else 0
+            else:
+                step_count = self._count_steps(run_id)
+                # Backfill cache for this run
+                meta["step_count"] = step_count
+                self._write_run_meta(run_id, meta)
             incomplete = meta.get("incomplete") if "incomplete" in meta else True
             summaries.append(
                 RunSummary(
@@ -1147,6 +1150,27 @@ class LineageStore:
         """Count steps by replaying the log (fallback when cache is stale)."""
         log = self._safe_replay(run_id)
         return len(log.steps) if log is not None else 0
+
+    def warm_cache(self) -> int:
+        """Backfill cached fields for all existing runs.
+
+        Iterates every run directory, replays the log once per run, and writes
+        *step_count*, *incomplete*, and *latest_decision* into ``run.json``.
+        Returns the number of runs updated.
+
+        Call this once at server startup so the overview loads instantly.
+        """
+        updated = 0
+        if not self.base_dir.exists():
+            return 0
+        for meta_path in sorted(self.base_dir.glob("*/run.json")):
+            run_id = meta_path.parent.name
+            try:
+                self._update_run_meta_cache(run_id)
+                updated += 1
+            except Exception:
+                pass
+        return updated
 
     def _safe_replay(self, run_id: str) -> RunLog | None:
         try:
