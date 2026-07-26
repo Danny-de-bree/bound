@@ -14,6 +14,7 @@ import sys
 import time
 import webbrowser
 from collections.abc import Mapping
+from contextlib import suppress
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -1834,9 +1835,14 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     lineage_store: LineageStore | None = None
     startup_redirect: str | None = None
 
-    # Suppress all HTTP request logging for a quiet terminal
+    # Quiet the default access-log spam; only log at DEBUG
     def log_message(self, fmt: str, *args: object) -> None:
-        pass  # silence is golden
+        logger.debug(fmt, *args)
+
+    def handle(self) -> None:
+        """Handle one request, suppressing connection-drop noise."""
+        with suppress(ConnectionResetError, BrokenPipeError, OSError):
+            super().handle()
 
     def _send_html(self, html: str, status: int = 200) -> None:
         body = html.encode("utf-8")
