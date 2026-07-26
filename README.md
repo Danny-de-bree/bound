@@ -30,34 +30,53 @@ BOUND emits the signal; the agent performs the action.
 
 ## Quickstart — use BOUND with your agent today
 
-### With Cline or Codex (strongest — MCP, no prompt needed)
+Pick your agent:
 
-```bash
-pip install bound-policy        # 1. Install BOUND
-bound adapter install cline     # 2. Wire Cline to BOUND's MCP server
-# or: bound adapter install codex
-```
-
-That's it. Cline/Codex now see BOUND tools — `bound_evaluate`,
-`bound_checkpoint`, `bound_rollback` — and call them automatically during
-execution. No prompt, no manual `bound evaluate` calls. BOUND decides, the
-agent acts.
-
-Open the dashboard to watch live:
-
-```bash
-bound ui                        # → http://127.0.0.1:8765
-```
-
-### With any other agent (prompt-based)
+### Cline
 
 ```bash
 pip install bound-policy
-bound setup --agent generic     # generates policy + integration prompt
-cat .bound/integration-prompt.md  # paste this into your agent
+bound adapter install cline  # generates .cline/mcp/bound.json
+cline                        # Cline auto-discovers BOUND's MCP tools
 ```
 
-Your agent now knows when and how to call `bound evaluate` at each step.
+Cline sees `bound_evaluate`, `bound_checkpoint`, `bound_rollback` as tools.
+No prompt needed — Cline calls BOUND automatically during execution.
+
+### Codex
+
+```bash
+pip install bound-policy
+bound adapter install codex   # validates Codex CLI, generates MCP config
+npx @openai/codex exec "your task"   # Codex calls BOUND tools during exec
+```
+
+Requires `OPENAI_API_KEY` or `codex login` for authentication.
+
+### Claude Code
+
+```bash
+pip install bound-policy
+bound adapter install claude  # validates claude-code CLI
+npx @anthropic-ai/claude-code -p "your task"  # use --print for non-interactive
+```
+
+Requires `claude login` for authentication. Use `--output-format stream-json`
+for structured events that BOUND can evaluate.
+
+### Any other agent (prompt-based)
+
+```bash
+pip install bound-policy
+bound setup --agent generic
+cat .bound/integration-prompt.md   # paste into your agent
+```
+
+### Watch it live
+
+```bash
+bound ui   # → http://127.0.0.1:8765 — dashboard with plan progress, evidence, replays
+```
 
 ### What happens in a session
 
@@ -72,7 +91,19 @@ Your agent now knows when and how to call `bound evaluate` at each step.
 7. Finish:       bound run finish
 ```
 
-Watch it all live: `bound ui`
+### Tested vs untested
+
+| Component | Status | Verified by |
+|---|---|---|
+| `bound evaluate` + decision logic | ✅ Tested | 1477 pytest tests |
+| `bound ui` dashboard | ✅ Tested | Manual + visual regression tests |
+| MCP server (`bound mcp`) | ✅ Tested | tools/list returns correct schema |
+| MCP config generation (`bound adapter install`) | ✅ Tested | Generates valid `.cline/mcp/bound.json` |
+| GenericProcessAdapter | ✅ Tested | E2E subprocess tests with mock agents |
+| Claude Code stream-json parsing | ✅ Tested | Real CLI output captured, parsed correctly |
+| Cline MCP integration | ⚠️ MCP config valid, not E2E | Requires Anthropic auth |
+| Codex exec integration | ⚠️ CLI works, not E2E | Requires OpenAI auth |
+| Claude Code adapter E2E | ⚠️ CLI works, not E2E | Requires Anthropic auth |
 
 **Overview — all your runs at a glance:**
 
