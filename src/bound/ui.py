@@ -1117,7 +1117,10 @@ def _render_run_detail(log: RunLog) -> str:
     )
     for ev in log.events:
         try:
-            line = json.dumps(ev, default=str, indent=None)
+            if hasattr(ev, "model_dump"):
+                line = json.dumps(ev.model_dump(mode="json"), default=str)
+            else:
+                line = json.dumps(ev, default=str)
         except (TypeError, ValueError):
             line = str(ev)
         parts.append(html_escape(line))
