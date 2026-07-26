@@ -36,6 +36,17 @@ entirely without an LLM: LLM-based contract generation is an *optional*
 convenience layer, never a requirement.
 """
 
+from bound.adapters.protocol import (
+    AgentCapabilities,
+    AgentInstallation,
+)
+from bound.agent_discovery import (
+    AgentDiscovery,
+    agent_selection_help,
+    detect_agent,
+    detect_all_agents,
+    get_integration_label,
+)
 from bound.bound_workflow import BoundWorkflow
 from bound.candidate import (
     Candidate,
@@ -53,6 +64,15 @@ from bound.command_collector import (
     PytestCollector,
     Redactor,
     default_redactor,
+)
+from bound.config import (
+    AgentConfig,
+    PlanConfig,
+    PolicyConfig,
+    ProjectConfig,
+    WorkspaceConfig,
+    find_project_root,
+    load_project_config,
 )
 from bound.contract_evaluator import (
     AssuranceAssessment,
@@ -180,6 +200,17 @@ from bound.models import (
     ScoreEvidence,
     WorkflowNormalization,
 )
+from bound.plan_model import (
+    Plan,
+    PlanVersion,
+    RunPlanLink,
+    compute_plan_hash,
+    create_plan_version,
+    find_or_create_plan,
+    require_replan,
+    resolve_plan_id,
+)
+from bound.plan_parser import PlanSnapshot, extract_front_matter, load_plan, parse_plan_steps
 from bound.policy_canon import (
     canonicalize_policy,
     compute_contract_hash,
@@ -361,6 +392,49 @@ __all__ = [
     "html_escape",
     "provenance_label",
     "sv",
+    # --- v1.0 config + capability model ---
+    "AgentConfig",
+    "AgentCapabilities",
+    "AgentDiscovery",
+    "AgentInstallation",
+    "PlanConfig",
+    "PolicyConfig",
+    "ProjectConfig",
+    "WorkspaceConfig",
+    "find_project_root",
+    "load_project_config",
+    # --- v1.0 agent discovery ---
+    "agent_selection_help",
+    "detect_agent",
+    "detect_all_agents",
+    "get_integration_label",
+    # --- v1.0 plan model ---
+    "Plan",
+    "PlanVersion",
+    "RunPlanLink",
+    "PlanSnapshot",
+    "compute_plan_hash",
+    "create_plan_version",
+    "discover_plan",
+    "extract_front_matter",
+    "find_or_create_plan",
+    "load_plan",
+    "parse_plan_steps",
+    "require_replan",
+    "resolve_plan_id",
+    # --- v1.0 plan runtime events ---
+    "PlanDiscoveredEvent",
+    "PlanCreatedEvent",
+    "PlanVersionCreatedEvent",
+    "PlanDiffCreatedEvent",
+    "PlanUpdatedEvent",
+    "PlanStepStartedEvent",
+    "PlanStepCompletedEvent",
+    "PlanStepFailedEvent",
+    "PlanStepSkippedEvent",
+    "PlanStepInsertedEvent",
+    "PlanStepRemovedEvent",
+    "PlanStepModifiedEvent",
 ]
 
 __version__ = "0.9.1"

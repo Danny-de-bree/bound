@@ -12,6 +12,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from bound.ui_models import PlanStep, PlanStepStatus
@@ -204,4 +205,166 @@ def _parse_steps(raw: str) -> list[PlanStep]:
     return steps
 
 
-__all__ = ["PlanSnapshot", "load_plan"]
+def extract_front_matter(content: str) -> dict:
+    """Parse YAML front matter from plan content.
+
+    Extracts the YAML block between the first pair of ``---`` markers
+    and returns the parsed dict.  Handles the common ``bound: {plan_id: ...,
+    title: ...}`` pattern used by BOUND plans.
+
+    Args:
+        content: Raw markdown content, possibly with front matter.
+
+    Returns:
+        Parsed front matter as a dict.  Returns an empty dict when no
+        front matter is present or when the YAML cannot be parsed.
+
+    Examples:
+        >>> extract_front_matter('---\\nbound:\\n  plan_id: abc\\n---\\n# Goal')
+        {'bound': {'plan_id': 'abc'}}
+    """
+    stripped = content.lstrip()
+    if not stripped.startswith("---"):
+        return {}
+
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return {}
+
+    # Find the closing ---
+    end_idx: int | None = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end_idx = i
+            break
+
+    if end_idx is None:
+        return {}
+
+    yaml_block = "\n".join(lines[1:end_idx])
+    try:
+        parsed = yaml.safe_load(yaml_block)
+    except yaml.YAMLError:
+        return {}
+
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
+
+
+def parse_plan_steps(content: str) -> list[dict]:
+    """Parse plan content into a list of step dicts with stable step_ids.
+
+    Parses ``##`` headings as phases and checklist items (``- [ ]`` /
+    ``- [x]``) as checkable steps.  Each step dict receives a stable
+    ``step_id`` derived from a content hash of its title and ordinal position.
+
+    Args:
+        content: Raw markdown plan content.
+
+    Returns:
+        A list of step dicts, each containing at minimum:
+        ``step_id``, ``title``, ``ordinal``, ``depth``, ``status``,
+        ``phase``, and ``source_line``.
+
+    Examples:
+        >>> steps = parse_plan_steps('## Inspect\\n- [ ] Read code\\n- [x] Run tests')
+        >>> steps[0]['title']
+        'Inspect'
+        >>> steps[1]['status']
+        'pending'
+    """
+    steps: list[dict] = []
+    ordinal = 0
+    current_phase: str | None = None
+    lines = content.splitlines()
+
+    for idx, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        heading_match = _HEADING_RE.match(stripped)
+
+        # Skip # headings (goal)
+        if heading_match and heading_match.group(1) == "#":
+            continue
+
+        # ## heading = phase
+        if heading_match and heading_match.group(1) == "##":
+            title = heading_match.group(2).strip()
+            ordinal += 1
+            step_id = _derive_step_id(title, ordinal)
+            current_phase = title
+            steps.append({
+                "step_id": step_id,
+                "title": title,
+                "ordinal": ordinal,
+                "depth": 0,
+                "status": "pending",
+                "phase": None,
+                "source_line": idx,
+            })
+            continue
+
+        # ### heading = sub-step
+        if heading_match and heading_match.group(1) == "###":
+            title = heading_match.group(2).strip()
+            ordinal += 1
+            step_id = _derive_step_id(title, ordinal)
+            steps.append({
+                "step_id": step_id,
+                "title": title,
+                "ordinal": ordinal,
+                "depth": 1,
+                "status": "pending",
+                "phase": current_phase,
+                "source_line": idx,
+            })
+            continue
+
+        # Checkbox items: - [ ] / - [x]
+        checkbox_match = _CHECKBOX_RE.match(stripped)
+        if checkbox_match:
+            checked = checkbox_match.group(1).lower()
+            title = checkbox_match.group(2).strip()
+            ordinal += 1
+            step_id = _derive_step_id(title, ordinal)
+            status = "completed" if checked == "x" else "pending"
+            steps.append({
+                "step_id": step_id,
+                "title": title,
+                "ordinal": ordinal,
+                "depth": 1 if current_phase else 0,
+                "status": status,
+                "phase": current_phase,
+                "source_line": idx,
+            })
+            continue
+
+        # Numbered items: 1. ...
+        numbered_match = _NUMBERED_ITEM_RE.match(stripped)
+        if numbered_match:
+            title = numbered_match.group(2).strip()
+            ordinal += 1
+            step_id = _derive_step_id(title, ordinal)
+            steps.append({
+                "step_id": step_id,
+                "title": title,
+                "ordinal": ordinal,
+                "depth": 1 if current_phase else 0,
+                "status": "pending",
+                "phase": current_phase,
+                "source_line": idx,
+            })
+            continue
+
+    return steps
+
+
+__all__ = [
+    "PlanSnapshot",
+    "extract_front_matter",
+    "load_plan",
+    "parse_plan_steps",
+]

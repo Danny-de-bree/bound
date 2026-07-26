@@ -46,6 +46,18 @@ __all__ = [
     "LineageEvent",
     "Outcome",
     "OutcomeRecordedEvent",
+    "PlanDiscoveredEvent",
+    "PlanCreatedEvent",
+    "PlanVersionCreatedEvent",
+    "PlanDiffCreatedEvent",
+    "PlanUpdatedEvent",
+    "PlanStepStartedEvent",
+    "PlanStepCompletedEvent",
+    "PlanStepFailedEvent",
+    "PlanStepSkippedEvent",
+    "PlanStepInsertedEvent",
+    "PlanStepRemovedEvent",
+    "PlanStepModifiedEvent",
     "PlanLoadedEvent",
     "PolicyActivatedEvent",
     "PolicyApprovedEvent",
@@ -123,6 +135,19 @@ EVENT_NAMES: tuple[str, ...] = (
     "plan.loaded",
     "outcome_recorded",
     "run_finished",
+    # --- v1.0 plan runtime events (appended) ---
+    "plan.discovered",
+    "plan.created",
+    "plan.version_created",
+    "plan.diff_created",
+    "plan.updated",
+    "plan.step_started",
+    "plan.step_completed",
+    "plan.step_failed",
+    "plan.step_skipped",
+    "plan.step_inserted",
+    "plan.step_removed",
+    "plan.step_modified",
 )
 
 
@@ -701,6 +726,8 @@ class RunStartedEvent(_LineageEventBase):
         config: Optional :class:`RunConfigSnapshot` logging the policy/config
             version that governed this run (item 11). ``None`` when not
             supplied (backwards compatible with schema 1.0).
+        plan_id: Optional stable plan identifier (v1.0).
+        plan_version: Optional plan version number (v1.0).
     """
 
     event: Literal["run_started"] = "run_started"
@@ -708,6 +735,8 @@ class RunStartedEvent(_LineageEventBase):
     task: str
     metadata: dict[str, str] = {}
     config: RunConfigSnapshot | None = None
+    plan_id: str | None = None
+    plan_version: int | None = Field(default=None, ge=1)
 
 
 class StepStartedEvent(_LineageEventBase):
@@ -724,6 +753,10 @@ class StepStartedEvent(_LineageEventBase):
         contract_id: Stable contract / phase id (may carry ``-R<N>``).
         attempt: One-based attempt number.
         description: Optional human-readable step description.
+        plan_id: Optional stable plan identifier (v1.0).
+        plan_version: Optional plan version number (v1.0).
+        candidate_id: Optional candidate identifier for multi-candidate
+            evaluation (v1.0).
     """
 
     event: Literal["step_started"] = "step_started"
@@ -732,6 +765,9 @@ class StepStartedEvent(_LineageEventBase):
     contract_id: str
     attempt: int = Field(ge=1)
     description: str | None = None
+    plan_id: str | None = None
+    plan_version: int | None = Field(default=None, ge=1)
+    candidate_id: str | None = None
 
 
 class EvaluationRecordedEvent(_LineageEventBase):
@@ -770,6 +806,10 @@ class EvaluationRecordedEvent(_LineageEventBase):
         collector_versions: Collector name -> version mapping, or ``None``.
         raw_evidence_values: Raw evidence values per check id, or ``None``.
         effective_evidence_values: Policy-adjusted effective values, or ``None``.
+        plan_id: Optional stable plan identifier (v1.0).
+        plan_version: Optional plan version number (v1.0).
+        candidate_id: Optional candidate identifier for multi-candidate
+            evaluation (v1.0).
     """
 
     event: Literal["evaluation_recorded"] = "evaluation_recorded"
@@ -793,6 +833,9 @@ class EvaluationRecordedEvent(_LineageEventBase):
     collector_versions: dict[str, str] | None = None
     raw_evidence_values: dict[str, float | None] | None = None
     effective_evidence_values: dict[str, float] | None = None
+    plan_id: str | None = None
+    plan_version: int | None = Field(default=None, ge=1)
+    candidate_id: str | None = None
 
 
 class OutcomeRecordedEvent(_LineageEventBase):
@@ -807,6 +850,8 @@ class OutcomeRecordedEvent(_LineageEventBase):
         next_action: The mapped :class:`~bound.integration.NextAction`.
         reason_code: The :class:`ReasonCode` explaining the outcome.
         note: Optional free-text context (e.g. ``"switched to csv.DictWriter"``).
+        plan_id: Optional stable plan identifier (v1.0).
+        plan_version: Optional plan version number (v1.0).
     """
 
     event: Literal["outcome_recorded"] = "outcome_recorded"
@@ -817,6 +862,8 @@ class OutcomeRecordedEvent(_LineageEventBase):
     next_action: NextAction
     reason_code: ReasonCode
     note: str | None = None
+    plan_id: str | None = None
+    plan_version: int | None = Field(default=None, ge=1)
 
 
 class RunFinishedEvent(_LineageEventBase):
@@ -1236,6 +1283,327 @@ class PlanLoadedEvent(_LineageEventBase):
     note: str | None = None
 
 
+# ---------------------------------------------------------------------------
+# v1.0 plan runtime events
+# ---------------------------------------------------------------------------
+
+
+class PlanDiscoveredEvent(_LineageEventBase):
+    """Event: a plan file was discovered via auto-discovery (v1.0).
+
+    Emitted when ``discover_plan`` finds a ``plan.md`` (or equivalent) in the
+    project root or ``.bound/`` directory.  Distinct from
+    :class:`PlanLoadedEvent` (which records the parsed snapshot), this event
+    captures the discovery itself and whether it was automatic.
+
+    Attributes:
+        event: The literal tag ``"plan.discovered"``.
+        run_id: Owning run id.
+        plan_id: Stable plan identifier.
+        source_path: Path to the discovered plan file, or ``None``.
+        plan_version: Plan version number at discovery time.
+        auto_discovered: ``True`` when found via directory scan (not an
+            explicit ``--plan`` flag).
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.discovered"] = "plan.discovered"
+    run_id: str
+    plan_id: str
+    source_path: str | None = None
+    plan_version: int = Field(default=1, ge=1)
+    auto_discovered: bool = False
+    note: str | None = None
+
+
+class PlanCreatedEvent(_LineageEventBase):
+    """Event: a plan was created (explicitly, implicitly, or via replan) (v1.0).
+
+    Emitted when :func:`~bound.plan_model.find_or_create_plan` produces a new
+    :class:`~bound.plan_model.Plan`.  The ``source`` field records how the plan
+    came into being.
+
+    Attributes:
+        event: The literal tag ``"plan.created"``.
+        run_id: Owning run id.
+        plan_id: The new plan's identifier.
+        source: How the plan was created (``"file"``, ``"agent_submitted"``,
+            ``"implicit"``, ``"replan"``).
+        plan_version: Initial version number (always 1).
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.created"] = "plan.created"
+    run_id: str
+    plan_id: str
+    source: str
+    plan_version: int = Field(default=1, ge=1)
+    note: str | None = None
+
+
+class PlanVersionCreatedEvent(_LineageEventBase):
+    """Event: a new :class:`~bound.plan_model.PlanVersion` was created (v1.0).
+
+    Records the creation of an immutable plan snapshot — on initial load,
+    agent submission, or replan.  The ``parent_version`` field chains versions
+    together so the full evolution is auditable.
+
+    Attributes:
+        event: The literal tag ``"plan.version_created"``.
+        run_id: Owning run id.
+        plan_id: The plan this version belongs to.
+        version: The new version number.
+        parent_version: Previous version number, or ``None`` for initial.
+        source: How this version was created (``"file"``,
+            ``"agent_submitted"``, ``"implicit"``, ``"replan"``).
+        content_hash: SHA-256 hex digest of the raw plan content.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.version_created"] = "plan.version_created"
+    run_id: str
+    plan_id: str
+    version: int = Field(ge=1)
+    parent_version: int | None = None
+    source: str
+    content_hash: str
+    note: str | None = None
+
+
+class PlanDiffCreatedEvent(_LineageEventBase):
+    """Event: a diff between two plan versions was computed (v1.0).
+
+    Emitted during REPLAN when the agent produces a materially different plan.
+    The diff captures what changed between parent and child versions.
+
+    Attributes:
+        event: The literal tag ``"plan.diff_created"``.
+        run_id: Owning run id.
+        plan_id: The plan identifier.
+        from_version: Parent version number.
+        to_version: Child version number.
+        diff: The computed diff text, or ``None``.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.diff_created"] = "plan.diff_created"
+    run_id: str
+    plan_id: str
+    from_version: int = Field(ge=1)
+    to_version: int = Field(ge=1)
+    diff: str | None = None
+    note: str | None = None
+
+
+class PlanUpdatedEvent(_LineageEventBase):
+    """Event: a plan was updated in-place (content changed, version bumped) (v1.0).
+
+    Distinct from :class:`PlanVersionCreatedEvent` — this event signals that
+    the *current active* plan version pointer advanced (e.g. after a replan
+    the run now uses version 3 instead of version 2).
+
+    Attributes:
+        event: The literal tag ``"plan.updated"``.
+        run_id: Owning run id.
+        plan_id: The plan identifier.
+        previous_version: The version that was active before the update.
+        new_version: The version that is now active.
+        reason: Why the active version changed, or ``None``.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.updated"] = "plan.updated"
+    run_id: str
+    plan_id: str
+    previous_version: int = Field(ge=1)
+    new_version: int = Field(ge=1)
+    reason: str | None = None
+    note: str | None = None
+
+
+class PlanStepStartedEvent(_LineageEventBase):
+    """Event: a plan step began execution (v1.0).
+
+    Plan-level step tracking, distinct from the lineage-level
+    :class:`StepStartedEvent`.  Whereas ``step_started`` records an evaluation
+    attempt against a contract, ``plan.step_started`` records that a plan's
+    phase/checklist item is being worked on.
+
+    Attributes:
+        event: The literal tag ``"plan.step_started"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version being executed.
+        step_id: Stable step identifier from the plan parser.
+        title: Human-readable step title, or ``None``.
+        attempt: One-based attempt number for this step.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_started"] = "plan.step_started"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    title: str | None = None
+    attempt: int = Field(default=1, ge=1)
+    note: str | None = None
+
+
+class PlanStepCompletedEvent(_LineageEventBase):
+    """Event: a plan step finished (v1.0).
+
+    Complements :class:`PlanStepStartedEvent` with the terminal outcome.
+    The ``outcome`` field captures the status: ``"accepted"``, ``"retried"``,
+    ``"replanned"``, ``"failed"``, or ``"skipped"``.
+
+    Attributes:
+        event: The literal tag ``"plan.step_completed"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version that was executed.
+        step_id: Stable step identifier.
+        outcome: Terminal outcome string.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_completed"] = "plan.step_completed"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    outcome: str
+    note: str | None = None
+
+
+class PlanStepFailedEvent(_LineageEventBase):
+    """Event: a plan step failed (v1.0).
+
+    Carries error detail that may inform a replan decision.
+
+    Attributes:
+        event: The literal tag ``"plan.step_failed"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version being executed.
+        step_id: Stable step identifier.
+        error: Description of the failure, or ``None``.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_failed"] = "plan.step_failed"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    error: str | None = None
+    note: str | None = None
+
+
+class PlanStepSkippedEvent(_LineageEventBase):
+    """Event: a plan step was skipped (v1.0).
+
+    A step may be skipped because it was already completed, unnecessary, or
+    superseded by a replan.
+
+    Attributes:
+        event: The literal tag ``"plan.step_skipped"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version being executed.
+        step_id: Stable step identifier.
+        reason: Why the step was skipped, or ``None``.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_skipped"] = "plan.step_skipped"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    reason: str | None = None
+    note: str | None = None
+
+
+class PlanStepInsertedEvent(_LineageEventBase):
+    """Event: a new step was inserted into a plan (v1.0).
+
+    Emitted during replan when the agent adds a step not present in the
+    parent plan version.
+
+    Attributes:
+        event: The literal tag ``"plan.step_inserted"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version where the step was inserted.
+        step_id: Stable step identifier.
+        title: Human-readable step title, or ``None``.
+        position: Zero-based insertion position in the step list.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_inserted"] = "plan.step_inserted"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    title: str | None = None
+    position: int = Field(ge=0)
+    note: str | None = None
+
+
+class PlanStepRemovedEvent(_LineageEventBase):
+    """Event: a step was removed from a plan (v1.0).
+
+    Emitted during replan when the agent removes a step that existed in the
+    parent plan version.
+
+    Attributes:
+        event: The literal tag ``"plan.step_removed"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belonged to.
+        plan_version: Plan version where the step was removed.
+        step_id: Stable step identifier of the removed step.
+        title: Human-readable title of the removed step, or ``None``.
+        reason: Why the step was removed, or ``None``.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_removed"] = "plan.step_removed"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    title: str | None = None
+    reason: str | None = None
+    note: str | None = None
+
+
+class PlanStepModifiedEvent(_LineageEventBase):
+    """Event: a plan step was modified during replan (v1.0).
+
+    The step's ``step_id`` is preserved but its title or other metadata
+    changed.  The ``changes`` dict records what was modified.
+
+    Attributes:
+        event: The literal tag ``"plan.step_modified"``.
+        run_id: Owning run id.
+        plan_id: The plan this step belongs to.
+        plan_version: Plan version where the step was modified.
+        step_id: Stable step identifier.
+        changes: Dict of field-name -> new-value for modified fields.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.step_modified"] = "plan.step_modified"
+    run_id: str
+    plan_id: str
+    plan_version: int = Field(ge=1)
+    step_id: str
+    changes: dict[str, str] = {}
+    note: str | None = None
+
+
 #: Discriminated union of every lineage event. ``event`` is the discriminator
 #: tag, so a single :func:`parse_lineage_event` call routes a JSONL record to
 #: the correct concrete event type.
@@ -1258,6 +1626,19 @@ LineageEvent = Annotated[
         | ActionObservedEvent
         | StepCompletedEvent
         | PlanLoadedEvent
+        # --- v1.0 plan runtime events ---
+        | PlanDiscoveredEvent
+        | PlanCreatedEvent
+        | PlanVersionCreatedEvent
+        | PlanDiffCreatedEvent
+        | PlanUpdatedEvent
+        | PlanStepStartedEvent
+        | PlanStepCompletedEvent
+        | PlanStepFailedEvent
+        | PlanStepSkippedEvent
+        | PlanStepInsertedEvent
+        | PlanStepRemovedEvent
+        | PlanStepModifiedEvent
     ),
     Field(discriminator="event"),
 ]

@@ -201,10 +201,14 @@ class AgentAdapter(ABC):
         ...
 
 
+from bound.adapters.protocol import AgentCapabilities, AgentInstallation  # noqa: E402
+
 __all__ = [
     "AdapterConfig",
     "AdapterEvent",
     "AgentAdapter",
+    "AgentCapabilities",
+    "AgentInstallation",
     "ClaudeCodeAdapter",
     "ClineMCPAdapter",
     "CodexAdapter",

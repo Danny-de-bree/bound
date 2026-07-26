@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 # ---------------------------------------------------------------------------
 # Canonical type constants
@@ -185,8 +188,78 @@ def make_command(
     return msg
 
 
+# ---------------------------------------------------------------------------
+# Capability model (v1.0)
+# ---------------------------------------------------------------------------
+
+
+class AgentCapabilities(BaseModel):
+    """Declared capabilities of a BOUND-aware coding agent.
+
+    Each flag represents a specific integration dimension that BOUND can
+    use to decide how to interact with the agent at runtime. Agents that
+    support more capabilities enable richer control loops.
+
+    Attributes:
+        tool_integration: Agent calls BOUND via MCP or CLI tools (Level A).
+        structured_events: Agent emits machine-parseable events (ACP JSONL).
+        process_ownership: BOUND can start/stop the agent process.
+        bidirectional_control: BOUND can send commands during a session.
+        interrupt: BOUND can interrupt the agent mid-task.
+        resume: Agent supports resume from a saved checkpoint.
+        checkpoint_awareness: Agent natively understands BOUND checkpoints.
+        plan_events: Agent emits plan-lifecycle events.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    tool_integration: bool = False
+    structured_events: bool = False
+    process_ownership: bool = False
+    bidirectional_control: bool = False
+    interrupt: bool = False
+    resume: bool = False
+    checkpoint_awareness: bool = False
+    plan_events: bool = False
+
+
+class AgentInstallation(BaseModel):
+    """Describes a detected agent installation on the local system.
+
+    Attributes:
+        agent_id: Stable machine-readable identifier (e.g. ``"cline"``).
+        display_name: Human-readable label (e.g. ``"Cline (VS Code)"``).
+        executable: Resolved filesystem path to the agent binary, or
+            ``None`` when the agent is managed by an editor / app server.
+        version: Detected version string, or ``None`` when unknown.
+        installation_type: How the agent is installed — one of ``"mcp"``,
+            ``"cli"``, ``"app-server"``, or ``"unknown"``.
+        authenticated: Whether the agent appears to have valid credentials.
+            ``None`` when authentication status cannot be determined.
+        project_config_paths: Paths to agent-specific project configuration
+            files found in the current workspace.
+        capabilities: The :class:`AgentCapabilities` declared by this agent.
+        confidence: Detection confidence — ``"verified"``, ``"probable"``,
+            or ``"possible"``.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    agent_id: str
+    display_name: str
+    executable: Path | None
+    version: str | None
+    installation_type: str
+    authenticated: bool | None
+    project_config_paths: tuple[Path, ...]
+    capabilities: AgentCapabilities
+    confidence: str
+
+
 __all__ = [
     "ACPMessage",
+    "AgentCapabilities",
+    "AgentInstallation",
     "ALL_TYPES",
     "COMMAND_TYPES",
     "EVENT_TYPES",

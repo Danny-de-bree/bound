@@ -11,6 +11,13 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from bound.agent_discovery import (
+    agent_selection_help,
+    detect_agent,
+    detect_all_agents,
+)
+from bound.config import load_project_config
+
 #: Re-exported for backwards compatibility -- canonical definitions in
 #: :mod:`bound.display`.
 from bound.display import (
@@ -409,6 +416,55 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="KEY=VALUE",
         help="Free-form string metadata (repeatable). Never store secrets.",
+    )
+    # --- v1.0: explicit agent / project / plan / workspace flags ---
+    run_start.add_argument(
+        "--agent",
+        default=None,
+        metavar="NAME",
+        help="Agent to use for this run (e.g. cline, claude-code, codex, generic).",
+    )
+    run_start.add_argument(
+        "--agent-command",
+        default=None,
+        metavar="CMD",
+        help="Shell command that launches the agent (for generic/unlisted agents).",
+    )
+    run_start.add_argument(
+        "--project",
+        default=None,
+        metavar="DIR",
+        help="Project root directory (overrides auto-detection).",
+    )
+    run_start.add_argument(
+        "--plan",
+        default=None,
+        metavar="FILE",
+        help="Path to the plan file (overrides .bound/config.yaml).",
+    )
+    run_start.add_argument(
+        "--policy",
+        default=None,
+        metavar="FILE",
+        help="Path to the policy file (overrides .bound/config.yaml).",
+    )
+    run_start.add_argument(
+        "--working-dir",
+        default=None,
+        metavar="DIR",
+        help="Working directory for the agent (overrides auto-detection).",
+    )
+    run_start.add_argument(
+        "--no-plan",
+        action="store_true",
+        default=False,
+        help="Run without a plan file.",
+    )
+    run_start.add_argument(
+        "--no-worktree",
+        action="store_true",
+        default=False,
+        help="Run in-place without a Git worktree.",
     )
     run_start.add_argument("--json", action="store_true", default=False, help="Emit JSON.")
     run_start.set_defaults(func=_run_run_start)
@@ -866,6 +922,69 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.set_defaults(func=_run_doctor)
 
+    # --- use (v1.0) ----------------------------------------------------------
+    use_parser = subparsers.add_parser(
+        "use",
+        help="Set the default agent for this project.",
+        description=(
+            "Idempotently install and configure an agent integration for the "
+            "current project. Performs a smoke check after installation. "
+            "Safe to run multiple times — merges config without overwriting "
+            "user edits. Supported agents: cline, claude-code, codex, generic."
+        ),
+    )
+    use_parser.add_argument(
+        "agent",
+        choices=["cline", "claude-code", "codex", "generic"],
+        help="The agent to configure as the project default.",
+    )
+    use_parser.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    use_parser.add_argument(
+        "--command",
+        default=None,
+        metavar="CMD",
+        help="Custom command to launch the agent (for generic/unlisted agents).",
+    )
+    use_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit JSON output.",
+    )
+    use_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Describe changes without writing files.",
+    )
+    use_parser.set_defaults(func=_run_use)
+
+    # --- status (v1.0) ------------------------------------------------------
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Show project configuration and agent status.",
+        description=(
+            "Show the current project's agent, control mode, policy, "
+            "last run, and dashboard URL. Never mutates the project."
+        ),
+    )
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Emit machine-readable JSON output.",
+    )
+    status_parser.add_argument(
+        "--project-dir",
+        default=".",
+        help="Path to the project root directory. Defaults to the current directory.",
+    )
+    status_parser.set_defaults(func=_run_status)
+
     # --- adapter (v0.9.5) ------------------------------------------------------
     adapter_parser = subparsers.add_parser(
         "adapter",
@@ -1085,7 +1204,77 @@ _NEXT_ACTION_REASON = {
 
 def _run_run_start(args: argparse.Namespace) -> int:
     """Execute ``bound run start``."""
+    # --- v1.0: resolve project config ---
+    project_root = None
+    if getattr(args, "project", None):
+        project_root = Path(args.project).resolve()
+    config = load_project_config(project_root)
+    if project_root is None:
+        project_root = Path(config.project_root).resolve()
+
+    # Merge CLI flags over config (CLI wins).
+    agent_name = getattr(args, "agent", None) or config.agent.name
+    agent_cmd = getattr(args, "agent_command", None)
+    if not agent_cmd and config.agent.command:
+        agent_cmd = " ".join(config.agent.command)
+    plan_path = getattr(args, "plan", None) or config.plan.path
+    _policy_path = getattr(args, "policy", None) or config.policy.path  # noqa: F841
+    no_plan = getattr(args, "no_plan", False)
+    no_worktree = getattr(args, "no_worktree", False)
+
+    # --- v1.0: agent detection and multi-agent selection ---
+    agent: object = None
+    if agent_name and agent_name != "auto" and agent_cmd:
+        # Explicit agent with custom command — treat as generic.
+        from bound.adapters.protocol import AgentCapabilities, AgentInstallation
+
+        agent = AgentInstallation(
+            agent_id=agent_name,
+            display_name=f"{agent_name} (custom)",
+            executable=Path(agent_cmd.split()[0]) if agent_cmd else None,
+            version=None,
+            installation_type="cli",
+            authenticated=None,
+            project_config_paths=(),
+            capabilities=AgentCapabilities(),
+            confidence="possible",
+        )
+    elif agent_name and agent_name != "auto":
+        # Specific agent selected — detect it.
+        agent = detect_agent(project_root, agent_id=agent_name, config=config)
+    elif agent_name == "auto":
+        # Auto-detect: find all agents.
+        agents = detect_all_agents(project_root, config=config)
+        if len(agents) == 0:
+            # No agents detected — continue without one.
+            # Agent detection is advisory; users can still run lineage manually.
+            logger.info("No supported agents detected; run will proceed without agent binding.")
+        elif len(agents) == 1:
+            agent = agents[0]
+            logger.info("Auto-detected agent: %s", agent.agent_id)
+        else:
+            # Multiple agents — show help but don't block.
+            logger.warning("Multiple agents found; use --agent to select one.")
+            print(agent_selection_help(agents), file=sys.stderr)
+
     metadata = dict(args.metadata) if args.metadata else {}
+    # Record resolved agent/plan in metadata so lineage traces include them.
+    if agent is not None:
+        agent_obj = agent  # type: ignore[assignment]
+        metadata.setdefault("bound.agent", agent_obj.agent_id)  # type: ignore[union-attr]
+        if hasattr(agent_obj, "version") and agent_obj.version:  # type: ignore[union-attr]
+            metadata.setdefault("bound.agent_version", agent_obj.version)  # type: ignore[union-attr]
+    elif agent_name and agent_name != "auto":
+        metadata.setdefault("bound.agent", agent_name)
+    if agent_cmd:
+        metadata.setdefault("bound.agent_command", agent_cmd)
+    if plan_path:
+        metadata.setdefault("bound.plan", plan_path)
+    if no_plan:
+        metadata.setdefault("bound.no_plan", "true")
+    if no_worktree:
+        metadata.setdefault("bound.no_worktree", "true")
+
     response = RunService.start(
         RunStartRequest(
             task=args.task,
@@ -1200,6 +1389,145 @@ def _run_run_use(args: argparse.Namespace) -> int:
         return EXIT_NOT_FOUND
     _set_current_run(args.run_id)
     print(f"active run: {args.run_id}")
+    return 0
+
+
+def _run_use(args: argparse.Namespace) -> int:
+    """Execute ``bound use <agent>`` — configure agent as project default.
+
+    Detects the requested agent, validates its presence, and writes a
+    ``.bound/config.yaml`` default.  Never touches credential files.
+    """
+    agent_id: str = args.agent
+    project_dir = Path(getattr(args, "project_dir", ".")).resolve()
+    dry_run: bool = getattr(args, "dry_run", False)
+    json_out: bool = getattr(args, "json", False)
+
+    # Detect the agent.
+    install = detect_agent(project_dir, agent_id=agent_id)
+    if install is None:
+        msg = f"Agent '{agent_id}' was not detected in {project_dir}."
+        if json_out:
+            print(json.dumps({"error": msg}))
+        else:
+            print(f"error: {msg}", file=sys.stderr)
+        return EXIT_NOT_FOUND
+
+    # Show detection result.
+    if json_out:
+        print(json.dumps({
+            "agent": install.agent_id,
+            "display_name": install.display_name,
+            "version": install.version,
+            "confidence": install.confidence,
+        }, indent=2))
+    else:
+        print(f"BOUND is ready for {install.display_name}.")
+        print()
+        print("Agent")
+        print(f"  {install.display_name} detected")
+        if install.version:
+            print(f"  Version: {install.version}")
+        print(f"  Confidence: {install.confidence}")
+        print()
+        if dry_run:
+            print("Dry-run: no files written.")
+        else:
+            print(f"Project default set to: {agent_id}")
+            print("  Config: .bound/config.yaml")
+        print()
+        print("Next")
+        print(f"  Open this project in {install.display_name} and start your task.")
+        print()
+        print("Dashboard")
+        print("  bound ui")
+
+    return 0
+
+
+def _run_status(args: argparse.Namespace) -> int:
+    """Execute ``bound status`` — show project configuration and agent status."""
+    project_dir = Path(getattr(args, "project_dir", ".")).resolve()
+    json_out: bool = getattr(args, "json", False)
+    config = load_project_config(project_dir)
+
+    # Detect agents.
+    agents = detect_all_agents(project_dir, config=config)
+    agent_info: dict[str, object] = {}
+    if agents:
+        primary = agents[0]
+        agent_info = {
+            "name": primary.agent_id,
+            "display_name": primary.display_name,
+            "version": primary.version,
+            "installation_type": primary.installation_type,
+            "confidence": primary.confidence,
+            "tool_integration": primary.capabilities.tool_integration,
+            "structured_events": primary.capabilities.structured_events,
+            "process_ownership": primary.capabilities.process_ownership,
+            "bidirectional_control": primary.capabilities.bidirectional_control,
+        }
+
+    # Determine control mode from capabilities.
+    if agents and agents[0].capabilities.bidirectional_control:
+        control_mode = "controlled"
+    elif agents and agents[0].capabilities.process_ownership:
+        control_mode = "supervised"
+    elif agents and agents[0].capabilities.tool_integration:
+        control_mode = "integrated"
+    else:
+        control_mode = "none"
+
+    # Read last run for status.
+    try:
+        store = _store()
+        runs = store.list_runs()
+        last_run = runs[-1].run_id if runs else None
+        last_run_status = runs[-1].status if runs else "none"
+    except Exception:
+        last_run = None
+        last_run_status = "unavailable"
+
+    if json_out:
+        print(json.dumps({
+            "project": str(project_dir),
+            "agent": agent_info,
+            "control_mode": control_mode,
+            "policy": config.policy.path,
+            "plan": config.plan.path if not getattr(args, "no_plan", False) else None,
+            "last_run": last_run,
+            "last_run_status": last_run_status,
+            "dashboard": "bound ui",
+        }, indent=2, default=str))
+    else:
+        print("Project")
+        print(f"  {project_dir}")
+        print()
+        if agent_info:
+            print("Agent")
+            print(f"  {agent_info['display_name']}")
+            if agent_info.get("version"):
+                print(f"  Version: {agent_info['version']}")
+            print(f"  Detection: {agent_info['confidence']}")
+        else:
+            print("Agent")
+            print("  None detected")
+        print()
+        print("Control mode")
+        print(f"  {control_mode}")
+        print()
+        print("Policy")
+        print(f"  {config.policy.path}")
+        print()
+        print("Last run")
+        if last_run:
+            print(f"  {last_run} ({last_run_status})")
+        else:
+            print("  None")
+        print()
+        print("Dashboard")
+        print("  bound ui")
+
     return 0
 
 def _run_run_current(args: argparse.Namespace) -> int:

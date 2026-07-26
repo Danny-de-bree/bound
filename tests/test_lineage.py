@@ -513,6 +513,19 @@ class TestEventNames:
             "plan.loaded",
             "outcome_recorded",
             "run_finished",
+            # --- v1.0 plan runtime events (appended) ---
+            "plan.discovered",
+            "plan.created",
+            "plan.version_created",
+            "plan.diff_created",
+            "plan.updated",
+            "plan.step_started",
+            "plan.step_completed",
+            "plan.step_failed",
+            "plan.step_skipped",
+            "plan.step_inserted",
+            "plan.step_removed",
+            "plan.step_modified",
         )
 
         assert str(ReasonCode.RUN_COMPLETED) == "RUN_COMPLETED"
