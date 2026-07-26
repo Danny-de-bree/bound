@@ -75,61 +75,13 @@ cat .bound/integration-prompt.md   # paste into your agent
 ### Watch it live
 
 ```bash
-bound ui   # → http://127.0.0.1:8765 — dashboard with plan progress, evidence, replays
-```
-
-### What happens in a session
-
-```text
-1. Start a run:  bound run start "Add input validation"
-2. Agent works   → runs tests → 0/2 pass (regex broken)
-3. BOUND eval    → bound evaluate --step PHASE-001 --acceptance 0.0 ...
-                → REPLAN  (S=-0.55, tests failing)
-4. Agent fixes   → 3/3 pass
-5. BOUND eval    → ACCEPT  (S=1.05 ≥ 0.70)
-6. Keep working  → repeat until done
-7. Finish:       bound run finish
-```
-
-### Tested vs untested
-
-| Component | Status | Verified by |
-|---|---|---|
-| `bound evaluate` + decision logic | ✅ Tested | 1477 pytest tests |
-| `bound ui` dashboard | ✅ Tested | Manual + visual regression tests |
-| MCP server (`bound mcp`) | ✅ Tested | tools/list returns correct schema |
-| MCP config generation (`bound adapter install`) | ✅ Tested | Generates valid `.cline/mcp/bound.json` |
-| GenericProcessAdapter | ✅ Tested | E2E subprocess tests with mock agents |
-| Claude Code stream-json parsing | ✅ Tested | Real CLI output captured, parsed correctly |
-| Cline MCP integration | ⚠️ MCP config valid, not E2E | Requires Anthropic auth |
-| Codex exec integration | ⚠️ CLI works, not E2E | Requires OpenAI auth |
-| Claude Code adapter E2E | ⚠️ CLI works, not E2E | Requires Anthropic auth |
-
-**Overview — all your runs at a glance:**
-
-<p align="center">
-  <img src="assets/overview.png" alt="BOUND dashboard overview showing all runs with status, decisions, and assurance" width="100%">
-</p>
-
-**Run detail — decision tree with evidence provenance:**
-
-<p align="center">
-  <img src="assets/run.png" alt="BOUND run detail page showing the plan to step to attempt to decision tree with scores and evidence" width="100%">
-</p>
-
-```text
-Step 1 · First try: regex broken · replanned
-└── Attempt 1 · REPLAN · S=0.00 (A=0.00 I=0.30 R=0.10 C=0.20)
-
-Step 2 · Fixed, all tests pass · completed
-└── Attempt 2 · ACCEPT · S=1.05 (A=1.00 I=0.30 R=0.05 C=0.20)
+bound ui   # → http://127.0.0.1:8765
 ```
 
 ### Adjust the policy mid-run
 
 Edit `bound-policy.yaml` anytime — the agent's next `bound evaluate` picks up
-the new policy automatically. Each decision records which policy version was
-used, so old decisions stay reproducible.
+the new policy automatically.
 
 ```bash
 bound policy explain bound-policy.yaml   # see what your policy does
@@ -137,99 +89,11 @@ bound policy explain bound-policy.yaml   # see what your policy does
 
 ### Three integration modes
 
-| Mode | How | Command |
-| --- | --- | --- |
-| **Prompt** | Agent reads instructions, calls BOUND at each boundary | `bound evaluate ...` |
-| **MCP / Watch** | Agent calls BOUND tools or streams JSONL events | `bound mcp` / `bound watch` |
-| **Adapter (v0.9.5)** | BOUND spawns agent as child, full control loop via ACP | Python API |
-
-### Native adapter control (v0.9.5) — strongest integration
-
-The adapter layer lets BOUND **actively control** the agent instead of waiting
-for it to call `bound evaluate`. BOUND spawns the agent as a child process,
-reads events from its stdout, evaluates each step, and sends decisions back
-via stdin — all through the ACP (Adapter Control Protocol), a JSONL message
-format.
-
-```python
-from bound.adapters import GenericProcessAdapter
-from bound.runtime import BoundRuntime
-
-# Any CLI agent that speaks ACP JSONL on stdin/stdout
-adapter = GenericProcessAdapter(
-    agent_command=["python", "-m", "my_agent", "--acp"],
-    working_dir="/path/to/project",
-)
-
-# BOUND drives the full control loop
-runtime = BoundRuntime.from_policy("bound-policy.yaml")
-result = runtime.run_with_adapter(
-    adapter=adapter,
-    task="Implement input validation",
-    plan=load_plan("plan.md"),
-)
-# → BOUND spawns agent → agent does work → agent reports events
-# → BOUND evaluates → BOUND sends ACCEPT/RETRY/REPLAN/ROLLBACK
-# → Agent handles decision → repeat until done
-```
-
-**How the agent speaks ACP** (minimal example):
-
-```python
-import sys, json
-
-# Agent reads the task from BOUND on stdin
-task = json.loads(sys.stdin.readline())
-
-# Agent does work, then reports completion
-print(json.dumps({
-    "type": "step.completed",
-    "evidence": {"tests_pass": 3, "tests_total": 3, "lint_ok": True},
-    "candidate_id": task["candidate_id"],
-}), flush=True)
-
-# Agent waits for BOUND's decision on stdin
-decision = json.loads(sys.stdin.readline())
-if decision["type"] == "continue":
-    # ... next step
-elif decision["type"] == "replan":
-    # ... rethink approach
-```
-
-The adapter is **language-agnostic** — your agent can be Python, Node.js, Rust,
-Go, or a shell script. As long as it reads JSONL commands from stdin and writes
-JSONL events to stdout, BOUND can control it.
-
-Reference integrations for Cline, Codex, and Claude Code live in
-[`integrations/`](integrations/).  See also the tests at
-`tests/test_adapters_generic.py` for working examples.
-
-### Built-in native adapters
-
-```bash
-# One-command setup for any supported agent:
-bound adapter install cline     # generates .cline/mcp/bound.json MCP config
-bound adapter install claude    # validates claude-code CLI availability
-bound adapter install codex     # validates codex CLI availability
-```
-
-| Adapter | Agent | Mechanism | Module |
-|---|---|---|---|
-| **ClaudeCodeAdapter** | Claude Code | subprocess: `--print --output-format stream-json` | `adapters/claude_code.py` |
-| **CodexAdapter** | Codex | subprocess: `exec` + MCP | `adapters/codex.py` |
-| **ClineMCPAdapter** | Cline | MCP server config | `adapters/cline.py` |
-| **GenericProcessAdapter** | Any CLI | subprocess with ACP JSONL | `adapters/generic.py` |
-
-```python
-from bound.adapters.claude_code import ClaudeCodeAdapter
-from bound.runtime import BoundRuntime
-
-adapter = ClaudeCodeAdapter(model="claude-sonnet-4-20250514")
-runtime = BoundRuntime.from_policy("bound-policy.yaml")
-result = runtime.run_with_adapter(adapter, task="Fix validation bug")
-# → BOUND spawns Claude Code → reads stream-json events
-# → evaluates each step → sends ACCEPT/RETRY/REPLAN/ROLLBACK
-```
+| Mode | How |
+|---|---|
+| **Prompt** | Agent reads instructions from `bound setup`, calls `bound evaluate` |
+| **MCP** | Agent uses BOUND tools via MCP server (`bound mcp`) |
+| **Adapter** | BOUND spawns agent as child, controls loop via JSONL |
 
 ## License
 
