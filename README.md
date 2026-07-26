@@ -28,96 +28,51 @@ any agent, any language. **The model proposes. The harness decides.**
 
 BOUND emits the signal; the agent performs the action.
 
-## Get started in 3 sentences
+## Quickstart — use BOUND with your agent today
 
-Install with `pip install bound-policy`, then run `bound setup --agent generic` to auto-detect your tooling, generate a policy, and create an integration prompt in `.bound/integration-prompt.md`. **Paste that prompt into your agent** — it tells the agent when and how to call `bound evaluate` at each step. From there the agent does the work, BOUND decides ACCEPT / RETRY / REPLAN / ROLLBACK, and you can watch live with `bound ui`.
+### With Cline or Codex (strongest — MCP, no prompt needed)
 
-## Install — two parts, one command
+```bash
+pip install bound-policy        # 1. Install BOUND
+bound adapter install cline     # 2. Wire Cline to BOUND's MCP server
+# or: bound adapter install codex
+```
 
-You need the BOUND CLI on your machine **and** the integration prompt in your
-agent. `bound setup` handles both.
+That's it. Cline/Codex now see BOUND tools — `bound_evaluate`,
+`bound_checkpoint`, `bound_rollback` — and call them automatically during
+execution. No prompt, no manual `bound evaluate` calls. BOUND decides, the
+agent acts.
 
-### 1. Install the BOUND CLI
+Open the dashboard to watch live:
+
+```bash
+bound ui                        # → http://127.0.0.1:8765
+```
+
+### With any other agent (prompt-based)
 
 ```bash
 pip install bound-policy
+bound setup --agent generic     # generates policy + integration prompt
+cat .bound/integration-prompt.md  # paste this into your agent
 ```
 
-### 2. Onboard your project
+Your agent now knows when and how to call `bound evaluate` at each step.
 
-```bash
-bound setup --agent generic
-```
-
-This auto-detects your test, lint, and type-check tooling, generates
-`bound-policy.yaml`, installs the integration prompt for your agent, and
-validates the policy — all without running any tool or touching the network.
-
-For other agents, pass `--agent`:
-
-| Agent | Command |
-| --- | --- |
-| Any agent | `bound setup --agent generic` |
-| Cline | `bound setup --agent cline` |
-| Codex | `bound setup --agent codex` |
-| Claude Code | `bound setup --agent claude-code` |
-
-Or paste a prompt manually from [`integrations/`](integrations/).
-
-### 3. Paste the prompt into your agent
-
-```bash
-cat .bound/integration-prompt.md
-```
-
-Copy the output and paste it into your coding agent. The agent now knows
-when and how to call `bound evaluate`. That's it.
-
-## How it works in an agent
-
-Your agent executes a step → gathers evidence (test results, lint, type-check) →
-feeds the signals to BOUND → BOUND applies your policy → BOUND emits
-ACCEPT / RETRY / REPLAN / ROLLBACK → the agent acts on it.
-
-A real session looks like this:
+### What happens in a session
 
 ```text
-1. Onboard the project
-   → bound setup --agent generic (auto-detects pytest, ruff, mypy,
-     generates bound-policy.yaml, installs integration prompt, validates)
-
-2. Agent starts a run
-   → bound run start "Add input validation to registration"
-
-3. Agent implements, runs tests → 0/2 pass (regex broken)
-   → bound evaluate-workflow --test-pass-rate 0.0 --lint-passed ...
-   → Decision: REPLAN  (S=-0.55, tests failing badly)
-   → bound outcome --decision REPLAN --note "regex escaping broken"
-
-4. Agent fixes code, runs tests → 3/3 pass
-   → bound evaluate-workflow --test-pass-rate 1.0 --lint-passed --type-check-passed ...
-   → Decision: ACCEPT  (S=1.05 ≥ T=0.70)
-   → bound outcome --decision ACCEPT --note "all tests pass"
-
-5. Agent finishes the run
-   → bound run finish --status completed
+1. Start a run:  bound run start "Add input validation"
+2. Agent works   → runs tests → 0/2 pass (regex broken)
+3. BOUND eval    → bound evaluate --step PHASE-001 --acceptance 0.0 ...
+                → REPLAN  (S=-0.55, tests failing)
+4. Agent fixes   → 3/3 pass
+5. BOUND eval    → ACCEPT  (S=1.05 ≥ 0.70)
+6. Keep working  → repeat until done
+7. Finish:       bound run finish
 ```
 
-The scores come from whatever your project uses — `pytest`, `jest`, `go test`,
-`cargo test`, `ruff`, `eslint`, `mypy`, `tsc` — BOUND doesn't care. You feed
-it the results; it applies the policy and emits the decision.
-
-### Watch it live
-
-While the agent works, open the dashboard in a separate terminal:
-
-```bash
-bound ui --open
-```
-
-The dashboard at http://127.0.0.1:8765 shows every run as a decision tree —
-plan → step → attempt → decision — with evidence provenance. It auto-refreshes
-when new decisions arrive.
+Watch it all live: `bound ui`
 
 **Overview — all your runs at a glance:**
 
