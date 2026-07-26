@@ -26,6 +26,7 @@ from bound.lineage import (
     EvidenceCollectionFailedEvent,
     Outcome,
     OutcomeRecordedEvent,
+    PlanLoadedEvent,
     PolicyActivatedEvent,
     PolicyApprovedEvent,
     PolicyProposedEvent,
@@ -403,6 +404,58 @@ class LineageStore:
             meta["config"] = config.model_dump(mode="json")
         self._write_run_meta(run_id, meta)
         return event  # type: ignore[return-value]
+
+    def load_plan_snapshot(
+        self,
+        run_id: str,
+        *,
+        project_dir: str | Path | None = None,
+        explicit_path: str | Path | None = None,
+    ) -> object | None:
+        """Load plan.md, emit a ``plan.loaded`` event, and store metadata.
+
+        Discovers and parses a ``plan.md`` file using
+        :func:`bound.plan_parser.load_plan`. When a plan is found, records a
+        :class:`~bound.lineage.PlanLoadedEvent` in the run's event log and
+        persists the plan snapshot metadata in ``run.json``.
+
+        Args:
+            run_id: The owning run identifier.
+            project_dir: Project root for plan discovery. Defaults to the
+                current working directory.
+            explicit_path: An explicit path, bypassing discovery.
+
+        Returns:
+            A :class:`PlanSnapshot` when a plan is found; ``None`` otherwise.
+        """
+        from bound.plan_parser import load_plan
+
+        try:
+            root = Path(project_dir) if project_dir else Path.cwd()
+        except Exception:
+            root = Path.cwd()
+
+        snapshot = load_plan(root, explicit_path=explicit_path)
+        if snapshot is None:
+            return None
+
+        self._emit(
+            PlanLoadedEvent,
+            run_id,
+            run_id=run_id,
+            plan_id=snapshot.plan_id,
+            content_hash=snapshot.hash,
+            source_path=snapshot.source_path,
+            plan_version=snapshot.version,
+            goal=snapshot.goal,
+            step_count=len(snapshot.steps),
+        )
+
+        meta = self._read_run_meta(run_id) or {}
+        meta["plan_snapshot"] = snapshot.model_dump(mode="json")
+        self._write_run_meta(run_id, meta)
+
+        return snapshot
 
     def start_step(
         self,

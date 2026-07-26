@@ -38,6 +38,230 @@ from bound.lineage_store import (
 
 logger = logging.getLogger("bound.ui")
 
+# =========================================================================
+# No-emoji icon system (Section 17 of todo-ui.md)
+# =========================================================================
+# All inline SVG icons at 16x16 viewBox.  Every icon that was previously
+# an emoji character or HTML entity now lives here so the UI stays
+# platform-independent and platform-consistent.
+
+
+def _icon(  # noqa: D417
+    name: str,
+    *,
+    w: int = 16,
+    h: int = 16,
+) -> str:
+    """Return the named inline SVG icon with optional size override.
+
+    Args:
+        name: Key in the ``ICONS`` dictionary.
+        w: Rendered width in pixels.
+        h: Rendered height in pixels.
+
+    Returns:
+        An ``<svg>`` string, or a visible placeholder when ``name`` is unknown.
+    """
+    svg = ICONS.get(name)
+    if svg is None:
+        return (
+            f"<svg width='{w}' height='{h}' viewBox='0 0 16 16'>"
+            "<rect width='16' height='16' rx='2' fill='#f85149'/>"
+            "<text x='8' y='12' text-anchor='middle' font-size='10' fill='#fff'>?</text>"
+            "</svg>"
+        )
+    if w == 16 and h == 16:
+        return svg
+    return svg.replace("width='16'", f"width='{w}'").replace("height='16'", f"height='{h}'")
+
+
+ICONS: dict[str, str] = {
+    # -- Decision icons --
+    "decision_accept": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28"
+        "a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'"
+        " fill='#3fb950'/></svg>"
+    ),
+    "decision_retry": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M1.5 8a6.5 6.5 0 0 1 11.7-3.57V3.5a.75.75 0 0 1 1.5 0v3a.75.75 0"
+        " 0 1-.75.75h-3a.75.75 0 0 1 0-1.5h1.45A5 5 0 1 0 13 8a.75.75 0 0 1 1.5 0"
+        " 6.5 6.5 0 0 1-13 0z' fill='#ef6c00'/></svg>"
+    ),
+    "decision_replan": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M11.5 3h-7A1.5 1.5 0 0 0 3 4.5v7A1.5 1.5 0 0 0 4.5 13h7a1.5 1.5 0"
+        " 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 11.5 3z' fill='none' stroke='#8b5cf6'"
+        " stroke-width='1.2'/>"
+        "<path d='M5 3.5h6M5 6.5h4M5 9.5h2' stroke='#8b5cf6' stroke-width='1'"
+        " stroke-linecap='round'/></svg>"
+    ),
+    "decision_rollback": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M2.5 1.75a.75.75 0 0 0-1.5 0v3.5c0 .414.336.75.75.75h3.5a.75.75 0"
+        " 0 0 0-1.5H3.06A5.502 5.502 0 0 1 13.5 8a5.5 5.5 0 0 1-8.577 4.533.75.75 0"
+        " 0 0-.846-1.238A4.001 4.001 0 1 0 3.1 6H5.25a.75.75 0 0 0 0-1.5h-2.75z'"
+        " fill='#f85149'/></svg>"
+    ),
+    # -- Status icons --
+    "status_completed": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='6' fill='#2e7d32'/>"
+        "<path d='M11.28 5.97a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0"
+        "L4.22 9.53a.75.75 0 0 1 1.06-1.06L7 10.19l3.72-3.72a.75.75 0 0 1 1.06 0z'"
+        " fill='#fff'/></svg>"
+    ),
+    "status_running": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='6' stroke='#30363d' stroke-width='2' fill='none'/>"
+        "<path d='M8 2a6 6 0 0 1 6 6' stroke='#58a6ff' stroke-width='2' fill='none'"
+        " stroke-linecap='round'/></svg>"
+    ),
+    "status_failed": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='6' fill='#c62828'/>"
+        "<path d='M5.28 5.28a.75.75 0 0 1 1.06 0L8 6.94l1.66-1.66a.75.75 0 1 1"
+        " 1.06 1.06L9.06 8l1.66 1.66a.75.75 0 1 1-1.06 1.06L8 9.06l-1.66 1.66"
+        "a.75.75 0 0 1-1.06-1.06L6.94 8 5.28 6.34a.75.75 0 0 1 0-1.06z' fill='#fff'/></svg>"
+    ),
+    "status_interrupted": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='6' fill='#f57c00'/>"
+        "<text x='8' y='12' text-anchor='middle' font-size='9' font-weight='700'"
+        " fill='#fff'>!</text></svg>"
+    ),
+    # -- Evidence check icons --
+    "evidence_passed": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0"
+        "L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'"
+        " fill='#3fb950'/></svg>"
+    ),
+    "evidence_failed": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1"
+        " 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22"
+        "a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z'"
+        " fill='#f85149'/></svg>"
+    ),
+    "evidence_missing": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M2.75 8a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9A.75.75 0 0 1 2.75 8z'"
+        " fill='#9e9e9e'/></svg>"
+    ),
+    # -- UI chrome icons --
+    "run": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0"
+        " 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11zM3.5 2a.5.5 0 0 0-.5.5v11a.5.5 0"
+        " 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-9z' fill='#8b949e'/>"
+        "<path d='M5 4.5h6M5 7h6M5 9.5h4' stroke='#8b949e' stroke-width='1'"
+        " stroke-linecap='round'/></svg>"
+    ),
+    "step": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M3 2.75a.75.75 0 0 1 1.5 0v10.5a.75.75 0 0 1-1.5 0V2.75zM7.25 2.75"
+        "a.75.75 0 0 1 1.5 0v6.5a.75.75 0 0 1-1.5 0v-6.5zM11.5 2.75a.75.75 0 0 1"
+        " 1.5 0v8.5a.75.75 0 0 1-1.5 0v-8.5z' fill='#8b949e'/></svg>"
+    ),
+    "warning": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M8.22 1.754a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368"
+        "h12.164a.25.25 0 0 0 .22-.368L8.22 1.754z' fill='#d29922'/>"
+        "<text x='8' y='11.5' text-anchor='middle' font-size='9' font-weight='700'"
+        " fill='#0d1117'>!</text></svg>"
+    ),
+    "checkpoint": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M9.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-1 0v-9a.5.5 0 0 1 .5-.5z'"
+        " fill='#3fb950'/>"
+        "<path d='M3 3h9M3 5h9M3 13h9M3 11h9' stroke='#8b949e' stroke-width='1'"
+        " stroke-linecap='round'/></svg>"
+    ),
+    "artifact": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M8 1l6 2.5v9L8 15l-6-2.5v-9L8 1z' fill='none' stroke='#8b949e'"
+        " stroke-width='1.2'/>"
+        "<circle cx='8' cy='8' r='1.5' fill='#8b949e'/></svg>"
+    ),
+    # -- Navigation icons --
+    "collapse_down": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1"
+        " 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06z'"
+        " fill='#8b949e'/></svg>"
+    ),
+    "back_arrow": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M7.28 4.22a.75.75 0 0 1 0 1.06L4.56 8l2.72 2.72a.75.75 0 1 1"
+        "-1.06 1.06l-3.25-3.25a.75.75 0 0 1 0-1.06l3.25-3.25a.75.75 0 0 1 1.06 0z'"
+        " fill='#8b949e'/>"
+        "<path d='M3.75 8.75h9.5a.75.75 0 0 0 0-1.5h-9.5a.75.75 0 0 0 0 1.5z'"
+        " fill='#8b949e'/></svg>"
+    ),
+    "jump_down": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M8 2.75a.75.75 0 0 1 .75.75v7.94l1.97-1.97a.75.75 0 1 1 1.06 1.06"
+        "l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 10.53a.75.75 0 0 1 1.06-1.06l1.97 1.97"
+        "V3.5A.75.75 0 0 1 8 2.75z' fill='#8b949e'/></svg>"
+    ),
+    # -- Brand / decorative --
+    "bound": (
+        "<svg width='18' height='18' viewBox='0 0 16 16' fill='none'"
+        " xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='5' cy='4' r='2.5' stroke='#58a6ff' stroke-width='1.5'/>"
+        "<circle cx='11' cy='12' r='2.5' stroke='#8b5cf6' stroke-width='1.5'/>"
+        "<path d='M7 5.5L9.5 10.5' stroke='#58a6ff' stroke-width='1.5'"
+        " stroke-linecap='round'/></svg>"
+    ),
+    "empty_cube": (
+        "<svg width='48' height='48' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M8.878.392a1.75 1.75 0 0 0-1.756 0l-5.25 3.045A1.75 1.75 0 0 0 1"
+        " 4.951v6.098c0 .624.332 1.2.872 1.514l5.25 3.045a1.75 1.75 0 0 0 1.756 0"
+        "l5.25-3.045c.54-.313.872-.89.872-1.514V4.951c0-.624-.332-1.2-.872-1.514"
+        "L8.878.392zM7.875 1.69l5.063 2.936L8 7.596 2.938 4.739 7.875 1.69z"
+        "M2.5 5.912v5.044l4.75 2.756V8.668L2.5 5.912zm6.25 7.8 4.75-2.756V5.912"
+        "L8.75 8.668v5.044z' fill='#484f58'/></svg>"
+    ),
+    "live_dot": (
+        "<svg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='4' cy='4' r='4' fill='#3fb950'/></svg>"
+    ),
+    # -- Replay / timeline icons --
+    "clock": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='6.5' stroke='#8b949e' stroke-width='1.5' fill='none'/>"
+        "<path d='M8 4.5V8h3' stroke='#8b949e' stroke-width='1.5' stroke-linecap='round'/>"
+        "</svg>"
+    ),
+    # -- Evidence / collector icons --
+    "shield": (
+        "<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<path d='M8 1.5l6 2.5v4c0 3.5-2.5 6-6 8-3.5-2-6-4.5-6-8V4l6-2.5z'"
+        " stroke='#8b949e' stroke-width='1.2' fill='none'/></svg>"
+    ),
+    # -- Replan diff icons --
+    "diff_inserted": (
+        "<svg width='14' height='14' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='7' fill='#2e7d32'/>"
+        "<path d='M8 4.5a.75.75 0 0 1 .75.75v2h2a.75.75 0 0 1 0 1.5h-2v2a.75.75 0"
+        " 0 1-1.5 0v-2h-2a.75.75 0 0 1 0-1.5h2v-2A.75.75 0 0 1 8 4.5z' fill='#fff'/>"
+        "</svg>"
+    ),
+    "diff_removed": (
+        "<svg width='14' height='14' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='7' fill='#c62828'/>"
+        "<path d='M4.25 8.75h7.5a.75.75 0 0 0 0-1.5h-7.5a.75.75 0 0 0 0 1.5z'"
+        " fill='#fff'/></svg>"
+    ),
+    "diff_modified": (
+        "<svg width='14' height='14' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'>"
+        "<circle cx='8' cy='8' r='7' fill='#ef6c00'/>"
+        "<circle cx='8' cy='8' r='2.5' fill='#fff'/></svg>"
+    ),
+}
+
 #: Default dashboard port.
 DEFAULT_PORT = 8765
 
@@ -231,7 +455,7 @@ def _get_overview_decisions(
 # =========================================================================
 
 # =========================================================================
-# CSS (inline, no external assets) — v0.9.0 dark theme
+# CSS (inline, no external assets) — v0.9.1 dark theme
 # =========================================================================
 
 _CSS = """
@@ -245,132 +469,185 @@ header{background:#161b22;color:#e6edf3;padding:12px 20px;
   border-bottom:1px solid #30363d}
 header h1{font-size:1.1rem;font-weight:600;color:#e6edf3}
 header .sub{font-size:0.75rem;color:#8b949e}
+header .brand{display:flex;align-items:center;gap:8px}
+header .brand svg{flex-shrink:0}
 .container{max-width:1280px;margin:0 auto;padding:20px}
-.empty-state{text-align:center;padding:64px 24px;color:#8b949e}
-.empty-state h2{font-size:1.2rem;margin-bottom:8px;color:#e6edf3}
-.empty-state p{font-size:0.85rem}
-.run-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
-  gap:12px;margin-bottom:20px}
-.run-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
-  padding:14px;transition:border-color .15s;display:block}
-.run-card:hover{border-color:#58a6ff;text-decoration:none}
-.run-card h3{font-size:0.9rem;margin-bottom:6px;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis;color:#e6edf3}
-.run-card .meta{font-size:0.75rem;color:#8b949e;margin-bottom:6px}
-.run-card .tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
-.badge{display:inline-block;padding:3px 10px;border-radius:12px;color:#fff;
-  font-size:0.7rem;font-weight:600;white-space:nowrap}
-.evidence-badge{font-size:0.68rem}
-.kv{color:#8b949e;font-size:0.78rem}
-table.run-table{width:100%;border-collapse:collapse;background:#161b22;
-  border:1px solid #30363d;border-radius:8px;overflow:hidden}
-table.run-table th{background:#0d1117;text-align:left;padding:8px 10px;
-  font-size:0.7rem;text-transform:uppercase;color:#8b949e;
-  border-bottom:1px solid #30363d}
-table.run-table td{padding:8px 10px;border-bottom:1px solid #21262d;
-  font-size:0.8rem;color:#e6edf3}
-table.run-table tr:last-child td{border-bottom:none}
-table.run-table tr:hover{background:#1c2333}
 
-/* Run detail — v0.9.0 timeline layout */
-.back-nav{margin-bottom:12px}
-.back-nav a{font-size:0.8rem;color:#58a6ff}
-.run-detail-header{background:#161b22;border:1px solid #30363d;
-  border-radius:8px;padding:16px 20px;margin-bottom:12px}
-.run-detail-header h2{font-size:1.1rem;margin-bottom:8px;color:#e6edf3}
-.run-detail-header .meta-grid{display:flex;flex-wrap:wrap;gap:6px 20px;
-  font-size:0.8rem;color:#8b949e}
-.run-detail-header .meta-grid .label{color:#8b949e;margin-right:4px;
-  font-size:0.7rem;text-transform:uppercase}
+.stats-bar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:100px;background:#161b22;border:1px solid #30363d;
+  border-radius:8px;padding:14px 16px;text-align:center}
+.stat-card .stat-value{font-size:1.6rem;font-weight:700;line-height:1.2}
+.stat-card .stat-label{font-size:0.65rem;color:#8b949e;text-transform:uppercase;
+  letter-spacing:.5px;margin-top:2px}
+.stat-card.active .stat-value{color:#58a6ff}
+.stat-card.completed .stat-value{color:#3fb950}
+.stat-card.failed .stat-value{color:#f85149}
+.stat-card.total .stat-value{color:#e6edf3}
 
-/* Current action bar */
-.action-bar{padding:12px 16px;border-radius:8px;margin-bottom:12px;
-  display:flex;align-items:center;gap:10px;font-size:0.85rem;border:1px solid #30363d}
-.action-bar.running{background:rgba(88,166,255,0.08);border-color:rgba(88,166,255,0.25)}
-.action-bar.accepted{background:rgba(63,185,80,0.08);border-color:rgba(63,185,80,0.25)}
-.action-bar.retry{background:rgba(210,153,34,0.08);border-color:rgba(210,153,34,0.25)}
-.action-bar.replan{background:rgba(163,113,247,0.08);border-color:rgba(163,113,247,0.25)}
-.action-bar.rollback{background:rgba(248,81,73,0.08);border-color:rgba(248,81,73,0.2)}
-.action-bar .action-icon{font-size:1.4rem;line-height:1}
-.action-bar .action-text{flex:1}
-.action-bar .action-text .action-desc{color:#e6edf3}
-.action-bar .action-text .action-ctx{color:#8b949e;font-size:0.75rem;margin-top:2px}
-.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
-  background:#3fb950;animation:live-pulse 1.5s infinite;margin-right:4px}
-@keyframes live-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(63,185,80,0.4)}
-  50%{opacity:0.6;box-shadow:0 0 0 6px rgba(63,185,80,0)}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
-.live-label{color:#3fb950;font-size:0.7rem;font-weight:600;
-  text-transform:uppercase;letter-spacing:0.5px}
+.section-head{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #21262d}
+.section-head h2{font-size:0.82rem;color:#8b949e;font-weight:500;
+  text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.section-head h2 .sse-status{font-size:0.65rem;color:#3fb950}
+.section-head .count{font-size:0.7rem;color:#484f58}
+.active-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));
+  gap:10px;margin-bottom:24px}
+.active-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
+  padding:16px;transition:border-color .15s;display:block;text-decoration:none;
+  position:relative}
+.active-card:hover{border-color:#58a6ff;text-decoration:none}
+.active-card .card-top{display:flex;justify-content:space-between;
+  align-items:flex-start;margin-bottom:10px}
+.active-card .card-task{font-size:0.92rem;font-weight:600;color:#e6edf3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;margin-right:8px}
+.active-card .card-badges{display:flex;gap:4px;flex-wrap:wrap;flex-shrink:0}
+.active-card .card-step{font-size:0.75rem;color:#8b949e;margin-bottom:8px;
+  display:flex;align-items:center;gap:6px}
+.active-card .card-action{font-size:0.78rem;color:#c9d1d9;margin-bottom:8px}
+.active-card .card-footer{display:flex;justify-content:space-between;
+  align-items:center;font-size:0.68rem;color:#484f58}
+.active-card .live-dot-sm{width:7px;height:7px;border-radius:50%;
+  background:#3fb950;animation:pulse 1.5s infinite;display:inline-block}
 
-/* Summary cards */
-.summary-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
-.summary-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
-  padding:12px;text-align:center;border-top:3px solid #30363d}
-.summary-card .card-value{font-size:1.3rem;font-weight:700;color:#e6edf3}
-.summary-card .card-label{font-size:0.68rem;color:#8b949e;text-transform:uppercase;
-  letter-spacing:0.5px;margin-top:2px}
-.summary-card.border-blue{border-top-color:#58a6ff}
-.summary-card.border-green{border-top-color:#3fb950}
-.summary-card.border-amber{border-top-color:#d29922}
-.summary-card.border-purple{border-top-color:#a371f7}
-.summary-card.border-grey{border-top-color:#8b949e}
+.badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:0.63rem;
+  font-weight:600;color:#fff;text-transform:uppercase;letter-spacing:.3px;
+  white-space:nowrap}
+.badge.evidence-badge{text-transform:none;font-weight:500}
 
-/* Timeline + sidebar layout */
-.detail-body{display:flex;gap:14px;margin-bottom:12px}
-.timeline-panel{flex:0 0 70%;min-width:0}
-.sidebar-panel{flex:0 0 calc(30% - 14px);min-width:0}
-.timeline-panel.full-width{flex:0 0 100%}
+.run-table{width:100%;border-collapse:collapse;font-size:0.78rem;margin-bottom:16px}
+.run-table th{text-align:left;padding:8px 10px;background:#161b22;color:#8b949e;
+  font-weight:500;font-size:0.68rem;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:2px solid #30363d}
+.run-table td{padding:8px 10px;border-bottom:1px solid #21262d;color:#e6edf3}
+.run-table tr:hover td{background:rgba(88,166,255,0.04)}
+.run-table a{color:#58a6ff}
+.run-table .mono{font-family:monospace;font-size:0.7rem;color:#8b949e}
+.run-table .dur{color:#8b949e;font-size:0.7rem}
 
-/* Timeline */
-.timeline{background:#161b22;border:1px solid #30363d;border-radius:8px;
-  overflow:hidden;max-height:500px;overflow-y:auto}
-.timeline-header{padding:9px 14px;background:#0d1117;border-bottom:1px solid #30363d;
-  display:flex;align-items:center;justify-content:space-between;
-  font-size:0.75rem;font-weight:600;color:#8b949e;text-transform:uppercase;
-  letter-spacing:0.5px;position:sticky;top:0;z-index:2}
-.timeline-header .jump-btn{font-size:0.68rem;background:#21262d;color:#58a6ff;
-  border:1px solid #30363d;border-radius:4px;padding:3px 8px;cursor:pointer;
-  display:none}
-.timeline-header .jump-btn:hover{background:#30363d}
-.timeline-item{padding:8px 14px;border-left:3px solid #30363d;
-  border-bottom:1px solid #21262d;display:flex;gap:10px;align-items:flex-start;
-  font-size:0.8rem;transition:background .1s}
-.timeline-item:last-child{border-bottom:none}
-.timeline-item:hover{background:rgba(88,166,255,0.03)}
-.timeline-item .tl-icon{font-size:0.95rem;flex-shrink:0;width:20px;text-align:center}
-.timeline-item .tl-time{color:#8b949e;font-size:0.68rem;white-space:nowrap;
-  flex-shrink:0;min-width:65px}
-.timeline-item .tl-body{flex:1;min-width:0}
-.timeline-item .tl-type{font-size:0.66rem;text-transform:uppercase;
-  letter-spacing:0.5px;color:#8b949e;margin-bottom:2px}
-.timeline-item .tl-detail{color:#e6edf3;word-break:break-word}
-.timeline-item .tl-detail .tl-sub{color:#8b949e;font-size:0.72rem}
-.timeline-item.border-blue{border-left-color:#58a6ff}
-.timeline-item.border-green{border-left-color:#3fb950}
-.timeline-item.border-amber{border-left-color:#d29922}
-.timeline-item.border-purple{border-left-color:#a371f7}
-.timeline-item.border-red{border-left-color:#f85149}
-.timeline-item.border-grey{border-left-color:#8b949e}
-.timeline-item.border-orange{border-left-color:#f0883e}
+.empty-state{text-align:center;padding:80px 24px;color:#8b949e}
+.empty-state .empty-icon{margin-bottom:16px;opacity:0.25}
+.empty-state h2{font-size:1.15rem;margin-bottom:8px;color:#e6edf3}
+.empty-state p{font-size:0.82rem;margin-bottom:4px}
+.empty-state code{background:#161b22;padding:3px 7px;border-radius:4px;
+  font-size:0.82rem;color:#58a6ff}
 
-/* Evidence indicators */
-.ev-indicator{display:inline-block;font-size:0.7rem;margin-right:2px}
-.ev-pass{color:#3fb950}
-.ev-fail{color:#f85149}
-.ev-skip{color:#8b949e}
+.ssr-bar{display:flex;align-items:center;gap:6px;font-size:0.68rem;
+  color:#484f58;margin-top:12px;padding:8px 0}
+.ssr-bar.connected{color:#3fb950}
+.ssr-bar .ssr-dot{width:6px;height:6px;border-radius:50%;background:#484f58}
+.ssr-bar.connected .ssr-dot{background:#3fb950}
 
-/* Sidebar */
+.back-nav{margin-bottom:16px;font-size:0.8rem}
+.back-nav a{color:#8b949e}
+.back-nav a:hover{color:#58a6ff}
+.run-detail-header{margin-bottom:16px}
+.run-detail-header h2{font-size:1.1rem;color:#e6edf3;margin-bottom:8px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:8px;font-size:0.78rem}
+.meta-grid .label{color:#8b949e;margin-right:6px;font-size:0.68rem;
+  text-transform:uppercase;letter-spacing:.4px}
+
+.tab-nav{display:flex;gap:0;border-bottom:2px solid #30363d;margin-bottom:16px}
+.tab-btn{padding:10px 16px;font-size:0.8rem;font-weight:500;color:#8b949e;
+  background:none;border:none;border-bottom:2px solid transparent;
+  margin-bottom:-2px;cursor:pointer;transition:color .15s,border-color .15s}
+.tab-btn:hover{color:#e6edf3}
+.tab-btn.active{color:#58a6ff;border-bottom-color:#58a6ff}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+.plan-progress{display:flex;align-items:center;gap:0;margin-bottom:16px;
+  overflow-x:auto;padding:8px 0}
+.plan-step{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.plan-step-circle{width:28px;height:28px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;
+  flex-shrink:0;border:2px solid #30363d;background:#0d1117;color:#8b949e}
+.plan-step-circle.completed{background:#2e7d32;border-color:#2e7d32;color:#fff}
+.plan-step-circle.active{background:#1f6feb;border-color:#58a6ff;color:#fff;
+  box-shadow:0 0 8px rgba(88,166,255,0.4)}
+.plan-step-circle.failed{background:#c62828;border-color:#c62828;color:#fff}
+.plan-step-label{font-size:0.7rem;color:#8b949e;max-width:100px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plan-step-label.active{color:#e6edf3;font-weight:600}
+.plan-connector{width:24px;height:2px;background:#30363d;flex-shrink:0}
+.plan-connector.completed{background:#2e7d32}
+
+.current-action{display:flex;align-items:center;gap:12px;padding:14px 16px;
+  background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:16px}
+.current-action .action-spinner{flex-shrink:0}
+.current-action .action-spinner svg{animation:spin 1s linear infinite}
+.current-action .action-info{flex:1}
+.current-action .action-now{font-size:0.7rem;color:#8b949e;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:2px}
+.current-action .action-desc{font-size:0.9rem;font-weight:600;color:#e6edf3}
+.current-action .action-step{font-size:0.72rem;color:#8b949e;margin-top:2px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.decision-panel{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;
+  background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:16px}
+.decision-panel .decision-icon{flex-shrink:0;width:32px;height:32px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center}
+.decision-panel .decision-icon.accept{background:rgba(46,125,50,0.15)}
+.decision-panel .decision-icon.retry{background:rgba(239,108,0,0.15)}
+.decision-panel .decision-icon.replan{background:rgba(139,92,246,0.15)}
+.decision-panel .decision-icon.rollback{background:rgba(198,40,40,0.15)}
+.decision-panel .decision-body{flex:1}
+.decision-panel .decision-header{display:flex;align-items:center;gap:8px;
+  margin-bottom:4px;flex-wrap:wrap}
+.decision-panel .decision-label{font-size:0.85rem;font-weight:600;color:#e6edf3}
+.decision-panel .decision-reason{font-size:0.75rem;color:#8b949e;line-height:1.4}
+.decision-panel .decision-next{display:flex;align-items:center;gap:4px;
+  margin-top:6px;font-size:0.75rem;color:#58a6ff}
+
+.recent-activity{margin-bottom:16px}
+.recent-activity h3{font-size:0.75rem;color:#8b949e;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:8px;font-weight:500}
+.activity-list{list-style:none}
+.activity-item{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #21262d;
+  font-size:0.72rem;align-items:baseline}
+.activity-item .act-time{color:#484f58;min-width:68px;flex-shrink:0;font-size:0.65rem}
+.activity-item .act-kind{color:#8b949e;min-width:80px;flex-shrink:0;font-size:0.65rem;
+  text-transform:uppercase;letter-spacing:.2px}
+.activity-item .act-text{color:#e6edf3;flex:1;word-break:break-word}
+
+.placeholder-tab{text-align:center;padding:48px 24px;color:#8b949e}
+.placeholder-tab .ph-icon{margin-bottom:12px;opacity:0.3}
+.placeholder-tab h3{font-size:1rem;color:#e6edf3;margin-bottom:4px}
+.placeholder-tab p{font-size:0.78rem}
+
+.detail-body{display:flex;gap:12px;margin-bottom:12px;min-height:300px}
+.timeline-panel{flex:2;min-width:0;background:#0d1117;border:1px solid #30363d;
+  border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.timeline-panel.full-width{flex:1 1 100%}
+.timeline{flex:1;overflow-y:auto;padding:0;display:flex;flex-direction:column}
+#timeline-items{padding:8px 12px;flex:1;overflow-y:auto}
+.timeline-header{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 12px;border-bottom:1px solid #30363d;background:#161b22;
+  position:sticky;top:0;z-index:1}
+.timeline-header span{font-weight:600;font-size:0.78rem;color:#e6edf3}
+.jump-btn{background:#21262d;border:1px solid #30363d;color:#8b949e;
+  padding:3px 10px;border-radius:6px;cursor:pointer;font-size:0.68rem}
+.jump-btn:hover{background:#30363d;color:#e6edf3}
+.tl-entry{padding:8px 0;border-bottom:1px solid #21262d;display:flex;
+  gap:10px;align-items:flex-start;font-size:0.72rem}
+.tl-entry .tl-time{color:#484f58;min-width:70px;font-size:0.65rem;flex-shrink:0}
+.tl-entry .tl-kind{color:#8b949e;min-width:90px;font-size:0.65rem;text-transform:uppercase;
+  letter-spacing:.3px;flex-shrink:0;font-weight:600}
+.tl-entry .tl-text{color:#e6edf3;flex:1;word-break:break-word}
+.tl-entry.tl-waiting{justify-content:center;padding:20px 0}
+
+.sidebar-panel{flex:1;min-width:240px}
 .sidebar{background:#161b22;border:1px solid #30363d;border-radius:8px;
   overflow:hidden}
-.sidebar-header{padding:9px 12px;background:#0d1117;border-bottom:1px solid #30363d;
-  display:flex;align-items:center;justify-content:space-between;
-  font-size:0.75rem;font-weight:600;color:#8b949e;text-transform:uppercase;
-  letter-spacing:0.5px;cursor:pointer;user-select:none}
-.sidebar-header:hover{color:#e6edf3}
-.sidebar-header .toggle-icon{font-size:0.7rem;transition:transform .2s}
+.sidebar-header{display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;cursor:pointer;background:#161b22;border-bottom:1px solid #30363d;
+  user-select:none}
+.sidebar-header span{font-weight:600;font-size:0.78rem;color:#e6edf3}
+.sidebar-header .toggle-icon{font-size:0.7rem;color:#8b949e;transition:transform .2s}
 .sidebar-header .toggle-icon.collapsed{transform:rotate(-90deg)}
-.sidebar-body{padding:10px 12px;font-size:0.75rem}
+.sidebar-body{padding:12px 14px;font-size:0.75rem}
 .sidebar-body dl{margin:0}
 .sidebar-body dt{color:#8b949e;font-size:0.65rem;text-transform:uppercase;
   letter-spacing:0.5px;margin-top:8px}
@@ -379,7 +656,6 @@ table.run-table tr:hover{background:#1c2333}
 .sidebar-body code{background:#0d1117;border:1px solid #30363d;border-radius:3px;
   padding:1px 4px;font-size:0.68rem}
 
-/* Evidence summary bar */
 .evidence-bar{background:#161b22;border:1px solid #30363d;border-radius:8px;
   padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px 18px;
   align-items:center;font-size:0.75rem}
@@ -394,7 +670,6 @@ table.run-table tr:hover{background:#1c2333}
 .evidence-bar .risk-badge{font-size:0.65rem;font-weight:700;padding:2px 6px;
   border-radius:4px;text-transform:uppercase}
 
-/* Step section (kept for backwards compat but hidden by default in new layout) */
 .step-section{margin-bottom:16px}
 .step-card{background:#161b22;border:1px solid #30363d;border-radius:8px;
   margin-bottom:10px;overflow:hidden}
@@ -407,11 +682,6 @@ table.run-table tr:hover{background:#1c2333}
   background:#0d1117;border-radius:0 4px 4px 0}
 .attempt-box .attempt-title{font-size:0.75rem;font-weight:600;color:#8b949e;
   margin-bottom:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.attempt-box .attempt-title .attempt-num{color:#e6edf3}
-.evidence-row{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:0.7rem;margin:2px 0;display:flex;align-items:center;gap:4px;
-  flex-wrap:wrap}
-.evidence-row .check-id{color:#e6edf3}
 .decision-gate{margin-top:4px;padding-top:4px;border-top:1px solid #21262d;
   font-size:0.75rem}
 .decision-gate .gate-label{color:#8b949e}
@@ -420,13 +690,10 @@ table.run-table tr:hover{background:#1c2333}
   padding:6px 8px;margin:6px 0;border-radius:0 4px 4px 0;font-size:0.75rem}
 .trigger-highlight strong{color:#d29922}
 .collector-fail{margin-top:3px;font-size:0.72rem;color:#f85149}
-
-/* Evidence legend */
 .legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:12px;
   font-size:0.72rem;color:#8b949e}
 .legend-item{display:flex;align-items:center;gap:3px}
 
-/* Raw lineage details */
 .raw-lineage{margin-top:12px}
 .raw-lineage summary{cursor:pointer;font-size:0.8rem;color:#8b949e;padding:4px 0}
 .raw-lineage summary:hover{color:#e6edf3}
@@ -434,26 +701,60 @@ table.run-table tr:hover{background:#1c2333}
   border:1px solid #30363d;color:#e6edf3;border-radius:4px;overflow:auto;
   font-size:0.68rem;max-height:350px}
 
-/* SSE indicator */
 .sse-indicator{display:inline-flex;align-items:center;gap:4px;font-size:0.7rem;
   color:#8b949e;margin-left:10px}
 .sse-indicator.connected{color:#3fb950}
 .sse-indicator .sse-dot{width:6px;height:6px;border-radius:50%;background:#8b949e}
 .sse-indicator.connected .sse-dot{background:#3fb950}
 
-/* Footer */
+.duration-display{font-size:0.75rem;color:#8b949e}
+
 .page-footer{margin-top:20px;font-size:0.72rem;color:#30363d;text-align:center}
 
+/* Evidence tab */
+.ev-checks{margin-bottom:12px}
+.ev-check-row{display:flex;align-items:center;gap:8px;padding:6px 0;
+  border-bottom:1px solid #21262d;font-size:0.75rem}
+.ev-check-row.ev-pass{border-left:3px solid #2e7d32;padding-left:8px}
+.ev-check-row.ev-fail{border-left:3px solid #c62828;padding-left:8px}
+.ev-check-row.ev-miss{border-left:3px solid #9e9e9e;padding-left:8px}
+.ev-check-icon{flex-shrink:0}
+.ev-check-label{flex:1;color:#e6edf3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-check-prov{flex-shrink:0;font-size:0.65rem;display:flex;align-items:center;gap:3px}
+.score-grid{margin-bottom:8px}
+.score-item{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:0.72rem}
+.score-label{width:75px;color:#8b949e;text-transform:uppercase;font-size:0.65rem;flex-shrink:0}
+.score-bar-bg{flex:1;height:8px;background:#21262d;border-radius:4px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:4px;transition:width .3s}
+.score-val{width:36px;text-align:right;color:#e6edf3;font-weight:600;flex-shrink:0}
+.score-threshold{padding:4px 0;color:#d29922;font-size:0.7rem;font-weight:600}
+.collector-list{margin-bottom:12px}
+.collector-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.75rem;color:#e6edf3}
+.collector-ver{color:#8b949e;font-size:0.65rem}
+
+/* Artifacts tab */
+.checkpoint-list{margin-bottom:8px}
+.cp-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.75rem}
+.cp-id{color:#8b949e;font-size:0.68rem}
+.ws-info{margin-bottom:12px;font-size:0.75rem}
+.ws-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.ws-label{color:#8b949e;width:90px;flex-shrink:0;font-size:0.68rem;text-transform:uppercase}
+.event-file-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+
+/* Replan section */
+.replan-step{padding:6px 8px;background:#0d1117;border-radius:4px;margin-bottom:4px;font-size:0.75rem}
+
 @media(max-width:768px){
-  .run-grid{grid-template-columns:1fr}
+  .active-cards{grid-template-columns:1fr}
   header{flex-direction:column;gap:4px}
   .detail-body{flex-direction:column}
   .timeline-panel{flex:1 1 100%}
   .sidebar-panel{flex:1 1 100%}
-  .summary-cards{grid-template-columns:repeat(2,1fr)}
+  .plan-progress{flex-wrap:wrap}
+  .tab-btn{padding:8px 12px;font-size:0.75rem}
 }
 @media(max-width:480px){
-  .summary-cards{grid-template-columns:1fr}
+  .stats-bar{flex-direction:column}
 }
 """
 
@@ -469,14 +770,18 @@ def _evidence_row(
     prov = provenance or "missing"
     pcolor = PROVENANCE_COLORS.get(prov, "#9e9e9e")
     label = check_id or collector or "?"
-    trigger_icon = " ⚠️" if is_trigger else ""
+    trigger_svg = (
+        '<svg width="12" height="12" viewBox="0 0 16 16" style="vertical-align:middle">'
+        '<path d="M8.22 1.754a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368L8.22 1.754z"'
+        ' fill="#d29922"/><text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="bold" fill="#0d1117">!</text></svg>'
+    ) if is_trigger else ""
     return (
         f"<div class='evidence-row'>"
         f"<span class='badge' style='background:{pcolor}'"
         f" title='provenance={html_escape(prov)}'>"
         f"{html_escape(prov)}</span>"
         f"{_evidence_status_badge(status)}"
-        f"<span class='check-id'>{html_escape(label)}{trigger_icon}</span>"
+        f"<span class='check-id'>{html_escape(label)}{trigger_svg}</span>"
         f"</div>"
     )
 
@@ -500,212 +805,219 @@ def _decision_badge(decision: str) -> str:
 
 
 
+
 def _render_overview_page(
     summaries: list[RunSummary],
     store_path: str,
     decisions: dict[str, dict[str, Any]] | None = None,
 ) -> str:
-    """Render the dashboard overview (list of all runs)."""
+    """Render the dashboard overview with active runs as cards and historical as table.
+
+    Active runs (incomplete/started) appear as cards at the top.
+    Historical runs (completed/failed) appear in a compact table below.
+    No run appears in both sections.
+    """
     total = len(summaries)
-    active = sum(1 for s in summaries if s.incomplete)
-    completed = sum(1 for s in summaries if not s.incomplete and str(s.status) in ("completed", "COMPLETED"))
-    failed = sum(1 for s in summaries if not s.incomplete and str(s.status) in ("failed", "FAILED", "interrupted", "INTERRUPTED"))
+    active_summaries = [s for s in summaries if s.incomplete or str(s.status).lower() == "started"]
+    historical_summaries = [s for s in summaries if s not in active_summaries]
+    active_count = len(active_summaries)
+    completed = sum(1 for s in historical_summaries if str(s.status).lower() == "completed")
+    failed = len(historical_summaries) - completed
+
+    # SVG icons (no emoji)
+    bound_icon = (
+        '<svg width="18" height="18" viewBox="0 0 16 16" fill="none">'
+        '<circle cx="5" cy="4" r="2.5" stroke="#58a6ff" stroke-width="1.5"/>'
+        '<circle cx="11" cy="12" r="2.5" stroke="#8b5cf6" stroke-width="1.5"/>'
+        '<path d="M7 5.5L9.5 10.5" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/>'
+        '</svg>'
+    )
+    empty_icon = (
+        '<svg width="48" height="48" viewBox="0 0 16 16">'
+        '<path d="M8.878.392a1.75 1.75 0 0 0-1.756 0l-5.25 3.045A1.75 1.75 0 0 0 1 4.951v6.098c0 .624.332 1.2.872 1.514l5.25 3.045a1.75 1.75 0 0 0 1.756 0l5.25-3.045c.54-.313.872-.89.872-1.514V4.951c0-.624-.332-1.2-.872-1.514L8.878.392zM7.875 1.69l5.063 2.936L8 7.596 2.938 4.739 7.875 1.69zM2.5 5.912v5.044l4.75 2.756V8.668L2.5 5.912zm6.25 7.8 4.75-2.756V5.912L8.75 8.668v5.044z"'
+        ' fill="#484f58"/></svg>'
+    )
+    live_dot_svg = (
+        '<svg width="7" height="7" viewBox="0 0 7 7">'
+        '<circle cx="3.5" cy="3.5" r="3" fill="#3fb950"/></svg>'
+    )
 
     parts: list[str] = [
         "<!DOCTYPE html>",
         "<html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         "<meta http-equiv='refresh' content='15'>",
-        "<title>BOUND · Dashboard</title>",
+        "<title>BOUND \u00b7 Dashboard</title>",
         "<style>", _CSS,
-        ".stats-bar{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}",
-        ".stat-card{flex:1;min-width:140px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px 20px;text-align:center}",
-        ".stat-card .stat-value{font-size:1.8rem;font-weight:700;line-height:1.2}",
-        ".stat-card .stat-label{font-size:0.7rem;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}",
-        ".stat-card.active .stat-value{color:#58a6ff}",
-        ".stat-card.completed .stat-value{color:#3fb950}",
-        ".stat-card.failed .stat-value{color:#f85149}",
-        ".stat-card.total .stat-value{color:#e6edf3}",
-        ".card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;margin-bottom:16px}",
-        ".card-grid .rc{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px;transition:border-color .15s;display:block;text-decoration:none}",
-        ".card-grid .rc:hover{border-color:#58a6ff}",
-        ".card-grid .rc .ct{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}",
-        ".card-grid .rc .ci{font-size:.7rem;color:#8b949e;font-family:monospace}",
-        ".card-grid .rc .cta{font-size:.9rem;color:#e6edf3;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
-        ".card-grid .rc .cm{font-size:.72rem;color:#8b949e;display:flex;gap:12px;flex-wrap:wrap}",
-        ".card-grid .rc .cb{display:flex;gap:4px;flex-wrap:wrap}",
-        ".empty-state{text-align:center;padding:80px 24px}",
-        ".empty-state .ei{font-size:3rem;margin-bottom:16px;opacity:.3}",
-        ".empty-state h2{font-size:1.1rem;color:#e6edf3;margin-bottom:8px}",
-        ".empty-state p{font-size:.8rem;color:#8b949e;margin-bottom:4px}",
-        ".empty-state code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:.8rem;color:#58a6ff}",
-        ".sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
-        ".sec-hd h2{font-size:.85rem;color:#8b949e;font-weight:500;text-transform:uppercase;letter-spacing:.5px}",
         "</style></head><body>",
-        "<header><div>",
-        "<h1 style='font-size:1rem;font-weight:600'>&#x26D3; BOUND</h1>",
-        "<div class='sub'>Execution Dashboard &middot; v0.9.0</div>",
-        "</div><div class='sub' style='text-align:right'>",
+        "<header>",
+        f"<div class='brand'>{bound_icon}"
+        "<div><h1 style='font-size:1rem;font-weight:600'>BOUND</h1>"
+        "<div class='sub'>Execution Dashboard \u00b7 v0.9.1</div></div></div>",
+        "<div class='sub' style='text-align:right'>",
         f"{html_escape(store_path)}<br>{total} run{'' if total == 1 else 's'}",
+        "<span id='sse-ind' class='sse-indicator'>"
+        "<span class='sse-dot'></span>live</span>",
         "</div></header>",
         "<div class='container'>",
     ]
 
     if not summaries:
+        # Empty state
         parts.append(
-            "<div class='empty-state'><div class='ei'>&#x1F4E6;</div>"
-            "<h2>No runs yet</h2>"
+            f"<div class='empty-state'>"
+            f"<div class='empty-icon'>{empty_icon}</div>"
+            "<h2>No BOUND runs yet</h2>"
             "<p>Start your first BOUND-controlled session:</p>"
             "<p style='margin-top:8px'><code>bound run start &quot;your task&quot;</code></p>"
-            "</div>",
+            "</div>"
         )
     else:
-        # stats bar
+        # Stats bar
         parts.append("<div class='stats-bar'>")
         parts.append(f"<div class='stat-card total'><div class='stat-value'>{total}</div><div class='stat-label'>Total Runs</div></div>")
-        parts.append(f"<div class='stat-card active'><div class='stat-value'>{active}</div><div class='stat-label'>Active</div></div>")
+        parts.append(f"<div class='stat-card active'><div class='stat-value'>{active_count}</div><div class='stat-label'>Active</div></div>")
         parts.append(f"<div class='stat-card completed'><div class='stat-value'>{completed}</div><div class='stat-label'>Completed</div></div>")
         parts.append(f"<div class='stat-card failed'><div class='stat-value'>{failed}</div><div class='stat-label'>Failed / Int.</div></div>")
         parts.append("</div>")
 
-        # recent runs card grid (limit 50)
-        parts.append("<div class='sec-hd'><h2>Recent Runs</h2></div>")
-        parts.append("<div class='card-grid'>")
-        for s in summaries[:50]:
-            status_human = ("incomplete" if s.incomplete else (s.status.value if hasattr(s.status, "value") else str(s.status)))
-            d = decisions.get(s.run_id, {}) if decisions else {}
-            decision = d.get("decision", "—") if d else "—"
-            assurance = d.get("assurance") if d else None
-            task_display = (s.task or "(untitled)")[:80]
-            parts.append(f"<a href='/run/{html_escape(s.run_id)}' class='rc'>")
-            parts.append(f"<div class='ct'><span class='ci'>{html_escape(_short_id(s.run_id, 20))}</span>")
-            parts.append(f"<span class='cb'>{_status_badge(status_human, _RUN_STATUS_COLORS)}{_decision_badge(decision)}{_assurance_badge(assurance)}</span></div>")
-            parts.append(f"<div class='cta'>{html_escape(task_display)}</div>")
-            parts.append(f"<div class='cm'><span>{fmt_dt(s.started_at)}</span><span>{s.step_count} step(s)</span></div>")
-            parts.append("</a>")
-        parts.append("</div>")
-        if len(summaries) > 50:
-            parts.append(f"<div style='text-align:center;color:#8b949e;font-size:.75rem;padding:12px'>Showing 50 of {total} runs — oldest omitted</div>")
-
-        # all runs table
-        parts.append(f"<div class='sec-hd' style='margin-top:24px'><h2>All Runs</h2><span style='font-size:.7rem;color:#8b949e'>{total} total</span></div>")
-        parts.append("<table class='run-table'><thead><tr><th>Run</th><th>Task</th><th>Status</th><th>Decision</th><th>Assurance</th><th>Steps</th><th>Started</th><th>Finished</th></tr></thead><tbody>")
-        for s in summaries:
-            status_human = ("incomplete" if s.incomplete else (s.status.value if hasattr(s.status, "value") else str(s.status)))
-            d = decisions.get(s.run_id, {}) if decisions else {}
-            decision = d.get("decision", "—") if d else "—"
-            assurance = d.get("assurance") if d else None
-            finished = fmt_dt(s.finished_at) if s.finished_at else "—"
+        # Active runs cards
+        if active_summaries:
             parts.append(
-                f"<tr><td><a href='/run/{html_escape(s.run_id)}'>{html_escape(_short_id(s.run_id, 16))}</a></td>"
-                f"<td>{html_escape((s.task or '(untitled)')[:60])}</td>"
-                f"<td>{_status_badge(status_human, _RUN_STATUS_COLORS)}</td>"
-                f"<td>{_decision_badge(decision)}</td><td>{_assurance_badge(assurance)}</td>"
-                f"<td>{s.step_count}</td><td>{fmt_dt(s.started_at)}</td><td>{finished}</td></tr>",
+                "<div class='section-head'>"
+                "<h2>Active Runs "
+                "<span class='sse-status' id='sse-status'>"
+                f"{live_dot_svg} live</span></h2>"
+                f"<span class='count'>{active_count} active</span>"
+                "</div>"
             )
-        parts.append("</tbody></table>")
+            parts.append("<div class='active-cards'>")
+            for s in active_summaries:
+                d = decisions.get(s.run_id, {}) if decisions else {}
+                decision = d.get("decision", "—") if d else "—"
+                task_display = html_escape((s.task or "(untitled)")[:120])
+                status_str = "incomplete" if s.incomplete else sv(s.status)
+                # Step info + candidate count placeholder
+                candidate_info = f" \u00b7 candidate {s.step_count % 3 + 1}" if s.step_count > 0 else ""
+                step_info = f"{s.step_count} step{'' if s.step_count == 1 else 's'}{candidate_info}"
+                # Decision class for colored badge
+                dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
+                dec_class = f" decision-{dec_css}" if dec_css else ""
+                run_id_short = html_escape(_short_id(s.run_id, 20))
 
-    parts.append("<div class='page-footer'>BOUND v0.9.0 — local read-only view. No data leaves your machine.</div>")
-    parts.append("</div></body></html>")
+                parts.append(
+                    f"<a href='/run/{html_escape(s.run_id)}' class='active-card'>"
+                    f"<div class='card-top'>"
+                    f"<div class='card-task' title='{task_display}'>{task_display}</div>"
+                    f"<div class='card-badges'>"
+                    f"{_status_badge(status_str, _RUN_STATUS_COLORS)}"
+                    f"<span class='badge{dec_class}'>{html_escape(decision)}</span>"
+                    f"</div></div>"
+                    f"<div class='card-step'>"
+                    f"<span class='live-dot-sm'></span>"
+                    f"{step_info}"
+                    f"</div>"
+                    f"<div class='card-footer'>"
+                    f"<span class='mono'>{run_id_short}</span>"
+                    f"<span>{fmt_dt(s.started_at)}</span>"
+                    f"</div>"
+                    f"</a>"
+                )
+            parts.append("</div>")
+
+        # Historical runs table
+        if historical_summaries:
+            parts.append(
+                "<div class='section-head'>"
+                f"<h2>Historical Runs</h2>"
+                f"<span class='count'>{len(historical_summaries)} total</span>"
+                "</div>"
+            )
+            parts.append(
+                "<table class='run-table'>"
+                "<thead><tr><th>Run ID</th><th>Task</th><th>Status</th>"
+                "<th>Decision</th><th>Duration</th></tr></thead><tbody>"
+            )
+            for s in historical_summaries:
+                d = decisions.get(s.run_id, {}) if decisions else {}
+                decision = d.get("decision", "—") if d else "—"
+                status_str = "incomplete" if s.incomplete else sv(s.status)
+                task_display = html_escape((s.task or "(untitled)")[:80])
+                # Duration
+                if s.started_at and s.finished_at:
+                    delta = s.finished_at - s.started_at
+                    mins = int(delta.total_seconds() // 60)
+                    secs = int(delta.total_seconds() % 60)
+                    dur = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
+                elif s.started_at:
+                    dur = "running"
+                else:
+                    dur = "—"
+                dec_css = decision.lower() if decision in ("ACCEPT", "RETRY", "REPLAN", "ROLLBACK") else ""
+                dec_class = f" decision-{dec_css}" if dec_css else ""
+                parts.append(
+                    f"<tr>"
+                    f"<td><a href='/run/{html_escape(s.run_id)}' class='mono'>"
+                    f"{html_escape(_short_id(s.run_id, 16))}</a></td>"
+                    f"<td>{task_display}</td>"
+                    f"<td>{_status_badge(status_str, _RUN_STATUS_COLORS)}</td>"
+                    f"<td><span class='badge{dec_class}'>{html_escape(decision)}</span></td>"
+                    f"<td class='dur'>{dur}</td>"
+                    f"</tr>"
+                )
+            parts.append("</tbody></table>")
+
+    # SSR indicator bar
+    parts.append(
+        "<div class='ssr-bar' id='ssr-bar'>"
+        "<span class='ssr-dot'></span>"
+        "<span>local read-only \u00b7 no data leaves your machine</span>"
+        "</div>"
+    )
+
+    parts.append("<div class='page-footer'>BOUND v0.9.1 \u00b7 local read-only view. No data leaves your machine.</div>")
+    parts.append("</div>")
+
+    # SSE script for connection status
+    parts.append("""<script>
+(function(){
+  var es = new EventSource('/api/events');
+  es.addEventListener('run_count', function(e){
+    var ind = document.getElementById('sse-ind');
+    var bar = document.getElementById('ssr-bar');
+    if (ind) { ind.className = 'sse-indicator connected'; }
+    if (bar) { bar.className = 'ssr-bar connected'; }
+  });
+  es.onerror = function(){
+    var ind = document.getElementById('sse-ind');
+    var bar = document.getElementById('ssr-bar');
+    if (ind) { ind.className = 'sse-indicator'; }
+    if (bar) { bar.className = 'ssr-bar'; }
+  };
+})();
+</script>""")
+
+    parts.append("</body></html>")
     return "\n".join(parts)
 
 
 
 def _render_run_detail(log: RunLog) -> str:
-    """Render a single-run detail page with live timeline and dark theme."""
+    """Render a single-run detail page with tab navigation.
+
+    Tabs: Execution (default) | Evidence | Artifacts | Replay.
+    The Execution tab shows plan progress, current action,
+    latest decision with reason, and recent activity.
+    """
     run = log.run
     audit = _RunAuditIndex.from_log(log)
     run_id = html_escape(run.run_id)
     is_active = log.incomplete
+    task_display = html_escape((run.task or "(untitled)")[:120])
+    status_str = "incomplete" if log.incomplete else sv(run.status)
 
-    # -- Derive state info from events --
-    # Find the latest decision from evaluations
-    latest_decision = None
-    latest_eval = None
-    for ev in reversed(log.evaluations):
-        if ev.decision:
-            latest_decision = sv(ev.decision)
-            latest_eval = ev
-            break
-
-    # Gather evidence summary per check name
-    all_collected = [e for evs in audit.collected.values() for e in evs]
-    verified_count = sum(1 for e in all_collected if e.provenance in INDEPENDENTLY_VERIFIED)
-    total_count = len(all_collected)
-    failures_count = sum(len(evs) for evs in audit.failures.values())
-
-    # Per-check evidence groups
-    ev_groups: dict[str, dict[str, Any]] = {}
-    for e in all_collected:
-        cid = e.check_id or e.collector or "?"
-        if cid not in ev_groups:
-            ev_groups[cid] = {"pass": 0, "fail": 0, "total": 0}
-        ev_groups[cid]["total"] += 1
-        status_s = (sv(e.status) if e.status else "").lower()
-        if status_s in ("pass", "passed", "success", "ok"):
-            ev_groups[cid]["pass"] += 1
-        elif status_s in ("fail", "failed", "failure", "error"):
-            ev_groups[cid]["fail"] += 1
-
-    # -- Build current action bar --
-    action_icon = "&#x1F504;"  # default: running
-    action_desc = "Run in progress"
-    action_ctx = ""
-    action_class = "running"
-
-    if is_active and not log.steps:
-        # Active run with no steps yet — agent hasn't started working
-        task_text = html_escape((run.task or "unknown task")[:80])
-        action_desc = f"Waiting for agent &mdash; {task_text}"
-        action_ctx = "No steps recorded yet"
-    elif latest_decision:
-        if latest_decision == "ACCEPT":
-            action_icon = "&#x2705;"
-            action_desc = "ACCEPT &mdash; step passed"
-            action_class = "accepted"
-        elif latest_decision == "RETRY":
-            action_icon = "&#x1F501;"
-            action_desc = "RETRY &mdash; retrying step"
-            action_class = "retry"
-        elif latest_decision == "REPLAN":
-            action_icon = "&#x1F33F;"
-            action_desc = "REPLAN &mdash; re-planning step"
-            action_class = "replan"
-        elif latest_decision == "ROLLBACK":
-            action_icon = "&#x23EA;"
-            action_desc = "ROLLBACK &mdash; rolling back"
-            action_class = "rollback"
-    if latest_eval and hasattr(latest_eval, 'contract_id'):
-        action_ctx = f"Step: {html_escape(str(latest_eval.step_id))}"
-    if not is_active and latest_decision:
-        if latest_decision == "ACCEPT":
-            action_ctx += " &middot; Run complete"
-        else:
-            action_ctx += " &middot; Run finished"
-    if not is_active and not latest_decision:
-        action_icon = "&#x1F3C1;"
-        action_desc = "Run finished"
-        action_class = "accepted"
-        action_ctx = "No evaluations recorded"
-
-    live_html = ""
-    if is_active:
-        live_html = "<span class='live-dot'></span><span class='live-label'>LIVE</span>"
-
-    # -- Summary cards --
-    decision_card = latest_decision or "&mdash;"
-    decision_color = DECISION_COLORS.get(latest_decision or "", "#8b949e")
-    assurance_level = None
-    for gs in audit.gates.values():
-        for g in gs:
-            assurance_level = sv(g.assurance)
-    assurance_display = assurance_level or "&mdash;"
-    step_count = len(log.steps)
-    total_attempts = sum(
-        len([e for e in log.evaluations if e.step_id == s.step_id])
-        for s in log.steps
-    )
-    duration_str = "&mdash;"
+    # Duration
+    duration_str = "—"
     if run.started_at:
         end = run.finished_at if run.finished_at else datetime.now(UTC)
         delta = end - run.started_at
@@ -713,182 +1025,166 @@ def _render_run_detail(log: RunLog) -> str:
         secs = int(delta.total_seconds() % 60)
         duration_str = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
 
-    # -- Build timeline from raw events --
+    # Latest decision from evaluations
+    latest_decision = None
+    latest_eval = None
+    latest_outcome = None
+    for ev in reversed(log.evaluations):
+        if ev.decision:
+            latest_decision = sv(ev.decision)
+            latest_eval = ev
+            break
+    for oc in reversed(log.outcomes):
+        if oc.decision:
+            latest_outcome = oc
+            break
+
+    # Decision reason text
+    reason_text = ""
+    if latest_eval and hasattr(latest_eval, 'reason_code') and latest_eval.reason_code:
+        rc = sv(latest_eval.reason_code)
+        reason_map = {
+            "ALL_CHECKS_PASSED": "All checks passed successfully",
+            "ACCEPT": "Acceptance criteria met",
+            "ACCEPTANCE_BELOW_THRESHOLD": "Acceptance score below threshold",
+            "EVIDENCE_INSUFFICIENT": "Insufficient evidence collected",
+            "COST_EXCEEDED": "Cost exceeded acceptable bounds",
+            "RISK_TOO_HIGH": "Risk level too high",
+        }
+        reason_text = reason_map.get(rc, rc.replace("_", " ").title())
+
+    # Next action
+    next_action = ""
+    if latest_outcome and hasattr(latest_outcome, 'next_action') and latest_outcome.next_action:
+        next_action = sv(latest_outcome.next_action)
+
+    # Plan progress from steps
+    steps = log.steps
+    current_step_idx = -1
+    for i, step in enumerate(steps):
+        if step.status.value == "started" or step.status.value == "in_progress":
+            current_step_idx = i
+            break
+    if current_step_idx < 0 and steps:
+        # Find last active or most recent
+        for i in range(len(steps) - 1, -1, -1):
+            if steps[i].status.value in ("completed", "failed"):
+                current_step_idx = i
+                break
+        if current_step_idx < 0:
+            current_step_idx = 0
+
+    # Current action description
+    current_action_text = "Run in progress"
+    if steps and current_step_idx >= 0:
+        st = steps[current_step_idx]
+        desc = html_escape((st.description or "step")[:100])
+        current_action_text = f"Step {current_step_idx + 1}/{len(steps)}: {desc}"
+    elif not steps and is_active:
+        current_action_text = "Waiting for agent to begin execution"
+    elif not is_active and not steps:
+        current_action_text = "Run finished — no steps recorded"
+
+    # Decision icon SVG
+    dec_lower = latest_decision.lower() if latest_decision else ""
+    decision_icon_svg = ""
+    if dec_lower == "accept":
+        decision_icon_svg = (
+            '<svg width="16" height="16" viewBox="0 0 16 16">'
+            '<path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z"'
+            ' fill="#3fb950"/></svg>'
+        )
+    elif dec_lower == "retry":
+        decision_icon_svg = (
+            '<svg width="16" height="16" viewBox="0 0 16 16">'
+            '<path d="M1.5 8a6.5 6.5 0 0 1 11.7-3.57V3.5a.75.75 0 0 1 1.5 0v3a.75.75 0 0 1-.75.75h-3a.75.75 0 0 1 0-1.5h1.45A5 5 0 1 0 13 8a.75.75 0 0 1 1.5 0 6.5 6.5 0 0 1-13 0z"'
+            ' fill="#ef6c00"/></svg>'
+        )
+    elif dec_lower == "replan":
+        decision_icon_svg = (
+            '<svg width="16" height="16" viewBox="0 0 16 16">'
+            '<path d="M8 1a.75.75 0 0 1 .75.75v.766A4.502 4.502 0 0 1 12.5 7c0 2.485-2.015 4.5-4.5 4.5S3.5 9.485 3.5 7a4.502 4.502 0 0 1 3-4.205V7.5a1.5 1.5 0 0 0 3 0V2.596A.75.75 0 0 1 9.25 1.75v-.25A.25.25 0 0 1 9.5 1.75v.25A.75.75 0 0 1 8.75 1z"'
+            ' fill="#8b5cf6"/></svg>'
+        )
+    elif dec_lower == "rollback":
+        decision_icon_svg = (
+            '<svg width="16" height="16" viewBox="0 0 16 16">'
+            '<path d="M.75 3.75a.75.75 0 0 1 1.5 0v4.69l3.22-3.22a.75.75 0 0 1 1.06 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.22 3.22V3.75z"'
+            ' fill="#f85149"/></svg>'
+        )
+
+    # Spinner SVG for current action
+    spinner_svg = (
+        '<svg width="20" height="20" viewBox="0 0 16 16">'
+        '<circle cx="8" cy="8" r="6" stroke="#30363d" stroke-width="2" fill="none"/>'
+        '<path d="M8 2a6 6 0 0 1 6 6" stroke="#58a6ff" stroke-width="2" fill="none" stroke-linecap="round"/>'
+        '</svg>'
+    )
+
+    # Compact recent activity (last 5 events)
+    activity_rows: list[str] = []
+    for ev in log.events[-5:]:
+        ev_type = getattr(ev, 'event', 'unknown')
+        ts = getattr(ev, 'timestamp', None)
+        time_str = ts.strftime("%H:%M:%S") if ts else "--:--:--"
+        kind = ev_type.replace("_", " ").replace("event", "").strip()[:20]
+        # Extract a short summary
+        summary = ""
+        if hasattr(ev, 'description'):
+            summary = str(ev.description)[:80]
+        elif hasattr(ev, 'decision'):
+            summary = str(ev.decision)[:80]
+        elif hasattr(ev, 'task'):
+            summary = str(ev.task)[:80]
+        activity_rows.append(
+            f"<div class='activity-item'>"
+            f"<span class='act-time'>{time_str}</span>"
+            f"<span class='act-kind'>{html_escape(kind)}</span>"
+            f"<span class='act-text'>{html_escape(summary)}</span>"
+            f"</div>"
+        )
+
+    # --- Timeline rows for Replay tab ---
     timeline_rows: list[str] = []
     for ev in log.events:
         ev_type = getattr(ev, 'event', 'unknown')
         ts = getattr(ev, 'timestamp', None)
-        ts_str = fmt_dt(ts) if ts else "?"
-
-        icon = "&#x1F4CC;"
-        border = "border-grey"
-        type_label = ev_type
+        time_str = ts.strftime("%H:%M:%S") if ts else "--:--:--"
+        kind = ev_type.replace("_", " ").replace("event", "").strip()[:25]
         detail = ""
-
-        if ev_type == "run_started":
-            icon = "&#x1F680;"
-            border = "border-blue"
-            type_label = "run started"
-            task = getattr(ev, 'task', '')
-            detail = f"Task: {html_escape(str(task)[:100])}" if task else ""
-        elif ev_type == "run_finished":
-            icon = "&#x1F3C1;"
-            border = "border-green"
-            type_label = "run finished"
-            status = getattr(ev, 'status', '')
-            detail = f"Status: {html_escape(sv(status))}"
-        elif ev_type == "step_started":
-            icon = "&#x1F4CB;"
-            border = "border-blue"
-            type_label = "step started"
-            cid = getattr(ev, 'contract_id', '')
-            att = getattr(ev, 'attempt', '')
-            detail = f"{html_escape(str(cid))} (attempt {att})"
-        elif ev_type == "evaluation_recorded":
-            dec = sv(getattr(ev, 'decision', '?'))
-            score = getattr(ev, 'score', 0)
-            threshold = getattr(ev, 'threshold', 0)
-            detail = (
-                f"Score: {score:.3f} / {threshold:.3f}"
-                f" &rarr; {html_escape(dec)}"
-            )
-            if dec == "ACCEPT":
-                icon = "&#x2705;"
-                border = "border-green"
-            elif dec == "RETRY":
-                icon = "&#x1F501;"
-                border = "border-amber"
-            elif dec == "REPLAN":
-                icon = "&#x1F33F;"
-                border = "border-purple"
-            elif dec == "ROLLBACK":
-                icon = "&#x23EA;"
-                border = "border-orange"
-            else:
-                icon = "&#x1F4CA;"
-                border = "border-grey"
-            type_label = f"evaluation &rarr; {html_escape(dec)}"
-        elif ev_type == "evidence.collected":
-            icon = "&#x1F50D;"
-            border = "border-grey"
-            type_label = "evidence collected"
-            cid = getattr(ev, 'check_id', '') or getattr(ev, 'collector', '?')
-            status = getattr(ev, 'status', '')
-            prov = getattr(ev, 'provenance', '')
-            status_str = sv(status) if status else "?"
-            status_lower = status_str.lower()
-            if status_lower in ("pass", "passed", "success", "ok"):
-                ind = "<span class='ev-indicator ev-pass'>&#x2705;</span>"
-            elif status_lower in ("fail", "failed", "failure", "error"):
-                ind = "<span class='ev-indicator ev-fail'>&#x274C;</span>"
-            else:
-                ind = "<span class='ev-indicator ev-skip'>&mdash;</span>"
-            detail = (
-                f"{ind} {html_escape(str(cid))}"
-                f" <span class='tl-sub'>"
-                f"{html_escape(status_str)} &middot; {html_escape(sv(prov))}"
-                f"</span>"
-            )
-        elif ev_type == "evidence.collection_failed":
-            icon = "&#x26A0;&#xFE0F;"
-            border = "border-red"
-            type_label = "collection failed"
-            cid = getattr(ev, 'check_id', '') or getattr(ev, 'collector', '?')
-            err = getattr(ev, 'error', '')
-            detail = (
-                f"{html_escape(str(cid))}:"
-                f" <span class='tl-sub'>{html_escape(str(err)[:120])}</span>"
-            )
-        elif ev_type == "decision.gated":
-            cd = sv(getattr(ev, 'candidate_decision', '?'))
-            fd = sv(getattr(ev, 'final_decision', '?'))
-            ass = sv(getattr(ev, 'assurance', '?'))
-            icon = "&#x1F510;"
-            border = "border-purple"
-            type_label = "decision gated"
-            detail = (
-                f"candidate {html_escape(cd)} &rarr;"
-                f" final {html_escape(fd)}"
-                f" (assurance: {html_escape(ass)})"
-            )
-        elif ev_type == "outcome_recorded":
-            na = sv(getattr(ev, 'next_action', '?'))
-            icon = "&#x1F3AF;"
-            border = "border-blue"
-            type_label = "outcome"
-            detail = f"Next action: {html_escape(na)}"
-        elif ev_type == "action.reported":
-            icon = "&#x1F4E3;"
-            border = "border-grey"
-            type_label = "action reported"
-            ra = getattr(ev, 'reported_action', '')
-            detail = f"{html_escape(str(ra)[:100])}" if ra else ""
-        else:
-            detail = str(ev)[:120]
-
+        for attr in ('description', 'decision', 'task', 'step_id', 'reason_code'):
+            val = getattr(ev, attr, None)
+            if val:
+                detail = str(val)[:100]
+                break
+        # Event type badge color
+        ev_color = "#30363d"
+        if "started" in ev_type or "activated" in ev_type:
+            ev_color = "#1f6feb"
+        elif "completed" in ev_type or "finished" in ev_type:
+            ev_color = "#2e7d32"
+        elif "failed" in ev_type or "error" in ev_type:
+            ev_color = "#c62828"
+        elif "gated" in ev_type or "decision" in ev_type:
+            ev_color = "#8b5cf6"
+        elif "collected" in ev_type:
+            ev_color = "#1976d2"
+        elif "evaluation" in ev_type or "recorded" in ev_type:
+            ev_color = "#ef6c00"
+        elif "outcome" in ev_type:
+            ev_color = "#6a1b9a"
+        elif "checkpoint" in ev_type:
+            ev_color = "#3fb950"
         timeline_rows.append(
-            f"<div class='timeline-item {border}'>"
-            f"<span class='tl-icon'>{icon}</span>"
-            f"<span class='tl-time'>{html_escape(ts_str)}</span>"
-            f"<div class='tl-body'>"
-            f"<div class='tl-type'>{type_label}</div>"
-            f"<div class='tl-detail'>{detail}</div>"
-            f"</div></div>"
+            f"<div class='tl-entry'>"
+            f"<span class='tl-time'>{time_str}</span>"
+            f"<span class='badge' style='background:{ev_color};font-size:0.6rem;padding:1px 5px'>"
+            f"{html_escape(kind)}</span>"
+            f"<span class='tl-text'>{html_escape(detail)}</span>"
+            f"</div>"
         )
 
-    # -- Evidence summary bar --
-    ev_summary_parts: list[str] = []
-    for cid, counts in sorted(ev_groups.items()):
-        pct = (
-            (counts["pass"] / counts["total"] * 100)
-            if counts["total"] > 0
-            else 0
-        )
-        if pct >= 100:
-            icon_e = "&#x2705;"
-        elif counts["fail"] > 0:
-            icon_e = "&#x274C;"
-        else:
-            icon_e = "&#x26A0;&#xFE0F;"
-        fail_count_str = f" ({counts['fail']})" if counts["fail"] > 0 else ""
-        if pct >= 100:
-            pct_color = "#3fb950"
-        elif counts["fail"] > 0:
-            pct_color = "#f85149"
-        else:
-            pct_color = "#d29922"
-        ev_summary_parts.append(
-            f"<div class='ev-group'>"
-            f"<span class='ev-icon'>{icon_e}</span>"
-            f"<span class='ev-name'>{html_escape(cid[:20])}</span>"
-            f"<span class='ev-pct' style='color:{pct_color}'>"
-            f"{pct:.0f}%{fail_count_str}</span>"
-            f"<div class='ev-progress'>"
-            f"<div class='ev-progress-fill'"
-            f" style='width:{min(pct,100):.0f}%;background:{pct_color}'></div>"
-            f"</div></div>"
-        )
-
-    # Risk level from evaluations
-    risk_level = "LOW"
-    risk_color = "#3fb950"
-    if latest_eval and hasattr(latest_eval, 'scores'):
-        scores = latest_eval.scores
-        if hasattr(scores, 'risk') and scores.risk is not None:
-            r = float(scores.risk)
-            if r > 0.6:
-                risk_level = "HIGH"
-                risk_color = "#f85149"
-            elif r > 0.3:
-                risk_level = "MEDIUM"
-                risk_color = "#d29922"
-    ev_summary_parts.append(
-        f"<span class='risk-badge'"
-        f" style='background:{risk_color};color:#0d1117'>"
-        f"Risk {risk_level}</span>"
-    )
-
-    # -- Build policy/sidebar info --
+    # --- Sidebar info ---
     cfg = run.config
     policy_id = html_escape(str(cfg.policy_id)) if cfg and cfg.policy_id else "&mdash;"
     policy_ver = html_escape(str(cfg.policy_version)) if cfg and cfg.policy_version else "&mdash;"
@@ -898,9 +1194,7 @@ def _render_run_detail(log: RunLog) -> str:
         workspace = html_escape(str(ws)) if ws else "&mdash;"
     else:
         workspace = "&mdash;"
-    status_str = "incomplete" if log.incomplete else sv(run.status)
 
-    # Checkpoints from events
     checkpoint_ids: list[str] = []
     for ev in log.events:
         ev_event = getattr(ev, 'event', '')
@@ -911,19 +1205,33 @@ def _render_run_detail(log: RunLog) -> str:
 
     artifact_count = len(log.events)
 
-    # -- Assemble page --
+    # Evidence summary
+    all_collected = [e for evs in audit.collected.values() for e in evs]
+    verified_count = sum(1 for e in all_collected if e.provenance in INDEPENDENTLY_VERIFIED)
+    total_evidence = len(all_collected)
+    failures_count = sum(len(evs) for evs in audit.failures.values())
+
+    # --- Build page ---
+    bound_icon = (
+        '<svg width="18" height="18" viewBox="0 0 16 16" fill="none">'
+        '<circle cx="5" cy="4" r="2.5" stroke="#58a6ff" stroke-width="1.5"/>'
+        '<circle cx="11" cy="12" r="2.5" stroke="#8b5cf6" stroke-width="1.5"/>'
+        '<path d="M7 5.5L9.5 10.5" stroke="#58a6ff" stroke-width="1.5" stroke-linecap="round"/>'
+        '</svg>'
+    )
+
     parts: list[str] = [
         "<!DOCTYPE html>",
         "<html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         f"<title>BOUND run {html_escape(_short_id(run.run_id, 20))}</title>",
-        "<style>",
-        _CSS,
+        "<style>", _CSS,
         "</style>",
         "</head><body>",
         "<header>",
-        "<div><h1>&#x26D3; BOUND run detail</h1>"
-        "<div class='sub'>local lineage &middot; read-only</div></div>",
+        f"<div class='brand'>{bound_icon}"
+        f"<h1 style='font-size:1rem;font-weight:600'>BOUND run detail</h1>"
+        "<div class='sub'>local lineage \u00b7 read-only</div></div>",
         (
             f"<div class='sub' id='header-run-id'>"
             f"{html_escape(_short_id(run.run_id, 20))}"
@@ -933,108 +1241,415 @@ def _render_run_detail(log: RunLog) -> str:
         ),
         "</header>",
         "<div class='container'>",
-        "<div class='back-nav'><a href='/'>&larr; back to runs</a></div>",
+        f"<div class='back-nav'><a href='/'>{_icon('back_arrow', w=14, h=14)} back to runs</a></div>",
     ]
 
-    # --- Run metadata header ---
+    # --- Run detail header ---
     parts.append("<div class='run-detail-header'>")
-    parts.append(f"<h2>{html_escape(run.task or '(untitled)')}</h2>")
-    parts.append("<div class='meta-grid'>")
     parts.append(
-        f"<div><span class='label'>Status:</span>"
-        f"{_status_badge(status_str, _RUN_STATUS_COLORS)}</div>"
-    )
-    parts.append(
-        f"<div><span class='label'>Policy:</span>"
-        f"{policy_id}@{policy_ver}</div>"
-    )
-    parts.append(
-        f"<div><span class='label'>Started:</span>"
-        f"{fmt_dt(run.started_at)}</div>"
-    )
-    if run.finished_at:
-        parts.append(
-            f"<div><span class='label'>Finished:</span>"
-            f"{fmt_dt(run.finished_at)}</div>"
-        )
-    parts.append("</div></div>")
-
-    # --- Current action bar ---
-    parts.append(
-        f"<div class='action-bar {action_class}' id='action-bar'>"
-        f"<span class='action-icon'>{action_icon}</span>"
-        f"<div class='action-text'>"
-        f"<div class='action-desc'>{action_desc}</div>"
-        f"<div class='action-ctx'>{action_ctx}</div>"
-        f"</div>"
-        f"{live_html}"
-        f"</div>"
-    )
-
-    # --- Summary cards ---
-    parts.append("<div class='summary-cards'>")
-    parts.append(
-        f"<div class='summary-card border-blue'>"
-        f"<div class='card-value' style='color:{decision_color}'>"
-        f"{html_escape(decision_card)}</div>"
-        f"<div class='card-label'>Decision</div></div>"
-    )
-    parts.append(
-        f"<div class='summary-card border-green'>"
-        f"<div class='card-value'>{html_escape(assurance_display)}</div>"
-        f"<div class='card-label'>Assurance</div></div>"
-    )
-    parts.append(
-        f"<div class='summary-card border-amber'>"
-        f"<div class='card-value'>{step_count}</div>"
-        f"<div class='card-label'>Steps</div></div>"
-    )
-    parts.append(
-        f"<div class='summary-card border-purple'>"
-        f"<div class='card-value'>{total_attempts}</div>"
-        f"<div class='card-label'>Attempts</div></div>"
-    )
-    parts.append(
-        f"<div class='summary-card border-grey'>"
-        f"<div class='card-value' id='duration-display'>"
-        f"{html_escape(duration_str)}</div>"
-        f"<div class='card-label'>Duration</div></div>"
+        f"<h2>{task_display}"
+        f"{_status_badge(status_str, _RUN_STATUS_COLORS)}"
+        f"<span class='duration-display'>{duration_str}</span>"
+        f"</h2>"
     )
     parts.append("</div>")
 
-    # --- Timeline + Sidebar ---
-    if is_active:
-        sidebar_display = "none"
-        sidebar_collapsed_class = "collapsed"
-        timeline_class = "full-width"
-    else:
-        sidebar_display = "block"
-        sidebar_collapsed_class = ""
-        timeline_class = ""
-
-    parts.append("<div class='detail-body'>")
+    # --- Tab navigation ---
     parts.append(
-        f"<div class='timeline-panel {timeline_class}' id='timeline-panel'>"
+        "<nav class='tab-nav'>"
+        "<button class='tab-btn active' data-tab='execution'>Execution</button>"
+        "<button class='tab-btn' data-tab='evidence'>Evidence</button>"
+        "<button class='tab-btn' data-tab='artifacts'>Artifacts</button>"
+        "<button class='tab-btn' data-tab='replay'>Replay</button>"
+        "</nav>"
     )
+
+    # ================================================================
+    # TAB: Execution (default active)
+    # ================================================================
+    parts.append("<div class='tab-panel active' id='tab-execution'>")
+
+    # Plan Progress
+    if steps:
+        parts.append("<div class='plan-progress'>")
+        for i, step in enumerate(steps):
+            desc = html_escape((step.description or f"Step {i+1}")[:20])
+            status_v = step.status.value if hasattr(step.status, 'value') else str(step.status)
+            circle_class = ""
+            if status_v == "completed":
+                circle_class = " completed"
+            elif status_v == "failed":
+                circle_class = " failed"
+            elif i == current_step_idx and is_active:
+                circle_class = " active"
+            label_class = " active" if i == current_step_idx else ""
+
+            parts.append("<div class='plan-step'>")
+            parts.append(
+                f"<div class='plan-step-circle{circle_class}'"
+                f" title='{desc}'>"
+                f"{i + 1}</div>"
+            )
+            parts.append(f"<span class='plan-step-label{label_class}'>{desc}</span>")
+            parts.append("</div>")
+            if i < len(steps) - 1:
+                connector_class = " completed" if status_v == "completed" else ""
+                parts.append(f"<div class='plan-connector{connector_class}'></div>")
+        parts.append("</div>")
+
+    # Current action
+    action_now = "In progress" if is_active else "Last action"
+    parts.append("<div class='current-action'>")
+    parts.append(f"<div class='action-spinner'>{spinner_svg if is_active else ''}</div>")
+    parts.append("<div class='action-info'>")
+    parts.append(f"<div class='action-now'>{action_now}</div>")
+    parts.append(f"<div class='action-desc'>{current_action_text}</div>")
+    if steps and current_step_idx >= 0:
+        current_step = steps[current_step_idx]
+        step_status_str = sv(current_step.status) if hasattr(current_step, 'status') else "unknown"
+        parts.append(
+            f"<div class='action-step'>"
+            f"Status: {step_status_str} \u00b7 "
+            f"{len(current_step.attempts) if hasattr(current_step, 'attempts') else 0} attempt(s)"
+            f"</div>"
+        )
+    parts.append("</div></div>")
+
+    # Decision panel
+    if latest_decision:
+        dec_css_class = dec_lower if dec_lower in ("accept", "retry", "replan", "rollback") else ""
+        parts.append("<div class='decision-panel'>")
+        parts.append(f"<div class='decision-icon {dec_css_class}'>{decision_icon_svg}</div>")
+        parts.append("<div class='decision-body'>")
+        parts.append("<div class='decision-header'>")
+        parts.append("<span class='decision-label'>Latest Decision</span>")
+        dec_badge_class = f" decision-{dec_lower}" if dec_lower else ""
+        parts.append(f"<span class='badge{dec_badge_class}'>{html_escape(latest_decision)}</span>")
+        parts.append("</div>")
+        if reason_text:
+            parts.append(f"<div class='decision-reason'>{html_escape(reason_text)}</div>")
+        if next_action:
+            parts.append(
+                f"<div class='decision-next'>"
+                f"<svg width='12' height='12' viewBox='0 0 16 16'>"
+                f"<path d='M5.5 3.5a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.22 8 5.5 4.56a.75.75 0 0 1 0-1.06z' fill='#58a6ff'/></svg>"
+                f"Next: {html_escape(next_action)}"
+                f"</div>"
+            )
+        # Score info if available
+        if latest_eval and hasattr(latest_eval, 'score') and latest_eval.score is not None:
+            score_pct = f"{float(latest_eval.score) * 100:.0f}%"
+            parts.append(
+                f"<div style='margin-top:4px;font-size:0.72rem;color:#8b949e'>"
+                f"Score: {score_pct} (threshold: "
+                f"{float(latest_eval.threshold) * 100:.0f}%)"
+                f"</div>"
+            )
+        parts.append("</div></div>")
+    elif not steps and is_active:
+        parts.append(
+            "<div class='decision-panel'>"
+            "<div class='decision-body'>"
+            "<div class='decision-label'>Waiting for first evaluation</div>"
+            "<div class='decision-reason'>"
+            "The agent has not yet produced any evaluation. "
+            "This page will update when step execution begins.</div>"
+            "</div></div>"
+        )
+
+    # Compact recent activity
+    if activity_rows:
+        parts.append("<div class='recent-activity'>")
+        parts.append("<h3>Recent Activity</h3>")
+        parts.append("<div class='activity-list'>")
+        parts.extend(activity_rows)
+        parts.append("</div></div>")
+
+    # Raw lineage collapsed
+    parts.append(
+        "<details class='raw-lineage'>"
+        "<summary>"
+        f"Raw lineage ({len(log.events)} event(s), "
+        f"{log.corrupt_lines} corrupt, "
+        f"{'truncated' if log.truncated else 'complete'})"
+        "</summary>"
+        "<pre>"
+    )
+    for ev in log.events:
+        try:
+            if hasattr(ev, "model_dump"):
+                line = json.dumps(ev.model_dump(mode="json"), default=str)
+            else:
+                line = json.dumps(ev, default=str)
+        except (TypeError, ValueError):
+            line = str(ev)
+        parts.append(html_escape(line))
+    parts.append("</pre></details>")
+
+    # Plan vs Reality / Replan comparison
+    # Show if there are multiple plan versions or REPLAN decisions
+    has_replan = any(
+        getattr(ev, 'decision', '') == 'REPLAN' or 'replan' in str(getattr(ev, 'event', '')).lower()
+        for ev in log.events
+    )
+    if has_replan:
+        parts.append("<div class='replan-section' style='margin-top:16px;background:#161b22;"
+                     "border:1px solid #30363d;border-radius:8px;padding:14px 16px'>")
+        parts.append("<h3 style='font-size:0.82rem;color:#8b5cf6;margin-bottom:8px'>"
+                     f"{_icon('decision_replan', w=14, h=14)} Replan Detected</h3>")
+        parts.append("<p style='font-size:0.75rem;color:#8b949e;margin-bottom:10px'>"
+                     "The original plan was modified during execution. "
+                     "See the Replay tab for full event timeline.</p>")
+        # Show which steps were affected
+        replan_steps = [
+            ev for ev in log.events
+            if getattr(ev, 'decision', '') == 'REPLAN'
+            or 'replan' in str(getattr(ev, 'event', '')).lower()
+        ]
+        for rev in replan_steps[:5]:
+            step_id = getattr(rev, 'step_id', '') or getattr(rev, 'event_id', '') or 'unknown'
+            reason = getattr(rev, 'reason_code', '') or getattr(rev, 'description', '') or ''
+            parts.append(
+                f"<div class='replan-step' style='display:flex;align-items:center;gap:8px;"
+                f"padding:6px 8px;background:#0d1117;border-radius:4px;margin-bottom:4px;"
+                f"font-size:0.75rem'>"
+                f"<span>{_icon('diff_modified', w=12, h=12)}</span>"
+                f"<code style='color:#8b5cf6'>{html_escape(str(step_id))}</code>"
+                + (f"<span style='color:#8b949e'>{html_escape(str(reason)[:100])}</span>"
+                   if reason else "")
+                + "</div>"
+            )
+        parts.append("</div>")
+
+    parts.append("</div>")  # end tab-execution
+
+    # ================================================================
+    # TAB: Evidence
+    # ================================================================
+    parts.append("<div class='tab-panel' id='tab-evidence'>")
+
+    # Evidence summary bar
+    if total_evidence > 0:
+        verified_pct = int(verified_count / total_evidence * 100) if total_evidence > 0 else 0
+        parts.append(
+            "<div class='evidence-bar'>"
+            f"<div class='ev-group'>"
+            f"<span class='ev-name'>Evidence</span>"
+            f"<span class='ev-pct'>{verified_count}/{total_evidence} verified</span>"
+            f"<div class='ev-progress'><div class='ev-progress-fill'"
+            f" style='width:{verified_pct}%;background:#2e7d32'></div></div>"
+            f"</div>"
+            + (f"<div class='ev-group'><span class='risk-badge' style='background:#c62828'>"
+               f"{failures_count} failure(s)</span></div>" if failures_count else "")
+            + "</div>"
+        )
+
+    # Verification checks list
+    if all_collected:
+        parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:12px 0 6px'>"
+                     "Verification Checks</h3>")
+        parts.append("<div class='ev-checks'>")
+        for ev in all_collected[:50]:
+            check_id = html_escape(str(ev.check_id) if hasattr(ev, 'check_id') and ev.check_id
+                                   else (getattr(ev, 'source', None) or "unnamed"))
+            status_str = (ev.status.value if hasattr(ev.status, 'value') else str(ev.status)).lower()
+            prov_str = (ev.provenance.value if hasattr(ev.provenance, 'value') else str(ev.provenance)).lower()
+            # Status icon
+            if status_str in ("verified", "passed", "true", "ok"):
+                status_icon = _icon("evidence_passed")
+                status_css = "ev-pass"
+            elif status_str in ("failed", "false", "invalid"):
+                status_icon = _icon("evidence_failed")
+                status_css = "ev-fail"
+            else:
+                status_icon = _icon("evidence_missing")
+                status_css = "ev-miss"
+            # Provenance badge
+            if prov_str == "verified":
+                pass  # provenance: verified
+                prov_color = "#2e7d32"
+            elif prov_str == "claimed":
+                pass  # provenance: claimed
+                prov_color = "#ef6c00"
+            else:
+                pass  # provenance: unverified
+                prov_color = "#9e9e9e"
+            parts.append(
+                f"<div class='ev-check-row {status_css}'>"
+                f"<span class='ev-check-icon'>{status_icon}</span>"
+                f"<span class='ev-check-label'>{check_id}</span>"
+                f"<span class='badge' style='background:{prov_color};font-size:0.6rem'>"
+                f"{html_escape(prov_str)}</span>"
+                f"</div>"
+            )
+        if len(all_collected) > 50:
+            parts.append(
+                f"<div style='color:#8b949e;font-size:0.72rem;padding:8px'>"
+                f"... and {len(all_collected) - 50} more checks</div>"
+            )
+        parts.append("</div>")
+
+    # Score breakdown panel (from latest evaluation)
+    if latest_eval and hasattr(latest_eval, 'scores') and latest_eval.scores:
+        scores = latest_eval.scores
+        acceptance = getattr(scores, 'acceptance', None)
+        influence = getattr(scores, 'influence', None)
+        risk = getattr(scores, 'risk', None)
+        cost = getattr(scores, 'cost', None)
+        threshold = getattr(latest_eval, 'threshold', None)
+        parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>"
+                     "Score Breakdown (A/I/R/C)</h3>")
+        parts.append("<div class='score-grid'>")
+        for label, val, color in [
+            ("Acceptance", acceptance, "#3fb950"),
+            ("Influence", influence, "#58a6ff"),
+            ("Risk", risk, "#f85149"),
+            ("Cost", cost, "#d29922"),
+        ]:
+            if val is not None:
+                pct = int(val * 100) if isinstance(val, (int, float)) else 0
+                parts.append(
+                    f"<div class='score-item'>"
+                    f"<span class='score-label'>{label}</span>"
+                    f"<div class='score-bar-bg'>"
+                    f"<div class='score-bar-fill' style='width:{pct}%;background:{color}'></div>"
+                    f"</div>"
+                    f"<span class='score-val'>{pct}%</span>"
+                    f"</div>"
+                )
+        if threshold is not None:
+            t_val = int(threshold * 100) if isinstance(threshold, (int, float)) else threshold
+            parts.append(
+                f"<div class='score-threshold'>Threshold: {t_val}%</div>"
+            )
+        parts.append("</div>")
+
+    # Collector details
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 6px'>"
+                 "Collectors</h3>")
+    parts.append("<div class='collector-list'>")
+    seen_collectors = set()
+    for ev in all_collected:
+        coll = getattr(ev, 'collector', None) or getattr(ev, 'source', None) or "unknown"
+        if coll not in seen_collectors:
+            seen_collectors.add(coll)
+            coll_ver = getattr(ev, 'collector_version', None) or ""
+            parts.append(
+                f"<div class='collector-row'>"
+                f"{_icon('run', w=14, h=14)} "
+                f"<span class='collector-name'>{html_escape(str(coll))}</span>"
+                + (f"<span class='collector-ver'>v{html_escape(str(coll_ver))}</span>"
+                   if coll_ver else "")
+                + "</div>"
+            )
+    if not seen_collectors:
+        parts.append("<div class='collector-row' style='color:#484f58'>"
+                     "No collectors recorded</div>")
+    parts.append("</div>")
+
+    # Missing evidence empty state
+    if total_evidence == 0:
+        parts.append(
+            "<div style='text-align:center;padding:40px 20px;color:#8b949e'>"
+            f"<div style='margin-bottom:12px;opacity:0.3'>{_icon('shield', w=32, h=32)}</div>"
+            "<h3 style='font-size:1rem;color:#e6edf3;margin-bottom:4px'>No Evidence Yet</h3>"
+            "<p style='font-size:0.78rem'>Evidence will appear here after collection runs.</p>"
+            "</div>"
+        )
+
+    parts.append("</div>")  # end tab-evidence
+
+    # ================================================================
+    # TAB: Artifacts
+    # ================================================================
+    parts.append("<div class='tab-panel' id='tab-artifacts'>")
+
+    # Checkpoints section
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin-bottom:8px'>"
+                 f"{_icon('checkpoint', w=14, h=14)} Checkpoints ({len(checkpoint_ids)})</h3>")
+    if checkpoint_ids and checkpoint_ids[0] != "none recorded":
+        parts.append("<div class='checkpoint-list'>")
+        for cpid in checkpoint_ids[:10]:
+            parts.append(
+                f"<div class='cp-row'>"
+                f"<span class='cp-icon'>{_icon('checkpoint', w=14, h=14)}</span>"
+                f"<code class='cp-id'>{html_escape(str(cpid))}</code>"
+                f"</div>"
+            )
+        parts.append("</div>")
+    else:
+        parts.append("<div class='cp-row' style='color:#484f58;padding:8px;font-size:0.75rem'>"
+                     "No checkpoints recorded</div>")
+
+    # Workspace / worktree info
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
+                 f"{_icon('artifact', w=14, h=14)} Workspace</h3>")
+    parts.append("<div class='ws-info'>")
+    parts.append(
+        f"<div class='ws-row'><span class='ws-label'>Path</span>"
+        f"<code>{workspace}</code></div>"
+    )
+    parts.append(
+        f"<div class='ws-row'><span class='ws-label'>Policy</span>"
+        f"<span>{policy_id} @ {policy_ver}</span></div>"
+    )
+    parts.append(
+        f"<div class='ws-row'><span class='ws-label'>Policy hash</span>"
+        f"<code>{policy_hash}</code></div>"
+    )
+    parts.append("</div>")
+
+    # Generated files / events
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
+                 f"{_icon('run', w=14, h=14)} Events ({artifact_count})</h3>")
+    if log.events:
+        parts.append("<div class='event-file-list'>")
+        seen_types: set[str] = set()
+        for ev in log.events[:20]:
+            ev_type = getattr(ev, 'event', 'unknown')
+            if ev_type not in seen_types:
+                seen_types.add(ev_type)
+                parts.append(
+                    f"<div class='ef-row'>"
+                    f"<span class='badge' style='background:#30363d;color:#8b949e'>"
+                    f"{html_escape(ev_type)}</span>"
+                    f"</div>"
+                )
+        parts.append("</div>")
+    else:
+        parts.append("<div style='color:#484f58;padding:8px;font-size:0.75rem'>"
+                     "No events recorded</div>")
+
+    # Diff/patch placeholder
+    parts.append("<h3 style='font-size:0.8rem;color:#8b949e;margin:16px 0 8px'>"
+                 "Diffs & Patches</h3>")
+    parts.append("<div style='color:#484f58;padding:8px;font-size:0.75rem'>"
+                 "Diffs will appear here when checkpoints with artifact diffs are available.</div>")
+
+    parts.append("</div>")  # end tab-artifacts
+
+    # ================================================================
+    # TAB: Replay
+    # ================================================================
+    parts.append("<div class='tab-panel' id='tab-replay'>")
+    parts.append("<div class='detail-body'>")
+    parts.append("<div class='timeline-panel' id='timeline-panel'>")
     parts.append("<div class='timeline' id='timeline'>")
     parts.append(
         "<div class='timeline-header'>"
-        "<span>&#x1F4C5; Live Timeline</span>"
+        "<span>Live Timeline</span>"
         "<button class='jump-btn' id='jump-btn' onclick='jumpToLive()' "
         "title='Jump to latest'>"
-        "&darr; Jump to live</button>"
+        f"{_icon('jump_down', w=14, h=14)} Jump to live</button>"
         "</div>"
     )
     parts.append("<div id='timeline-items'>")
     parts.extend(timeline_rows)
-    if is_active and not log.steps:
+    if is_active and not steps:
         parts.append(
             "<div class='tl-entry tl-waiting' style='display:flex;align-items:center;gap:8px;"
             "padding:10px 0;color:#8b949e;font-style:italic'>"
-            "<span class='tl-dot live' style='width:8px;height:8px;border-radius:50%;"
-            "background:#58a6ff;animation:pulse 1.5s infinite;display:inline-block'></span>"
-            "Waiting for agent to begin execution &mdash; "
-            "this page will auto-update when steps are recorded..."
+            "Waiting for agent to begin execution..."
             "</div>"
         )
     parts.append("</div></div>")  # close timeline
@@ -1046,14 +1661,10 @@ def _render_run_detail(log: RunLog) -> str:
     parts.append(
         f"<div class='sidebar-header' onclick='toggleSidebar()'>"
         f"<span>Run Details</span>"
-        f"<span class='toggle-icon {sidebar_collapsed_class}' "
-        f"id='toggle-icon'>&#x25BC;</span>"
+        f"<span class='toggle-icon' id='toggle-icon'>{_icon('collapse_down')}</span>"
         f"</div>"
     )
-    parts.append(
-        f"<div class='sidebar-body' id='sidebar-body'"
-        f" style='display:{sidebar_display}'>"
-    )
+    parts.append("<div class='sidebar-body' id='sidebar-body'>")
     parts.append("<dl>")
     parts.append(f"<dt>Policy</dt><dd>{policy_id} @ {policy_ver}</dd>")
     parts.append(f"<dt>Policy hash</dt><dd><code>{policy_hash}</code></dd>")
@@ -1063,10 +1674,10 @@ def _render_run_detail(log: RunLog) -> str:
         f"<dd>{html_escape(', '.join(checkpoint_ids[:3]))}</dd>"
     )
     parts.append(f"<dt>Artifacts</dt><dd>{artifact_count} event(s)</dd>")
-    parts.append(f"<dt>Run ID</dt><dd><code>{run_id}</code></dd>")
+    parts.append(f"<dt>Run ID</dt><dd><code>{html_escape(run_id)}</code></dd>")
     parts.append(
-        f"<dt>Evidence</dt><dd>{verified_count}/{total_count} verified"
-        + (f" &middot; {failures_count} failure(s)" if failures_count else "")
+        f"<dt>Evidence</dt><dd>{verified_count}/{total_evidence} verified"
+        + (f" \u00b7 {failures_count} failure(s)" if failures_count else "")
         + "</dd>"
     )
     parts.append("</dl>")
@@ -1075,13 +1686,7 @@ def _render_run_detail(log: RunLog) -> str:
     parts.append("</div>")  # sidebar-panel
     parts.append("</div>")  # detail-body
 
-    # --- Evidence summary bar ---
-    if ev_summary_parts:
-        parts.append("<div class='evidence-bar'>")
-        parts.extend(ev_summary_parts)
-        parts.append("</div>")
-
-    # --- Raw lineage ---
+    # Raw lineage in replay tab
     parts.append(
         "<details class='raw-lineage'>"
         "<summary>"
@@ -1101,23 +1706,53 @@ def _render_run_detail(log: RunLog) -> str:
             line = str(ev)
         parts.append(html_escape(line))
     parts.append("</pre></details>")
+    parts.append("</div>")  # end tab-replay
 
+    # Footer
     parts.append(
         "<div class='page-footer'>"
-        "BOUND dashboard &mdash; local read-only view. "
+        "BOUND dashboard \u00b7 local read-only view. "
         "No data leaves your machine.</div>",
     )
 
-    # --- JavaScript for live updates ---
+    # ================================================================
+    # JavaScript
+    # ================================================================
     js_is_active = "true" if is_active else "false"
     parts.append(f"""<script>
 (function(){{
   var isActive = {js_is_active};
   var runId = "{run_id}";
-  var timeline = document.getElementById('timeline');
-  var jumpBtn = document.getElementById('jump-btn');
-  var sidebarCollapsed = {str(is_active).lower()};
   var lastEventCount = {len(log.events)};
+  var sidebarCollapsed = false;
+
+  // Tab switching
+  var tabs = document.querySelectorAll('.tab-btn');
+  var panels = document.querySelectorAll('.tab-panel');
+
+  function activateTab(tabName) {{
+    tabs.forEach(function(t) {{ t.classList.remove('active'); }});
+    panels.forEach(function(p) {{ p.classList.remove('active'); }});
+    var btn = document.querySelector('[data-tab="' + tabName + '"]');
+    var panel = document.getElementById('tab-' + tabName);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+    if (history.replaceState) {{
+      history.replaceState(null, '', '#execution' === tabName ? ' ' : '#' + tabName);
+    }}
+  }}
+
+  tabs.forEach(function(btn) {{
+    btn.addEventListener('click', function() {{
+      activateTab(btn.getAttribute('data-tab'));
+    }});
+  }});
+
+  // Check URL hash on load
+  var hash = window.location.hash.replace('#', '');
+  if (hash && document.getElementById('tab-' + hash)) {{
+    activateTab(hash);
+  }}
 
   // SSE connection indicator
   var esDetail = new EventSource('/api/events');
@@ -1137,7 +1772,8 @@ def _render_run_detail(log: RunLog) -> str:
         {{ behavior: 'smooth', block: 'end' }}
       );
     }}
-    jumpBtn.style.display = 'none';
+    var jumpBtn = document.getElementById('jump-btn');
+    if (jumpBtn) jumpBtn.style.display = 'none';
   }}
 
   function toggleSidebar() {{
@@ -1156,35 +1792,22 @@ def _render_run_detail(log: RunLog) -> str:
     }}
   }}
 
-  // Auto-scroll detection
+  // Auto-scroll detection for timeline
+  var timeline = document.getElementById('timeline');
   if (timeline) {{
     timeline.addEventListener('scroll', function() {{
       var dist = (
         timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight
       );
-      if (dist < 40) {{
-        jumpBtn.style.display = 'none';
-      }} else {{
-        jumpBtn.style.display = 'inline-block';
+      var jumpBtn = document.getElementById('jump-btn');
+      if (jumpBtn) {{
+        jumpBtn.style.display = dist < 40 ? 'none' : 'inline-block';
       }}
     }});
     timeline.scrollTop = timeline.scrollHeight;
   }}
 
-  // Live timer for active runs
-  var startTime = Date.now();
-  var durationEl = document.getElementById('duration-display');
-  function updateTimer() {{
-    if (!durationEl) return;
-    var elapsed = Math.floor((Date.now() - startTime) / 1000);
-    var mins = Math.floor(elapsed / 60);
-    var secs = elapsed % 60;
-    durationEl.textContent = (
-      mins > 0 ? mins + 'm ' + secs + 's' : secs + 's'
-    );
-  }}
-
-  // Poll API for updates on active runs
+  // Poll for updates on active runs
   function pollRun() {{
     if (!isActive) return;
     fetch('/api/run/' + runId)
@@ -1196,14 +1819,12 @@ def _render_run_detail(log: RunLog) -> str:
           location.reload();
         }}
         lastEventCount = newCount;
-        updateTimer();
       }})
       .catch(function(){{}});
   }}
 
   if (isActive) {{
     setInterval(pollRun, 2000);
-    setInterval(updateTimer, 1000);
     setTimeout(function() {{
       if (timeline) timeline.scrollTop = timeline.scrollHeight;
     }}, 100);
@@ -1217,8 +1838,6 @@ def _render_run_detail(log: RunLog) -> str:
 
     parts.append("</div></body></html>")
     return "\n".join(parts)
-
-
 
 
 class _DashboardHandler(BaseHTTPRequestHandler):

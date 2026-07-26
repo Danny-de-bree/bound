@@ -326,7 +326,7 @@ __all__ = [
     "sha256_hex",
     "sha256_hex_bare",
     "normalize_capped",
-    # --- v0.9.0 public runtime ---
+    # --- v0.9.1 public runtime ---
     "BoundRuntime",
     "EvaluationContext",
     "FinishRunResult",
@@ -346,7 +346,7 @@ __all__ = [
     "canonicalize_policy",
     "compute_policy_hash",
     "policy_changed_since",
-    # --- v0.9.0 dedup refactoring ---
+    # --- v0.9.1 dedup refactoring ---
     "ACTION_TO_OUTCOME_REASON",
     "DECISION_TO_ACTION",
     "DECISION_TO_CONTROL",
@@ -363,4 +363,4 @@ __all__ = [
     "sv",
 ]
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"

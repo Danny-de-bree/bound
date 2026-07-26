@@ -46,6 +46,7 @@ __all__ = [
     "LineageEvent",
     "Outcome",
     "OutcomeRecordedEvent",
+    "PlanLoadedEvent",
     "PolicyActivatedEvent",
     "PolicyApprovedEvent",
     "PolicyProposedEvent",
@@ -119,6 +120,7 @@ EVENT_NAMES: tuple[str, ...] = (
     "action.reported",
     "action.observed",
     "step.completed",
+    "plan.loaded",
     "outcome_recorded",
     "run_finished",
 )
@@ -1203,6 +1205,37 @@ class StepCompletedEvent(_LineageEventBase):
     note: str | None = None
 
 
+class PlanLoadedEvent(_LineageEventBase):
+    """Event: a plan was loaded and snapshotted at run start (v0.9.1).
+
+    Records that a ``plan.md`` file was discovered, parsed, and stored as
+    a :class:`~bound.plan_parser.PlanSnapshot`. The original plan content
+    hash is recorded so the trace proves *which* plan was active.
+
+    Attributes:
+        event: The literal tag ``"plan.loaded"``.
+        run_id: Owning run id.
+        plan_id: Stable plan identifier derived from the content hash.
+        content_hash: SHA-256 hex digest of the raw plan content.
+        source_path: Relative or absolute path to the plan source file.
+        plan_version: Plan version number (1 for the original, incremented
+            on replan).
+        goal: The top-level heading text from the plan, or ``None``.
+        step_count: Number of steps parsed from the plan.
+        note: Optional free-text context.
+    """
+
+    event: Literal["plan.loaded"] = "plan.loaded"
+    run_id: str
+    plan_id: str
+    content_hash: str
+    source_path: str
+    plan_version: int = Field(default=1, ge=1)
+    goal: str | None = None
+    step_count: int = Field(default=0, ge=0)
+    note: str | None = None
+
+
 #: Discriminated union of every lineage event. ``event`` is the discriminator
 #: tag, so a single :func:`parse_lineage_event` call routes a JSONL record to
 #: the correct concrete event type.
@@ -1224,6 +1257,7 @@ LineageEvent = Annotated[
         | ActionReportedEvent
         | ActionObservedEvent
         | StepCompletedEvent
+        | PlanLoadedEvent
     ),
     Field(discriminator="event"),
 ]

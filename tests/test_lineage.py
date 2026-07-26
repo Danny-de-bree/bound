@@ -510,6 +510,7 @@ class TestEventNames:
             "action.reported",
             "action.observed",
             "step.completed",
+            "plan.loaded",
             "outcome_recorded",
             "run_finished",
         )
