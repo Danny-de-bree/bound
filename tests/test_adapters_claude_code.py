@@ -204,6 +204,6 @@ def test_parse_event_with_raw_fallback() -> None:
 def test_default_claude_command_structure() -> None:
     """DEFAULT_CLAUDE_COMMAND has the expected shape."""
     assert isinstance(DEFAULT_CLAUDE_COMMAND, list)
-    assert len(DEFAULT_CLAUDE_COMMAND) == 6
+    assert len(DEFAULT_CLAUDE_COMMAND) == 7
     assert DEFAULT_CLAUDE_COMMAND[0] == "npx"
     assert DEFAULT_CLAUDE_COMMAND[1] == "@anthropic-ai/claude-code"
