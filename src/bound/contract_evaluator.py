@@ -538,37 +538,10 @@ class ContractEvaluator:
         *,
         policy: BoundPolicyConfig | None = None,
     ) -> EvaluationScores:
-        """Derive :class:`EvaluationScores` from a contract and its evidence.
+        """Derive :class:`EvaluationScores` from a contract and its evidence."""
+        # Store for _influence() which doesn't receive evidence directly
+        self._last_evidence = evidence
 
-        The computation is pure and deterministic: the same ``contract`` and
-        ``evidence`` always yield identical scores, with no network or model
-        dependency. Per-dimension evidence is available via :attr:`provenance`.
-
-        When an active ``policy`` is supplied it governs the
-        evaluation: weighted quality signals feed the acceptance dimension, the
-        policy's hard gates and budgets are assessed into a
-        :class:`PolicyGateOutcome` (available via :attr:`policy_gate`), and the
-        resolved effective weights are stored on :attr:`effective_weights`. When
-        ``policy`` is ``None`` the behaviour is identical to the contract-only
-        path (backwards compatible): no gate is computed and
-        :attr:`effective_weights` is empty.
-
-        Args:
-            contract: The :class:`~bound.contracts.StepContract` whose declared
-                acceptance checks, risk checks, and budget scope the scoring.
-            evidence: The :class:`~bound.evidence.ExecutionEvidence` observed
-                after the step executed. Unknown ``check_id`` values are
-                allowed; they are simply ignored during contract reconciliation.
-            policy: Optional active :class:`~bound.policy_schema.BoundPolicyConfig`
-                governing gates/weights/budgets. ``None`` (the default) selects
-                the contract-only path.
-
-        Returns:
-            The :class:`EvaluationScores` (``A``, ``I``, ``R``, ``C``) plus a
-            structured ``reasoning`` summary. Per-dimension evidence is available
-            via :attr:`provenance`. This never produces a BOUND decision; that
-            remains the policy's responsibility.
-        """
         if policy is None:
             self._policy_gate = None
             self._effective_weights = {}
@@ -1209,15 +1182,14 @@ class ContractEvaluator:
         return cost, records
 
     def _influence(self) -> tuple[float, list[ScoreEvidence]]:
-        """Resolve downstream influence (v0.3: honest default or external).
+        """Resolve influence from quality-signal evidence or external override.
 
-        No downstream-influence evidence is derivable from contract evidence, so
-        the default is ``0.0`` recorded as an explicit DEFAULTED value (not a
-        measurement): ``raw_value=None``, ``effective_value=0.0``, and a
-        ``reason`` explaining the policy-neutral substitution. DEFAULTED is
-        never presented as VERIFIED. A caller may instead supply influence
-        externally at construction; that value is recorded as EVALUATED
-        (derived/supplied, not independently observed).
+        Influence is derived from acceptance evidence with known quality
+        check_ids: ``coverage``, ``lint-clean``, ``tests-added``,
+        ``typecheck-clean``. Each passing quality signal contributes up to
+        0.25 to I (capped at 1.0). When no influence evidence is collected
+        and no override was supplied, returns ``0.0`` with DEFAULTED provenance
+        (honesty: no measurement was taken).
 
         Returns:
             A ``(influence, evidence)`` tuple.
@@ -1226,33 +1198,62 @@ class ContractEvaluator:
             influence = float(self._influence_override)
             return influence, [
                 ScoreEvidence(
-                    source="external",
-                    value=influence,
-                    contribution=influence,
-                    description=(
-                        "influence supplied externally at construction; v0.3 "
-                        "does not derive downstream influence from contract "
-                        "evidence."
-                    ),
+                    source="external", value=influence, contribution=influence,
+                    description="influence supplied externally at construction.",
                     provenance=EvidenceProvenance.EVALUATED,
-                    raw_value=influence,
-                    effective_value=influence,
+                    raw_value=influence, effective_value=influence,
                 ),
             ]
 
+        records: list[ScoreEvidence] = []
+        total = 0.0
+        count = 0
+
+        ev = getattr(self, "_last_evidence", None)
+        if ev is not None:
+            quality_ids = {"coverage", "lint-clean", "tests-added", "typecheck-clean"}
+            for ce in (ev.acceptance if hasattr(ev, "acceptance") else []):
+                cid = getattr(ce, "check_id", "")
+                if cid in quality_ids:
+                    passed = getattr(ce, "passed", False)
+                    contrib = 0.25 if passed else 0.0
+                    total += contrib
+                    count += 1
+                    records.append(
+                        ScoreEvidence(
+                            source=cid,
+                            value=1.0 if passed else 0.0,
+                            contribution=contrib,
+                            description=(
+                                f"{'✓' if passed else '✗'} {cid}: "
+                                f"contributes {contrib:.2f} to I"
+                            ),
+                            provenance=getattr(ce, "provenance", EvidenceProvenance.CLAIMED),
+                        ),
+                    )
+
+        if count > 0:
+            influence = min(total, 1.0)
+            records.append(
+                ScoreEvidence(
+                    source="summary", value=influence, contribution=influence,
+                    description=f"I={influence:.4f} from {count} quality signal(s).",
+                    provenance=EvidenceProvenance.EVALUATED,
+                    raw_value=influence, effective_value=influence,
+                ),
+            )
+            return influence, records
+
         return 0.0, [
             ScoreEvidence(
-                source="default",
-                value=0.0,
-                contribution=0.0,
+                source="default", value=0.0, contribution=0.0,
                 description=(
-                    "v0.3 sets influence=0.0 by default: no downstream-influence "
-                    "evidence is derivable from contract evidence. Honesty over "
-                    "invented sophistication."
+                    "I=0.0: no influence evidence (coverage, lint-clean, "
+                    "tests-added, typecheck-clean) and no override. "
+                    "Honesty over fabrication."
                 ),
                 provenance=EvidenceProvenance.DEFAULTED,
-                raw_value=None,
-                effective_value=0.0,
+                raw_value=None, effective_value=0.0,
                 reason="policy neutral value; no evidence source",
             ),
         ]

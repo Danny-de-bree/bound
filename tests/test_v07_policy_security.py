@@ -825,7 +825,7 @@ class TestGoldenDemo:
         assert rc == 0
         # The two-attempt REPLAN -> ACCEPT path is proven by real collectors.
         assert "attempt 1" in out
-        assert "candidate=REPLAN  final=REPLAN  assurance=verified" in out
+        assert "candidate=ACCEPT  final=REPLAN  assurance=verified" in out
         assert "candidate=ACCEPT  final=ACCEPT  assurance=verified" in out
         # The policy lifecycle and hash are recorded.
         assert "golden-demo@1.0" in out
