@@ -504,148 +504,107 @@ def _render_overview_page(
     store_path: str,
     decisions: dict[str, dict[str, Any]] | None = None,
 ) -> str:
-    """Render the dashboard overview (list of all runs).
+    """Render the dashboard overview (list of all runs)."""
+    total = len(summaries)
+    active = sum(1 for s in summaries if s.incomplete)
+    completed = sum(1 for s in summaries if not s.incomplete and str(s.status) in ("completed", "COMPLETED"))
+    failed = sum(1 for s in summaries if not s.incomplete and str(s.status) in ("failed", "FAILED", "interrupted", "INTERRUPTED"))
 
-    Args:
-        summaries: Run summaries from the lineage store.
-        store_path: Filesystem path to the store (displayed in the header).
-        decisions: Optional dict mapping ``run_id`` to decision/assurance
-            info (from :func:`_get_overview_decisions`). When omitted the
-            overview omits decision and assurance columns.
-    """
     parts: list[str] = [
         "<!DOCTYPE html>",
         "<html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
-        "<meta http-equiv='refresh' content='10'>",
-        "<title>BOUND dashboard</title>",
-        "<style>",
-        _CSS,
-        """
-.sse-indicator-overview{display:inline-flex;align-items:center;gap:4px;
-  font-size:0.7rem;color:#8b949e}
-.sse-indicator-overview.connected{color:#3fb950}
-.sse-dot-ov{width:6px;height:6px;border-radius:50%;background:#8b949e}
-.sse-indicator-overview.connected .sse-dot-ov{background:#3fb950}
-""",
-        "</style>",
-        """<script>
-(function(){
-  var es = new EventSource('/api/events');
-  es.addEventListener('run_count', function(e){
-    var newCount = parseInt(e.data, 10);
-    var currentCount = document.querySelectorAll('.run-card').length;
-    if (newCount !== currentCount && !document.querySelector('.empty-state')) {
-      location.reload();
-    }
-    var indicator = document.getElementById('sse-ind');
-    if (indicator) { indicator.className = 'sse-indicator-overview connected'; }
-  });
-  es.onerror = function(){
-    var indicator = document.getElementById('sse-ind');
-    if (indicator) { indicator.className = 'sse-indicator-overview'; }
-  };
-})();
-</script>""",
-        "</head><body>",
-        "<header>",
-        "<div><h1>&#x26D3; BOUND dashboard</h1>",
-        "<div class='sub'>local lineage &middot; read-only</div></div>",
-        "<div class='sub'>"
-        f"<span id='sse-ind' class='sse-indicator-overview'>"
-        f"<span class='sse-dot-ov'></span>live</span>"
-        f" &middot; {html_escape(store_path)}"
-        "</div>",
-        "</header>",
+        "<meta http-equiv='refresh' content='15'>",
+        "<title>BOUND · Dashboard</title>",
+        "<style>", _CSS,
+        ".stats-bar{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap}",
+        ".stat-card{flex:1;min-width:140px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px 20px;text-align:center}",
+        ".stat-card .stat-value{font-size:1.8rem;font-weight:700;line-height:1.2}",
+        ".stat-card .stat-label{font-size:0.7rem;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}",
+        ".stat-card.active .stat-value{color:#58a6ff}",
+        ".stat-card.completed .stat-value{color:#3fb950}",
+        ".stat-card.failed .stat-value{color:#f85149}",
+        ".stat-card.total .stat-value{color:#e6edf3}",
+        ".card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;margin-bottom:16px}",
+        ".card-grid .rc{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 16px;transition:border-color .15s;display:block;text-decoration:none}",
+        ".card-grid .rc:hover{border-color:#58a6ff}",
+        ".card-grid .rc .ct{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}",
+        ".card-grid .rc .ci{font-size:.7rem;color:#8b949e;font-family:monospace}",
+        ".card-grid .rc .cta{font-size:.9rem;color:#e6edf3;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+        ".card-grid .rc .cm{font-size:.72rem;color:#8b949e;display:flex;gap:12px;flex-wrap:wrap}",
+        ".card-grid .rc .cb{display:flex;gap:4px;flex-wrap:wrap}",
+        ".empty-state{text-align:center;padding:80px 24px}",
+        ".empty-state .ei{font-size:3rem;margin-bottom:16px;opacity:.3}",
+        ".empty-state h2{font-size:1.1rem;color:#e6edf3;margin-bottom:8px}",
+        ".empty-state p{font-size:.8rem;color:#8b949e;margin-bottom:4px}",
+        ".empty-state code{background:#161b22;padding:2px 6px;border-radius:4px;font-size:.8rem;color:#58a6ff}",
+        ".sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}",
+        ".sec-hd h2{font-size:.85rem;color:#8b949e;font-weight:500;text-transform:uppercase;letter-spacing:.5px}",
+        "</style></head><body>",
+        "<header><div>",
+        "<h1 style='font-size:1rem;font-weight:600'>&#x26D3; BOUND</h1>",
+        "<div class='sub'>Execution Dashboard &middot; v0.9.0</div>",
+        "</div><div class='sub' style='text-align:right'>",
+        f"{html_escape(store_path)}<br>{total} run{'' if total == 1 else 's'}",
+        "</div></header>",
         "<div class='container'>",
     ]
 
     if not summaries:
         parts.append(
-            "<div class='empty-state'>"
-            "<h2>No BOUND runs yet</h2>"
-            "<p>Start a BOUND-controlled agent session to see runs appear here.</p>"
-            "<p style='margin-top:12px'><code>bound run start</code> &mdash; "
-            "or let your agent integration create one automatically.</p>"
+            "<div class='empty-state'><div class='ei'>&#x1F4E6;</div>"
+            "<h2>No runs yet</h2>"
+            "<p>Start your first BOUND-controlled session:</p>"
+            "<p style='margin-top:8px'><code>bound run start &quot;your task&quot;</code></p>"
             "</div>",
         )
     else:
-        parts.append(
-            f"<div style='margin-bottom:10px;color:#8b949e;font-size:0.8rem'>"
-            f"{len(summaries)} run(s) &middot; "
-            f"newest first</div>",
-        )
-        parts.append("<div class='run-grid'>")
-        for s in summaries:
-            status_human = (
-                "incomplete"
-                if s.incomplete
-                else (s.status.value if hasattr(s.status, "value") else str(s.status))
-            )
+        # stats bar
+        parts.append("<div class='stats-bar'>")
+        parts.append(f"<div class='stat-card total'><div class='stat-value'>{total}</div><div class='stat-label'>Total Runs</div></div>")
+        parts.append(f"<div class='stat-card active'><div class='stat-value'>{active}</div><div class='stat-label'>Active</div></div>")
+        parts.append(f"<div class='stat-card completed'><div class='stat-value'>{completed}</div><div class='stat-label'>Completed</div></div>")
+        parts.append(f"<div class='stat-card failed'><div class='stat-value'>{failed}</div><div class='stat-label'>Failed / Int.</div></div>")
+        parts.append("</div>")
+
+        # recent runs card grid (limit 50)
+        parts.append("<div class='sec-hd'><h2>Recent Runs</h2></div>")
+        parts.append("<div class='card-grid'>")
+        for s in summaries[:50]:
+            status_human = ("incomplete" if s.incomplete else (s.status.value if hasattr(s.status, "value") else str(s.status)))
             d = decisions.get(s.run_id, {}) if decisions else {}
             decision = d.get("decision", "—") if d else "—"
             assurance = d.get("assurance") if d else None
-
-            parts.append(f"<a href='/run/{html_escape(s.run_id)}' class='run-card'>")
-            parts.append(
-                f"<div class='tags'>"
-                f"{_status_badge(status_human, _RUN_STATUS_COLORS)}"
-                f"{_decision_badge(decision)}"
-                f"{_assurance_badge(assurance)}"
-                f"</div>",
-            )
-            task_display = s.task or "(untitled)"
-            if len(task_display) > 80:
-                task_display = task_display[:80] + "…"
-            parts.append(f"<h3 title='{html_escape(s.task)}'>{html_escape(task_display)}</h3>")
-            parts.append(
-                f"<div class='meta'>{_short_id(s.run_id, 16)}"
-                f" &middot; {fmt_dt(s.started_at)}"
-                f" &middot; {s.step_count} step(s)"
-                f"</div>",
-            )
+            task_display = (s.task or "(untitled)")[:80]
+            parts.append(f"<a href='/run/{html_escape(s.run_id)}' class='rc'>")
+            parts.append(f"<div class='ct'><span class='ci'>{html_escape(_short_id(s.run_id, 20))}</span>")
+            parts.append(f"<span class='cb'>{_status_badge(status_human, _RUN_STATUS_COLORS)}{_decision_badge(decision)}{_assurance_badge(assurance)}</span></div>")
+            parts.append(f"<div class='cta'>{html_escape(task_display)}</div>")
+            parts.append(f"<div class='cm'><span>{fmt_dt(s.started_at)}</span><span>{s.step_count} step(s)</span></div>")
             parts.append("</a>")
         parts.append("</div>")
+        if len(summaries) > 50:
+            parts.append(f"<div style='text-align:center;color:#8b949e;font-size:.75rem;padding:12px'>Showing 50 of {total} runs — oldest omitted</div>")
 
-        # Compact table view for quick scanning
-        parts.append("<table class='run-table'>")
-        parts.append(
-            "<thead><tr>"
-            "<th>Run</th><th>Task</th><th>Status</th>"
-            "<th>Decision</th><th>Assurance</th>"
-            "<th>Steps</th><th>Started</th><th>Finished</th>"
-            "</tr></thead><tbody>",
-        )
+        # all runs table
+        parts.append(f"<div class='sec-hd' style='margin-top:24px'><h2>All Runs</h2><span style='font-size:.7rem;color:#8b949e'>{total} total</span></div>")
+        parts.append("<table class='run-table'><thead><tr><th>Run</th><th>Task</th><th>Status</th><th>Decision</th><th>Assurance</th><th>Steps</th><th>Started</th><th>Finished</th></tr></thead><tbody>")
         for s in summaries:
-            status_human = (
-                "incomplete"
-                if s.incomplete
-                else (s.status.value if hasattr(s.status, "value") else str(s.status))
-            )
+            status_human = ("incomplete" if s.incomplete else (s.status.value if hasattr(s.status, "value") else str(s.status)))
             d = decisions.get(s.run_id, {}) if decisions else {}
             decision = d.get("decision", "—") if d else "—"
             assurance = d.get("assurance") if d else None
             finished = fmt_dt(s.finished_at) if s.finished_at else "—"
             parts.append(
-                "<tr>"
-                f"<td><a href='/run/{html_escape(s.run_id)}'>"
-                f"{html_escape(_short_id(s.run_id, 16))}</a></td>"
+                f"<tr><td><a href='/run/{html_escape(s.run_id)}'>{html_escape(_short_id(s.run_id, 16))}</a></td>"
                 f"<td>{html_escape((s.task or '(untitled)')[:60])}</td>"
                 f"<td>{_status_badge(status_human, _RUN_STATUS_COLORS)}</td>"
-                f"<td>{_decision_badge(decision)}</td>"
-                f"<td>{_assurance_badge(assurance)}</td>"
-                f"<td>{s.step_count}</td>"
-                f"<td>{fmt_dt(s.started_at)}</td>"
-                f"<td>{finished}</td>"
-                "</tr>",
+                f"<td>{_decision_badge(decision)}</td><td>{_assurance_badge(assurance)}</td>"
+                f"<td>{s.step_count}</td><td>{fmt_dt(s.started_at)}</td><td>{finished}</td></tr>",
             )
         parts.append("</tbody></table>")
 
-    parts.append(
-        "<div class='page-footer'>"
-        "BOUND dashboard &mdash; local read-only view. "
-        "No data leaves your machine.</div>",
-    )
+    parts.append("<div class='page-footer'>BOUND v0.9.0 — local read-only view. No data leaves your machine.</div>")
     parts.append("</div></body></html>")
     return "\n".join(parts)
 
@@ -1240,7 +1199,7 @@ def _render_run_detail(log: RunLog) -> str:
 </script>""")
 
     parts.append("</div></body></html>")
-    return "\\n".join(parts)
+    return "\n".join(parts)
 
 
 

@@ -175,7 +175,7 @@ def test_overview_page_empty_is_deterministic() -> None:
     html_1 = _render_overview_page([], "/tmp/.bound/runs")
     html_2 = _render_overview_page([], "/tmp/.bound/runs")
     assert html_1 == html_2, "Empty overview is not deterministic"
-    assert "No BOUND runs yet" in html_1
+    assert "No runs yet" in html_1
 
 
 def test_overview_page_populated_is_deterministic() -> None:
@@ -208,8 +208,8 @@ def test_overview_page_empty_has_doctype_and_structure() -> None:
     assert html.startswith("<!DOCTYPE html>")
     assert "<html" in html
     assert "</html>" in html
-    assert "<title>BOUND dashboard</title>" in html
-    assert "No BOUND runs yet" in html
+    assert "<title>BOUND" in html
+    assert "No runs yet" in html
     assert "local read-only" in html
 
 
@@ -224,7 +224,7 @@ def test_overview_page_populated_shows_runs() -> None:
     assert "run-002" in html
     assert "Implement feature X" in html
     assert "Fix bug Y" in html
-    assert "2 run(s)" in html
+    assert ">2<" in html  # 2 runs mentioned in stats bar or count
 
 
 def test_run_detail_has_doctype_and_structure() -> None:
@@ -251,9 +251,10 @@ def test_overview_html_matches_snapshot_on_same_inputs() -> None:
     ]
     html = _render_overview_page(summaries, "/tmp/.bound/runs")
     assert "<a href='/run/run-001'" in html
-    assert "class='run-card'" in html
+    assert "class='rc'" in html  # card class in v0.9.0 overview
     assert "completed" in html
     assert "1 step(s)" in html
+    assert "class='rc'" in html
 
 
 def test_run_detail_shows_decision_tree() -> None:

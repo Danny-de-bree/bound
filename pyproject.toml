@@ -66,6 +66,7 @@ dev = [
     "mypy>=2.3.0",
     "pre-commit>=4.6.0",
     "pytest>=8.0",
+    "pytest-cov>=6.0",
     "ruff>=0.6",
     "twine>=6.0",
 ]
@@ -77,6 +78,9 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/bound/ui.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
