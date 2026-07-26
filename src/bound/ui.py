@@ -2020,6 +2020,10 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() == "completed"]
         elif filter_status == "failed":
             summaries = [s for s in summaries if not s.incomplete and str(s.status).lower() in ("failed", "interrupted")]
+        # Hide empty runs (only run_started event, no real work) by default
+        hide_empty = query.get("hide_empty", "1") != "0"
+        if hide_empty:
+            summaries = [s for s in summaries if s.event_count > 1]
         # Apply search
         if search_q:
             summaries = [s for s in summaries if search_q in (s.task or "").lower() or search_q in s.run_id.lower()]
