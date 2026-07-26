@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-26
+
+### Added
+
+- **`BoundRuntime`** — single deterministic runtime API that powers every BOUND
+  component (CLI, MCP, UI, watch mode). One execution pipeline, no duplicated
+  evaluation logic.
+- **`Candidate`** — first-class execution unit backed by an isolated Git
+  worktree. Each candidate owns its workspace, evidence, lineage, checkpoints,
+  and decision history. Context-manager pattern ensures worktree cleanup.
+- **Git-native execution** — every candidate runs in its own `git worktree add
+  --detach` workspace under `.bound/worktrees/`. Checkpoint, rollback, and
+  cleanup use native Git primitives.
+- **Unified Event Model v3.0** — versioned event schema covering run, candidate,
+  step, evidence, evaluation, decision, outcome, and checkpoint lifecycles.
+  Every execution is replayable from recorded events.
+- **`bound.hashing`** — single source for `sha256_hex()` and
+  `compute_contract_hash()`, previously triplicated across `lineage.py`,
+  `command_collector.py`, and `policy_canon.py`.
+- **`bound.decisions`** — single source for all decision/action/reason mappings,
+  previously scattered across 5 files.
+- **`bound.display`** — extracted display constants (decision colours, provenance
+  strength) from CLI internals.
+- **Python entry points** (`bound.collectors`) in `pyproject.toml` for plugin
+  discovery.
+- **`make mypy`** and **`make cov`** targets for type checking and coverage.
+
+### Changed
+
+- Version bumped to `0.9.0`.
+- **CI/CD modernized**: `actions/checkout@v4`, `astral-sh/setup-uv@v5` (was
+  pinned to `0.5.18`), Python 3.12 + 3.13 matrix, `pytest-cov` coverage in CI,
+  Dutch comments translated to English in `release.yml`.
+- Overview dashboard redesigned with stats bar, card grid, and compact table
+  view.
+- `evaluate_agent_step` route unified through the single runtime pipeline.
+
+### Fixed
+
+- `sha256_hex` triplication resolved (3 implementations → 1).
+- `_normalize_capped` duplication resolved (2 implementations → 1).
+- `compute_contract_hash` duplication resolved (2 implementations → 1).
+- Decision-to-action mappings consolidated (5 scattered dicts → 1 module).
+- UI `{total}` f-string bug fixed in overview header.
+- Pydantic event serialization in UI fixed (use `model_dump` before `str`).
+
 ## [0.8.1] - 2026-07-25
 
 ### Added
