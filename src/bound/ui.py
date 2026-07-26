@@ -407,38 +407,19 @@ def _get_overview_decisions(
 ) -> dict[str, dict[str, Any]]:
     """Extract the latest decision and assurance per run for the overview.
 
-    For each run summary, attempts to read the full log and extract the
-    most recent evaluation's decision + gated assurance.  Falls back to
-    sensible defaults when the log cannot be read (corrupt, not found).
-
-    Args:
-        summaries: Run summaries from :meth:`LineageStore.list_runs`.
-        store: The lineage store to read logs from.
-
-    Returns:
-        A dict keyed by ``run_id``, each value containing ``decision``,
-        ``assurance``, ``final_decision`` and ``has_decision`` (bool).
+    Reads cached *latest_decision* from ``run.json`` for instant loads.
+    Falls back to reading the log when the cache is stale.
     """
     result: dict[str, dict[str, Any]] = {}
     for s in summaries:
-        try:
-            log = store.read_run(s.run_id, strict=False)
-        except Exception:
+        meta = store._read_run_meta(s.run_id) or {}
+        cached_decision = meta.get("latest_decision")
+        if cached_decision:
             result[s.run_id] = {
-                "decision": "—",
-                "assurance": None,
-                "final_decision": "—",
-                "has_decision": False,
-            }
-            continue
-        decisions = _iter_latest_decisions(log)
-        if decisions:
-            last = decisions[-1]
-            result[s.run_id] = {
-                "decision": last.get("decision", "—"),
-                "assurance": last.get("assurance"),
-                "final_decision": last.get("final", "—"),
-                "has_decision": last.get("decision", "—") not in ("—", None),
+                "decision": cached_decision,
+                "assurance": meta.get("latest_assurance"),
+                "final_decision": cached_decision,
+                "has_decision": True,
             }
         else:
             result[s.run_id] = {

@@ -359,6 +359,29 @@ class LineageStore:
         tmp.write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
         os.replace(tmp, meta_path)
 
+    def _update_run_meta_cache(self, run_id: str) -> None:
+        """Update run.json with cached fields so list_runs() avoids full replay.
+
+        Reads the events log once and writes *step_count*, *incomplete*, and
+        *latest_decision* into run.json so the overview page can load instantly.
+        """
+        meta = self._read_run_meta(run_id) or {}
+        try:
+            log = self.read_run(run_id, strict=False)
+            meta["step_count"] = len(log.steps)
+            meta["incomplete"] = log.incomplete
+            # Extract latest decision from the most recent evaluation
+            for ev in reversed(log.events):
+                ev_type = getattr(ev, "event", "")
+                if ev_type == "evaluation_recorded":
+                    meta["latest_decision"] = getattr(ev, "decision", None)
+                    meta["latest_assurance"] = getattr(ev, "assurance", None)
+                    break
+        except Exception:
+            meta.setdefault("step_count", 0)
+            meta.setdefault("incomplete", False)
+        self._write_run_meta(run_id, meta)
+
     def _read_run_meta(self, run_id: str) -> dict | None:
         meta_path = self._meta_path(run_id)
         if not meta_path.exists():
@@ -591,6 +614,7 @@ class LineageStore:
         meta["status"] = RunStatus(status).value
         meta["finished_at"] = (finished_at or event.timestamp).isoformat()  # type: ignore[union-attr]
         self._write_run_meta(run_id, meta)
+        self._update_run_meta_cache(run_id)
         return event
 
     # ----------------------------------------------------- schema-2.0 builders
@@ -1076,7 +1100,11 @@ class LineageStore:
 
     # --------------------------------------------------------------- listing
     def list_runs(self) -> list[RunSummary]:
-        """List every run under :attr:`base_dir`, newest first."""
+        """List every run under :attr:`base_dir`, newest first.
+
+        Uses cached *step_count* and *incomplete* from ``run.json`` so the
+        overview loads instantly without replaying full event logs.
+        """
         summaries: list[RunSummary] = []
         if not self.base_dir.exists():
             return summaries
@@ -1088,7 +1116,13 @@ class LineageStore:
             status = RunStatus(meta.get("status", RunStatus.STARTED.value))
             events_path = self._events_path(run_id)
             event_count = self._count_events(events_path) if events_path.exists() else 0
-            log = self._safe_replay(run_id)
+            # Use cached values to avoid full replay
+            step_count_raw = meta.get("step_count")
+            step_count = (
+                step_count_raw if "step_count" in meta
+                else self._count_steps(run_id)
+            )
+            incomplete = meta.get("incomplete") if "incomplete" in meta else True
             summaries.append(
                 RunSummary(
                     run_id=run_id,
@@ -1097,9 +1131,9 @@ class LineageStore:
                     started_at=started,
                     finished_at=finished,
                     status=status,
-                    step_count=len(log.steps) if log is not None else 0,
+                    step_count=step_count if isinstance(step_count, int) else 0,
                     event_count=event_count,
-                    incomplete=(log is None) or log.incomplete,
+                    incomplete=bool(incomplete),
                     path=str(meta_path.parent.resolve()),
                 ),
             )
@@ -1108,6 +1142,11 @@ class LineageStore:
             reverse=True,
         )
         return summaries
+
+    def _count_steps(self, run_id: str) -> int:
+        """Count steps by replaying the log (fallback when cache is stale)."""
+        log = self._safe_replay(run_id)
+        return len(log.steps) if log is not None else 0
 
     def _safe_replay(self, run_id: str) -> RunLog | None:
         try:
