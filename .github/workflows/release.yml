@@ -218,6 +218,7 @@ jobs:
           mkdir -p release/python
           echo "Downloading assets from GitHub Release $TAG ..."
           gh release download "$TAG" \
+            -R "${{ github.repository }}" \
             --pattern "*.whl" \
             --pattern "*.tar.gz" \
             --dir release/python/
