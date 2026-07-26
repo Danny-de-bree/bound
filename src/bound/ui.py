@@ -2129,6 +2129,12 @@ def serve(
         run_id: Optional run id to redirect to after startup. When set, the
             dashboard opens directly to that run's detail page.
     """
+    class _SilentHTTPServer(HTTPServer):
+        """HTTPServer that suppresses socket-level tracebacks."""
+
+        def handle_error(self, request: Any, client_address: Any) -> None:
+            pass  # connection drops are normal for a local dashboard
+
     host = "127.0.0.1"
     if store is not None:
         _DashboardHandler.lineage_store = store
@@ -2136,7 +2142,7 @@ def serve(
         _DashboardHandler.startup_redirect = run_id
 
     try:
-        server = HTTPServer((host, port), _DashboardHandler)
+        server = _SilentHTTPServer((host, port), _DashboardHandler)
     except OSError as exc:
         if "in use" in str(exc).lower() or "address already in use" in str(exc).lower():
             alt_port = port + 1
