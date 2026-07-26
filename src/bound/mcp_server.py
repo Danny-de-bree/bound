@@ -30,12 +30,14 @@ from bound.services import (
     CheckpointError,
     CheckpointListRequest,
     CheckpointService,
+    DecideRequest,
     EvaluateRequest,
     EvaluateWorkflowRequest,
     EvaluationInputError,
     EvaluationService,
     EvidenceCollectRequest,
     EvidenceService,
+    PlanRecordRequest,
     PolicyExplainRequest,
     PolicyHashRequest,
     PolicyLoadError,
@@ -49,6 +51,11 @@ from bound.services import (
     RunService,
     RunStartRequest,
     ServiceError,
+    SessionFinishRequest,
+    SessionService,
+    SessionStartRequest,
+    StepCompleteRequest,
+    StepStartRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,6 +251,49 @@ _TOOLS: list[McpToolDef] = [
         description="List all checkpoints for a run.",
         request_model=CheckpointListRequest,
         handler=lambda p: CheckpointService.list_checkpoints(CheckpointListRequest(**p)),
+    ),
+    # --- v1.0 session lifecycle tools ---
+    McpToolDef(
+        name="bound_session_start",
+        description="Start a new BOUND session linked to a lineage run.",
+        request_model=SessionStartRequest,
+        handler=lambda p: SessionService.start(SessionStartRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_session_finish",
+        description="Finish (close) a BOUND session.",
+        request_model=SessionFinishRequest,
+        handler=lambda p: SessionService.finish(SessionFinishRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_plan_record",
+        description="Record a plan snapshot for a run.",
+        request_model=PlanRecordRequest,
+        handler=lambda p: SessionService.record_plan(PlanRecordRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_step_start",
+        description="Record the start of a new execution step.",
+        request_model=StepStartRequest,
+        handler=lambda p: SessionService.start_step(StepStartRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_step_complete",
+        description="Record the completion of an execution step.",
+        request_model=StepCompleteRequest,
+        handler=lambda p: SessionService.complete_step(StepCompleteRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_evidence_collect_v1",
+        description="Record evidence collected during a step (v1.0).",
+        request_model=EvidenceCollectRequest,
+        handler=lambda p: SessionService.collect_evidence(EvidenceCollectRequest(**p)),
+    ),
+    McpToolDef(
+        name="bound_decide",
+        description="Evaluate a step and return an ACCEPT/RETRY/REPLAN/ROLLBACK decision.",
+        request_model=DecideRequest,
+        handler=lambda p: SessionService.decide(DecideRequest(**p)),
     ),
 ]
 

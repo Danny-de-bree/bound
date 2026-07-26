@@ -9,13 +9,13 @@ ACCEPT, RETRY, REPLAN, or ROLLBACK.
 ## v1.0 Phases (from todo.md § 22.1)
 
 - [x] **Phase A: Inspection & gap analysis** — `gap_analysis.md` created. 24 implemented, 9 partial, 2 config-only, 14 planned.
-- [ ] **Phase B: Data model & configuration** — `.bound/config.yaml` schema, `ProjectConfig`, `AgentConfig`, capability model
-- [ ] **Phase C: Agent discovery & explicit overrides** — detect Cline/Claude Code/Codex, `--agent`/`--agent-command` flags
-- [ ] **Phase D: `bound use` / `bound status` / `bound doctor`** — UX commands
-- [ ] **Phase E: Plan model & snapshots** — `PlanVersion`, immutable snapshots, plan→run links
-- [ ] **Phase F: Runtime event linkage** — plan-step-started/completed events
-- [ ] **Phase G: Cline zero-friction integration** — `bound use cline` full flow
-- [ ] **Phase H: First supervised agent** — real agent execution
+- [x] **Phase B: Data model & configuration** — `.bound/config.yaml` schema, `ProjectConfig`, `AgentConfig`, capability model (Pydantic)
+- [x] **Phase C: Agent discovery & explicit overrides** — detect Cline/Claude Code/Codex, `--agent`/`--agent-command` flags
+- [x] **Phase D: `bound use` / `bound status`** — UX commands implemented
+- [x] **Phase E: Plan model & snapshots** — `PlanVersion`, immutable snapshots, plan→run links, plan parser enhanced
+- [x] **Phase F: Runtime event linkage** — 12 plan-step events appended to lineage, plan auto-discovery, implicit plan fallback
+- [ ] **Phase G: Cline zero-friction integration** — `bound use cline` full flow (IN PROGRESS)
+- [ ] **Phase H: First supervised agent** — real agent execution (IN PROGRESS)
 - [ ] **Phase I: UI plan/run navigation** — plan vs reality views
 - [ ] **Phase J: Worktrees & candidates** — candidate branching
 - [ ] **Phase K: Docs & E2E validation** — README, CHANGELOG, capability matrix

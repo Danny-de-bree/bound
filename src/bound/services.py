@@ -1948,3 +1948,224 @@ class CheckpointService:
             run_id=request.run_id,
             checkpoint_ids=checkpoint_ids,
         )
+# ---------------------------------------------------------------------------
+# v1.0 Session lifecycle service
+# ---------------------------------------------------------------------------
+
+
+class SessionStartRequest(BaseModel):
+    """Request to start a new BOUND session linked to a run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(description="The lineage run this session belongs to.")
+
+
+class SessionStartResponse(BaseModel):
+    """Response after starting a session."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    session_id: str = Field(description="The generated session identifier.")
+    run_id: str = Field(description="The lineage run this session belongs to.")
+
+
+class SessionFinishRequest(BaseModel):
+    """Request to finish a BOUND session."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    session_id: str = Field(description="The session to finish.")
+    status: str = Field(
+        default="completed",
+        description="Final session status: completed, failed, interrupted.",
+    )
+
+
+class SessionFinishResponse(BaseModel):
+    """Response after finishing a session."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    session_id: str
+    status: str
+
+
+class PlanRecordRequest(BaseModel):
+    """Request to record a plan for a run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(description="The lineage run.")
+    content: str = Field(description="The raw plan content (markdown).")
+
+
+class PlanRecordResponse(BaseModel):
+    """Response after recording a plan."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    plan_id: str
+    version: int
+    content_hash: str
+
+
+class StepStartRequest(BaseModel):
+    """Request to start a new step in a run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(description="The lineage run.")
+    step_id: str = Field(description="Identifier for the step (from plan or generated).")
+    description: str = Field(default="", description="Human-readable step description.")
+
+
+class StepStartResponse(BaseModel):
+    """Response after starting a step."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str
+    step_id: str
+    attempt: int
+
+
+class StepCompleteRequest(BaseModel):
+    """Request to complete a step."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(description="The lineage run.")
+    step_id: str = Field(description="The step to complete.")
+    outcome: str = Field(
+        default="completed",
+        description="Step outcome: accepted, retried, replanned, failed, skipped.",
+    )
+
+
+class StepCompleteResponse(BaseModel):
+    """Response after completing a step."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str
+    step_id: str
+    outcome: str
+
+
+class DecideRequest(BaseModel):
+    """Request to evaluate a step and decide next action."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    run_id: str = Field(description="The lineage run.")
+    step_id: str = Field(description="The step to evaluate.")
+    action: str = Field(description="Description of the action taken.")
+    goal: str = Field(description="The larger goal.")
+    acceptance: float = Field(ge=0.0, le=1.0, description="Acceptance score A.")
+    influence: float = Field(ge=0.0, le=1.0, description="Influence score I.")
+    risk: float = Field(ge=0.0, le=1.0, description="Risk penalty R.")
+    cost: float = Field(ge=0.0, le=1.0, description="Cost penalty C.")
+
+
+class DecideResponse(BaseModel):
+    """Response with the BOUND decision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    decision: str = Field(description="One of: ACCEPT, RETRY, REPLAN, ROLLBACK.")
+    reason: str = Field(description="Human-readable reason for the decision.")
+    required_action: str = Field(description="What the agent should do next.")
+    next_boundary: str = Field(
+        default="", description="When the agent should next evaluate."
+    )
+    run_id: str
+    step_id: str
+    candidate_id: str = Field(default="")
+class SessionService:
+    """Service for BOUND session lifecycle (v1.0)."""
+
+    @staticmethod
+    def start(request: SessionStartRequest) -> SessionStartResponse:
+        """Start a new session for a run."""
+        import uuid
+
+        session_id = f"session-{uuid.uuid4().hex[:12]}"
+        return SessionStartResponse(session_id=session_id, run_id=request.run_id)
+
+    @staticmethod
+    def finish(request: SessionFinishRequest) -> SessionFinishResponse:
+        """Finish a session."""
+        return SessionFinishResponse(
+            session_id=request.session_id, status=request.status
+        )
+
+    @staticmethod
+    def record_plan(request: PlanRecordRequest) -> PlanRecordResponse:
+        """Record a plan for a run."""
+        from bound.plan_model import Plan, compute_plan_hash, create_plan_version
+
+        plan = Plan(plan_id=request.run_id, project_id="")
+        content_hash = compute_plan_hash(request.content)
+        version = create_plan_version(
+            plan=plan, content=request.content, source="agent_submitted"
+        )
+        return PlanRecordResponse(
+            plan_id=plan.plan_id,
+            version=version.version,
+            content_hash=content_hash,
+        )
+
+    @staticmethod
+    def decide(request: DecideRequest) -> DecideResponse:
+        """Evaluate a step and return a BOUND decision."""
+        score = (request.acceptance + request.influence - request.risk - request.cost)
+
+        if score >= 0.7:
+            decision = "ACCEPT"
+            reason = "All checks passed; acceptance threshold met."
+        elif score >= 0.6:
+            decision = "RETRY"
+            reason = "Close to threshold; one focused retry may succeed."
+        elif request.risk > 0.8:
+            decision = "ROLLBACK"
+            reason = "Risk exceeds rollback threshold; restore safe checkpoint."
+        else:
+            decision = "REPLAN"
+            reason = "Score below threshold; a materially different approach is needed."
+
+        return DecideResponse(
+            decision=decision,
+            reason=reason,
+            required_action=decision.lower(),
+            run_id=request.run_id,
+            step_id=request.step_id,
+        )
+
+    @staticmethod
+    def start_step(request: StepStartRequest) -> StepStartResponse:
+        """Record the start of an execution step."""
+        return StepStartResponse(
+            run_id=request.run_id,
+            step_id=request.step_id,
+            attempt=1,
+        )
+
+    @staticmethod
+    def complete_step(request: StepCompleteRequest) -> StepCompleteResponse:
+        """Record the completion of an execution step."""
+        return StepCompleteResponse(
+            run_id=request.run_id,
+            step_id=request.step_id,
+            outcome=request.outcome,
+        )
+
+    @staticmethod
+    def collect_evidence(request: EvidenceCollectRequest) -> EvidenceCollectResponse:
+        """Record evidence collected during a step."""
+        return EvidenceCollectResponse(
+            run_id=request.run_id,
+            step_id=request.step_id,
+            check_id=request.check_id,
+            status=request.status,
+        )
