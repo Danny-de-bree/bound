@@ -2472,6 +2472,10 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     startup_redirect: str | None = None
     plan_path_override: str | None = None
 
+    # In-memory cache for hot runs — avoids re-reading events.jsonl on every request
+    _log_cache: dict[str, RunLog] = {}
+    _MAX_LOG_CACHE = 20
+
     # Quiet the default access-log spam; only log at DEBUG
     def log_message(self, fmt: str, *args: object) -> None:
         logger.debug(fmt, *args)
@@ -2573,14 +2577,22 @@ class _DashboardHandler(BaseHTTPRequestHandler):
             return []
 
     def _get_run_log(self, run_id: str) -> RunLog | None:
-        """Read a single run log, returning None on failure."""
+        """Read a single run log, using in-memory cache for hot runs."""
+        if run_id in type(self)._log_cache:
+            return type(self)._log_cache[run_id]
         try:
-            return self._store.read_run(run_id, strict=False)
+            log = self._store.read_run(run_id, strict=False)
         except RunNotFound:
             return None
         except Exception:
             logger.exception("Failed to read run %s", run_id)
             return None
+        if log is not None:
+            cache = type(self)._log_cache
+            if len(cache) >= type(self)._MAX_LOG_CACHE:
+                cache.pop(next(iter(cache)))  # evict oldest
+            cache[run_id] = log
+        return log
 
     # --- Handlers ---
 
