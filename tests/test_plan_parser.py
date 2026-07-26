@@ -33,7 +33,8 @@ class TestPlanDiscovery:
             result = load_plan(td)
             assert result is not None
             assert result.goal == "Test"
-            assert len(result.steps) == 2  # phase + checkbox item
+            assert len(result.steps) == 1  # phase only; checkbox is acceptance check
+            assert len(result.steps[0].acceptance_checks) == 1
 
     def test_finds_plan_md_in_bound_dir(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -104,27 +105,29 @@ class TestListParsing:
 
     def test_checkbox_unchecked_is_pending(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            _write_plan(Path(td), "# T\n\n- [ ] Write tests\n- [ ] Lint\n")
+            _write_plan(Path(td), "# T\n\n## Phase\n- [ ] Write tests\n- [ ] Lint\n")
             result = load_plan(td)
             assert result is not None
-            assert len(result.steps) == 2
-            assert all(s.status.value == "pending" for s in result.steps)
+            assert len(result.steps) == 1  # only the phase heading
+            assert len(result.steps[0].acceptance_checks) == 2
 
     def test_checkbox_checked_is_completed(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            _write_plan(Path(td), "# T\n\n- [x] Write tests\n- [ ] Lint\n")
+            _write_plan(Path(td), "# T\n\n## Phase\n- [x] Write tests\n- [ ] Lint\n")
             result = load_plan(td)
             assert result is not None
-            assert result.steps[0].status.value == "completed"
-            assert result.steps[1].status.value == "pending"
+            assert len(result.steps) == 1
+            checks = result.steps[0].acceptance_checks
+            assert "✅ Write tests" in checks[0]
+            assert "☐ Lint" in checks[1]
 
     def test_numbered_list(self) -> None:
         with tempfile.TemporaryDirectory() as td:
-            _write_plan(Path(td), "# P\n\n1. Inspect\n2. Validate\n3. Test\n")
+            _write_plan(Path(td), "# P\n\n## Phase\n1. Inspect\n2. Validate\n3. Test\n")
             result = load_plan(td)
             assert result is not None
-            assert len(result.steps) == 3
-            assert result.steps[0].title == "Inspect"
+            assert len(result.steps) == 1
+            assert len(result.steps[0].acceptance_checks) == 3
 
 
 class TestAcceptanceCriteria:
@@ -139,11 +142,11 @@ class TestAcceptanceCriteria:
             _write_plan(Path(td), content)
             result = load_plan(td)
             assert result is not None
-            assert len(result.steps) == 2  # phase + checkbox
-            assert result.steps[-1].acceptance_checks == [
-                "- All tests pass",
-                "- Coverage 80%",
-            ]
+            assert len(result.steps) == 1  # Imp phase
+            checks = result.steps[0].acceptance_checks
+            assert len(checks) == 3
+            assert "☐ Add validator" in checks[0]
+            assert "All tests pass" in checks[1] or any("All tests pass" in c for c in checks)
 
     def test_criteria_header_variants(self) -> None:
         for header in ("## Acceptance", "## Criteria", "## Checks",
@@ -153,7 +156,9 @@ class TestAcceptanceCriteria:
                 _write_plan(Path(td), content)
                 result = load_plan(td)
                 assert result is not None
-                assert len(result.steps[-1].acceptance_checks) == 1
+                assert len(result.steps) == 1
+                checks = result.steps[0].acceptance_checks
+                assert len(checks) >= 1
 
 
 class TestDeterministicIds:

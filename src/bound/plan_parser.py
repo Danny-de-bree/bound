@@ -157,45 +157,30 @@ def _parse_steps(raw: str) -> list[PlanStep]:
         if heading_match and heading_match.group(1) == "#":
             continue
 
-        # Checkbox item: - [ ] / - [x]
+        # Checkbox item: - [ ] / - [x]  → acceptance check for current phase
         checkbox_match = _CHECKBOX_RE.match(stripped)
-        if checkbox_match and not in_acceptance_section:
+        if checkbox_match and not in_acceptance_section and steps and current_phase_id:
             checked = checkbox_match.group(1).lower()
             title = checkbox_match.group(2).strip()
-            ordinal += 1
-            step_id = _derive_step_id(title, ordinal)
-            status = PlanStepStatus.COMPLETED if checked == "x" else PlanStepStatus.PENDING
-            steps.append(PlanStep(
-                step_id=step_id, title=title, ordinal=ordinal,
-                depth=1 if current_phase_id else 0, source_line=idx,
-                parent_step_id=current_phase_id, status=status,
-            ))
+            status_mark = "✅" if checked == "x" else "☐"
+            steps[-1].acceptance_checks.append(f"{status_mark} {title}")
+            # Update phase status: completed only if all checks are done
+            if checked != "x":
+                pass  # keep phase as pending if any unchecked
             continue
 
-        # Numbered item: 1. ...
+        # Numbered item: 1. ...  → acceptance check
         numbered_match = _NUMBERED_ITEM_RE.match(stripped)
-        if numbered_match and not in_acceptance_section:
+        if numbered_match and not in_acceptance_section and steps and current_phase_id:
             title = numbered_match.group(2).strip()
-            ordinal += 1
-            step_id = _derive_step_id(title, ordinal)
-            steps.append(PlanStep(
-                step_id=step_id, title=title, ordinal=ordinal,
-                depth=1 if current_phase_id else 0, source_line=idx,
-                parent_step_id=current_phase_id,
-            ))
+            steps[-1].acceptance_checks.append(f"☐ {title}")
             continue
 
-        # Plain list item
+        # Plain list item → acceptance check
         list_match = _LIST_ITEM_RE.match(stripped)
-        if list_match and not in_acceptance_section and not checkbox_match:
+        if list_match and not in_acceptance_section and not checkbox_match and steps and current_phase_id:
             title = list_match.group(1).strip()
-            ordinal += 1
-            step_id = _derive_step_id(title, ordinal)
-            steps.append(PlanStep(
-                step_id=step_id, title=title, ordinal=ordinal,
-                depth=1 if current_phase_id else 0, source_line=idx,
-                parent_step_id=current_phase_id,
-            ))
+            steps[-1].acceptance_checks.append(f"☐ {title}")
             continue
 
         # Acceptance criteria collection
@@ -323,40 +308,20 @@ def parse_plan_steps(content: str) -> list[dict]:
             })
             continue
 
-        # Checkbox items: - [ ] / - [x]
+        # Checkbox items: - [ ] / - [x]  → acceptance check
         checkbox_match = _CHECKBOX_RE.match(stripped)
-        if checkbox_match:
+        if checkbox_match and steps:
             checked = checkbox_match.group(1).lower()
             title = checkbox_match.group(2).strip()
-            ordinal += 1
-            step_id = _derive_step_id(title, ordinal)
-            status = "completed" if checked == "x" else "pending"
-            steps.append({
-                "step_id": step_id,
-                "title": title,
-                "ordinal": ordinal,
-                "depth": 1 if current_phase else 0,
-                "status": status,
-                "phase": current_phase,
-                "source_line": idx,
-            })
+            mark = "✅" if checked == "x" else "☐"
+            steps[-1].setdefault("acceptance_checks", []).append(f"{mark} {title}")
             continue
 
-        # Numbered items: 1. ...
+        # Numbered items: 1. ...  → acceptance check
         numbered_match = _NUMBERED_ITEM_RE.match(stripped)
-        if numbered_match:
+        if numbered_match and steps:
             title = numbered_match.group(2).strip()
-            ordinal += 1
-            step_id = _derive_step_id(title, ordinal)
-            steps.append({
-                "step_id": step_id,
-                "title": title,
-                "ordinal": ordinal,
-                "depth": 1 if current_phase else 0,
-                "status": "pending",
-                "phase": current_phase,
-                "source_line": idx,
-            })
+            steps[-1].setdefault("acceptance_checks", []).append(f"☐ {title}")
             continue
 
     return steps

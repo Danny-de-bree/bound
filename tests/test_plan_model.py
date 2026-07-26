@@ -480,52 +480,55 @@ class TestParsePlanSteps:
         assert steps[1]["title"] == "Implement"
         assert steps[2]["title"] == "Verify"
 
-    def test_parses_checkbox_items(self) -> None:
-        """Checkbox items are parsed with correct status."""
-        content = "- [ ] Pending task\n- [x] Done task\n- [X] Also done"
+    def test_parses_checkbox_items_as_acceptance_checks(self) -> None:
+        """Checkbox items become acceptance checks on the preceding step."""
+        content = "## Build\n- [ ] Pending task\n- [x] Done task"
         steps = parse_plan_steps(content)
-        assert len(steps) == 3
-        assert steps[0]["status"] == "pending"
-        assert steps[1]["status"] == "completed"
-        assert steps[2]["status"] == "completed"
+        assert len(steps) == 1  # only the phase heading
+        assert steps[0]["title"] == "Build"
+        checks = steps[0].get("acceptance_checks", [])
+        assert len(checks) == 2
+        assert "☐ Pending task" in checks[0]
+        assert "✅ Done task" in checks[1]
 
     def test_steps_have_stable_ids(self) -> None:
         """Step IDs are deterministic based on content."""
-        content = "## Phase\n- [ ] Task A"
+        content = "## Phase A\n## Phase B"
         steps1 = parse_plan_steps(content)
         steps2 = parse_plan_steps(content)
         assert steps1[0]["step_id"] == steps2[0]["step_id"]
         assert steps1[1]["step_id"] == steps2[1]["step_id"]
 
     def test_steps_have_ordinals(self) -> None:
-        """Steps are numbered sequentially."""
+        """Steps are numbered sequentially (only headings count)."""
         content = "## A\n- [ ] Task\n## B\n- [x] Done"
         steps = parse_plan_steps(content)
-        assert [s["ordinal"] for s in steps] == [1, 2, 3, 4]
+        assert len(steps) == 2
+        assert [s["ordinal"] for s in steps] == [1, 2]
 
-    def test_checkbox_under_phase_gets_phase(self) -> None:
-        """Checkbox items under a ## heading inherit the phase name."""
+    def test_checkbox_under_phase_becomes_check(self) -> None:
+        """Checkbox items under a ## heading become acceptance checks."""
         content = "## Build\n- [ ] Write code\n- [ ] Test"
         steps = parse_plan_steps(content)
-        assert steps[0]["phase"] is None  # phase itself
-        assert steps[1]["phase"] == "Build"
-        assert steps[2]["phase"] == "Build"
+        assert len(steps) == 1
+        assert steps[0]["title"] == "Build"
+        assert len(steps[0].get("acceptance_checks", [])) == 2
 
-    def test_numbered_list_items_parsed(self) -> None:
-        """Numbered list items are parsed as steps."""
-        content = "1. First\n2. Second\n3. Third"
+    def test_numbered_items_become_checks(self) -> None:
+        """Numbered items become acceptance checks."""
+        content = "## Phase\n1. First\n2. Second"
         steps = parse_plan_steps(content)
-        assert len(steps) == 3
-        assert steps[0]["title"] == "First"
-        assert all(s["status"] == "pending" for s in steps)
+        assert len(steps) == 1
+        checks = steps[0].get("acceptance_checks", [])
+        assert len(checks) == 2
 
     def test_h1_skipped(self) -> None:
         """# headings (goal) are not treated as steps."""
         content = "# Goal\n## Phase\n- [ ] Task"
         steps = parse_plan_steps(content)
-        assert len(steps) == 2
+        assert len(steps) == 1
         assert steps[0]["title"] == "Phase"
-        assert steps[1]["title"] == "Task"
+        assert len(steps[0].get("acceptance_checks", [])) == 1
 
     def test_h3_substeps(self) -> None:
         """### headings become sub-steps with depth=1."""
@@ -549,7 +552,6 @@ class TestParsePlanSteps:
 
     def test_source_line_tracked(self) -> None:
         """Each step records its source line number."""
-        content = "## Line 1\n\n- [ ] Line 3"
+        content = "## Phase One\n- [ ] Task"
         steps = parse_plan_steps(content)
         assert steps[0]["source_line"] == 1
-        assert steps[1]["source_line"] == 3
