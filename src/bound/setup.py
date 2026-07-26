@@ -37,7 +37,9 @@ BOUND_DIR = ".bound"
 INTEGRATION_PROMPT_FILENAME = "integration-prompt.md"
 
 #: Source directory for agent-specific INSTALL_BOUND.md prompts.
-INTEGRATIONS_SRC = Path(__file__).resolve().parent.parent.parent / "integrations"
+_INTEGRATIONS_PKG = Path(__file__).resolve().parent / "integrations"
+_INTEGRATIONS_REPO = Path(__file__).resolve().parent.parent.parent / "integrations"
+INTEGRATIONS_SRC = _INTEGRATIONS_PKG if _INTEGRATIONS_PKG.is_dir() else _INTEGRATIONS_REPO
 
 
 # ---------------------------------------------------------------------------
