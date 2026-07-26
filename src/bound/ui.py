@@ -1834,9 +1834,9 @@ class _DashboardHandler(BaseHTTPRequestHandler):
     lineage_store: LineageStore | None = None
     startup_redirect: str | None = None
 
-    # Quiet the default logging
+    # Suppress all HTTP request logging for a quiet terminal
     def log_message(self, fmt: str, *args: object) -> None:
-        logger.debug(fmt, *args)
+        pass  # silence is golden
 
     def _send_html(self, html: str, status: int = 200) -> None:
         body = html.encode("utf-8")
